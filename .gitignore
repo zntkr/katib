@@ -1,0 +1,20 @@
+# Yapay Zeka Modelleri (Boyutları çok büyük olduğu için yoksayıyoruz)
+models/
+
+# Python ve IDE kalıntıları
+__pycache__/
+.pytest_cache/
+*.py[cod]
+
+# PyInstaller paketleme çıktıları
+build/
+dist/
+
+
+# Sanal Ortamlar (Virtual Environments)
+venv/
+.venv/
+
+# Editör Ayarları
+.vscode/
+.idea/

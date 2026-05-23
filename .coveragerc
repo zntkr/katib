@@ -1,0 +1,7 @@
+[run]
+omit =
+    */shibokensupport/*
+    tests/*
+    venv/*
+    pyscript
+    signature_bootstrap.py

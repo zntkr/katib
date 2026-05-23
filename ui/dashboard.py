@@ -1,0 +1,599 @@
+import os
+import html
+
+from PySide6.QtWidgets import (
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout,
+    QLabel, QComboBox, QTextBrowser, QPushButton,
+    QSizePolicy, QProgressBar,
+)
+from PySide6.QtCore import Qt, QDateTime, Signal, QTimer, QSize
+from PySide6.QtGui import (
+    QIcon, QFont, QColor,
+    QPainter, QPaintEvent, QShowEvent, QKeyEvent
+)
+
+from core.settings import APP_NAME, STATE_READY
+from core.i18n import t
+from ui.theme import theme_manager, G_1, G_4, FONT_SIZE_SM, FONT_SIZE_LG, PANEL_WIDTH, COMBO_HEIGHT, LOG_BOX_HEIGHT
+
+_LEVEL_PALETTE_KEY: dict[str, str] = {
+    "OK":   "CLR_OK",
+    "ERR":  "CLR_ERR",
+    "WARN": "CLR_WARN",
+    "WRN":  "CLR_WARN",
+    "IDLE": "CLR_WARN",  # Model yükleniyor (turuncu)
+    "...":  "CLR_INFO",
+    "INFO": "CLR_INFO",
+    "↓":    "CLR_INFO",
+}
+_PALETTE_KEY_TO_CSS: dict[str, str] = {
+    "CLR_OK":   "lvl-ok",
+    "CLR_ERR":  "lvl-err",
+    "CLR_WARN": "lvl-wrn",
+    "CLR_IDLE": "lvl-idle",
+    "CLR_INFO": "lvl-info",
+}
+from ui.utils_win import apply_dark_mode_to_window
+
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from ui.help_window import HelpWindow
+    from ui.settings_dialog import SettingsDialog
+
+from ui.icons import ICN_COPY, ICN_TERMINAL, ICN_SETTINGS, ICN_DOT
+from ui.components import NoScrollComboBox, DynamicIconButton
+
+class DashboardWindow(QWidget):
+    device_changed            = Signal(int)
+    hotkey_changed            = Signal(str)
+    hotkey_capture_mode       = Signal(bool)  # True=yakalama başladı, False=bitti
+    model_dir_changed         = Signal(str)
+    model_reload_requested    = Signal()
+    refresh_devices_requested = Signal()
+    download_model_requested  = Signal(str, str)
+
+    def __init__(self, settings, icon_idle: QIcon, parent: QWidget | None = None):
+        flags = (
+            Qt.WindowType.Window |
+            Qt.WindowType.CustomizeWindowHint |
+            Qt.WindowType.WindowTitleHint |
+            Qt.WindowType.WindowCloseButtonHint |
+            Qt.WindowType.WindowStaysOnTopHint |
+            Qt.WindowType.Tool
+        )
+        super().__init__(parent, flags)
+        self.setObjectName("DashboardWindow")
+        self.settings = settings
+        self.setWindowTitle(f"{APP_NAME} — {t('dashboard.title')}")
+        self.setWindowIcon(icon_idle)
+
+        # ── Beyaz Flash Koruması ───────────────────────────────────────────
+        # WA_TranslucentBackground: DWM buffer'ı beyaz yerine şeffaf initialize
+        # eder; Qt ilk paint'te koyu arka planı çizer — kullanıcı beyaz görmez.
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        # ───────────────────────────────────────────────────────────────────
+
+        # ── Windows DWM Dark Mode ──────────────────────────────────────────
+        try:
+            apply_dark_mode_to_window(int(self.winId()))
+        except Exception:
+            pass
+        # ───────────────────────────────────────────────────────────────────
+
+        self._last_devices = None
+        self._last_transcript: str | None = None
+
+        self._build_ui()
+
+        # Plug & Play: OS donanım olaylarını (deferred) dinle
+        QTimer.singleShot(100, self._init_media_devices)
+
+    def _init_media_devices(self):
+        from PySide6.QtMultimedia import QMediaDevices
+        self._media_devices = QMediaDevices(self)
+        self._media_devices.audioInputsChanged.connect(self._on_audio_inputs_changed)
+        
+        # Debounce timer: Donanım olayları (plug/unplug) saniyede onlarca kez tetiklenebilir
+        self._device_refresh_timer = QTimer(self)
+        self._device_refresh_timer.setSingleShot(True)
+        self._device_refresh_timer.setInterval(500)  # Sinyal fırtınası bitene kadar 500ms bekle
+        self._device_refresh_timer.timeout.connect(self._do_audio_inputs_changed)
+
+    def _on_audio_inputs_changed(self) -> None:
+        # Test ortamlarında timer henüz initialize edilmeden bu metot doğrudan çağrılabilir.
+        if hasattr(self, "_device_refresh_timer"):
+            self._device_refresh_timer.start()  # Her yeni sinyalde sayacı sıfırla
+        else:
+            self._do_audio_inputs_changed()
+
+    def _do_audio_inputs_changed(self) -> None:
+        self.append_log_entry("...", "MIC", t("dashboard.device_refreshed"))
+        self._populate_devices()
+
+    # ------------------------------------------------------------------ build
+    def _build_ui(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(G_1, G_1, G_1, G_1)
+        root.setSpacing(G_1)
+        
+        p = theme_manager.palette
+        
+        # ── LOG AREA (Üst Katman) ──────────────────────────────────────
+        self.log_widget = QWidget()
+        self.log_widget.setObjectName("log_widget")
+        log_layout = QVBoxLayout(self.log_widget)
+        log_layout.setContentsMargins(0, 0, 0, 0)
+        log_layout.setSpacing(G_1)
+        
+        self.log_box = QTextBrowser()
+        self.log_box.setObjectName("log_box")  # CSS için isim verdik
+        self.log_box.setOpenExternalLinks(False)
+        self.log_box.setFont(QFont("Consolas", FONT_SIZE_SM))
+        self.log_box.setFixedHeight(LOG_BOX_HEIGHT)
+        self.log_box.setLineWrapMode(QTextBrowser.LineWrapMode.WidgetWidth)
+        self.log_box.document().setMaximumBlockCount(100)
+        self._log_entries: list[tuple[str, str, str]] = []
+        log_layout.addWidget(self.log_box)
+
+        root.addWidget(self.log_widget)
+        self.log_widget.hide()
+
+        # ── STATUS & LEVEL ROW (Orta Katman) ───────────────────────────
+        status_row = QHBoxLayout()
+        status_row.setSpacing(G_1)
+        status_row.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+        
+        badge_layout = QHBoxLayout()
+        badge_layout.setSpacing(4)
+        
+        self.status_icon_label = QLabel()
+        self.status_icon_label.setFixedSize(14, 14)
+        self.status_icon_label.mousePressEvent = self._on_status_label_click
+        badge_layout.addWidget(self.status_icon_label)
+
+        self.status_label = QLabel("")
+        self.status_label.setFixedHeight(G_4)
+        self.status_label.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+        self._status_cache: tuple[str, str] = (STATE_READY, "OK")
+        self._status_clickable = False
+        self.status_label.mousePressEvent = self._on_status_label_click
+        badge_layout.addWidget(self.status_label)
+        
+        status_row.addLayout(badge_layout)
+        
+        self.level_bar = QProgressBar()
+        self.level_bar.setObjectName("level_bar")
+        self.level_bar.setRange(0, 100)
+        self.level_bar.setValue(0)
+        self.level_bar.setTextVisible(False)
+        self.level_bar.setFixedHeight(8)
+        self.level_bar.setMinimumWidth(48)
+        self.level_bar.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        status_row.addWidget(self.level_bar)
+        
+        self.btn_copy_transcript = DynamicIconButton(ICN_COPY, p["CLR_OK"], "")
+        self.btn_copy_transcript.setObjectName("btn_copy_transcript")
+        self.btn_copy_transcript.setFixedSize(G_4, G_4)
+        self.btn_copy_transcript.setToolTip(t("dashboard.copy_tooltip"))
+        self.btn_copy_transcript.setEnabled(False)
+        self.btn_copy_transcript.clicked.connect(self._copy_last_transcript)
+        status_row.addWidget(self.btn_copy_transcript)
+
+        self.btn_toggle_log = DynamicIconButton(ICN_TERMINAL, p["CLR_TEXT"], "\uE756")
+        self.btn_toggle_log.setObjectName("btn_toggle_log")
+        self.btn_toggle_log.setFixedSize(G_4, G_4)
+        self.btn_toggle_log.setToolTip(t("dashboard.console_tooltip"))
+        self.btn_toggle_log.clicked.connect(self._toggle_logs)
+        status_row.addWidget(self.btn_toggle_log)
+        
+        root.addLayout(status_row)
+
+        # ── COMPACT HUD (Alt Katman) ───────────────────────────────────
+        mic_row = QHBoxLayout()
+        mic_row.setSpacing(G_1)
+        
+        self.mic_combo = NoScrollComboBox()
+        self.mic_combo.currentIndexChanged.connect(self._on_device_changed)
+        mic_row.addWidget(self.mic_combo)
+        
+        self.btn_settings = DynamicIconButton(ICN_SETTINGS, p["CLR_TEXT"], "\uE713")
+        self.btn_settings.setObjectName("btn_settings")
+        self.btn_settings.setFixedSize(G_4, G_4)
+        self.btn_settings.setToolTip(t("dashboard.settings_tooltip"))
+        self.btn_settings.clicked.connect(self._open_settings_dialog)
+        mic_row.addWidget(self.btn_settings)
+        
+        root.addLayout(mic_row)
+
+        self._help_window: 'HelpWindow | None' = None
+        self._settings_dialog: 'SettingsDialog | None' = None
+
+        self.setFixedWidth(PANEL_WIDTH)
+        self.adjustSize()
+        self.setFixedHeight(self.sizeHint().height())
+
+        # Tüm arayüz (Durum çubuğu dahil) inşa edildikten sonra stilleri uygula
+        self._update_log_stylesheet()
+
+    def _toggle_logs(self) -> None:
+        self.setMinimumHeight(0)
+        self.setMaximumHeight(16777215)
+
+        old_bottom = self.y() + self.height()
+
+        if self.log_widget.isVisible():
+            self.log_widget.hide()
+        else:
+            self.log_widget.show()
+
+        self._update_log_btn_style()
+
+        self.adjustSize()
+        self.setFixedHeight(self.sizeHint().height())
+
+        # Alt kenarı sabit tut — pencere yukarı doğru büyür/küçülür, konum sıfırlanmaz
+        self.move(self.x(), old_bottom - self.height())
+
+    def _update_log_btn_style(self) -> None:
+        is_active = self.log_widget.isVisible()
+        self.btn_toggle_log.setProperty("isActive", is_active)
+        self.btn_toggle_log.set_active(is_active)
+        self.btn_toggle_log.style().unpolish(self.btn_toggle_log)
+        self.btn_toggle_log.style().polish(self.btn_toggle_log)
+
+    # ---------------------------------------------------------------- helpers
+    def _copy_last_transcript(self) -> None:
+        if self._last_transcript:
+            QApplication.clipboard().setText(self._last_transcript)
+            self.btn_copy_transcript.setToolTip(t("dashboard.copied_tooltip"))
+            QTimer.singleShot(1500, lambda: self.btn_copy_transcript.setToolTip(t("dashboard.copy_tooltip")))
+
+    def set_last_transcript(self, text: str) -> None:
+        self._last_transcript = text
+        self.btn_copy_transcript.setEnabled(True)
+        # İkon otomatik olarak QIcon.Mode.Normal durumuna (parlak) geçecektir.
+
+    def _populate_devices(self) -> None:
+        self.refresh_devices_requested.emit()
+
+    def populate_devices(self, items: list[tuple[str, int, bool]]) -> None:
+        """AudioWorker'ın devices_ready sinyalinden gelen listeyle combo'yu doldurur."""
+        if getattr(self, "_last_devices", None) == items:
+            return
+        self._last_devices = items
+        self.mic_combo.blockSignals(True)
+        self.mic_combo.clear()
+        saved_device  = self.settings.get("device_index")
+        saved_device_name = self.settings.get("device_name")
+        preferred_idx = -1
+        default_idx   = -1
+        for i, (label, index, is_default) in enumerate(items):
+            # Windows driver isimlerindeki gizli alt satır (\n) karakterlerini temizle
+            label = label.replace("\r", "").replace("\n", " ").strip()
+            
+            self.mic_combo.addItem(label, userData=index)
+            clean_label = label.replace(" (Default)", "")
+            if saved_device_name:
+                if clean_label == saved_device_name:
+                    preferred_idx = i
+            elif index == saved_device:
+                preferred_idx = i
+            if is_default:
+                default_idx = i
+        select_idx = preferred_idx if preferred_idx != -1 else default_idx
+        if select_idx == -1 and items:
+            select_idx = 0
+        if select_idx != -1:
+            self.mic_combo.setCurrentIndex(select_idx)
+        if not items:
+            self.append_log_entry("WRN", "MIC", t("dashboard.no_mic_found"))
+            self.mic_combo.setEnabled(False)
+        else:
+            self.mic_combo.setEnabled(True)
+        self.mic_combo.blockSignals(False)
+        # blockSignals nedeniyle setCurrentIndex sinyali çıkmadı; worker'ı manuel bildir
+        if select_idx != -1:
+            device_data = self.mic_combo.itemData(select_idx)
+            if device_data is not None:
+                # DEDEKTİF MODU: Hangi mikrofonun nasıl seçildiğini izleyelim
+                reason = "Saved Preference" if preferred_idx != -1 else "System Default"
+                clean_name = self.mic_combo.itemText(select_idx).replace(" (Default)", "")
+                self.append_log_entry("...", "MIC", f"Auto-selected: {clean_name} ({reason})")
+                
+                # AYARLARI EZME! Sadece kullanıcı _on_device_changed ile müdahale ederse kaydet.
+                # self.settings.set("device_name", clean_name)
+                # self.settings.set("device_index", device_data)
+                self.device_changed.emit(device_data)
+
+    def _position_bottom_right(self):
+        screen = QApplication.primaryScreen().availableGeometry()
+        geo = self.frameGeometry()
+        
+        x = screen.x() + screen.width() - geo.width()
+        y = screen.y() + screen.height() - geo.height()
+        
+        from ui.utils_win import get_dwm_visual_bounds
+        bounds = get_dwm_visual_bounds(int(self.winId()))
+        if bounds:
+            _, _, d_right, d_bottom = bounds
+            offset_right = d_right - geo.x()
+            offset_bottom = d_bottom - geo.y()
+            x = screen.x() + screen.width() - offset_right
+            y = screen.y() + screen.height() - offset_bottom
+
+        self.move(x, y)
+
+    def showEvent(self, event: QShowEvent) -> None:
+        self.setWindowOpacity(0.0)
+        self.adjustSize()
+        super().showEvent(event)
+        
+        def _finalize_position():
+            self._position_bottom_right()
+            self.setWindowOpacity(1.0)
+            
+        # Windows pencere çerçevesini (frame) ekledikten SONRA konumlandırmak için asenkron çağrı
+        QTimer.singleShot(15, _finalize_position)
+
+    def paintEvent(self, event: QPaintEvent) -> None:
+        """WA_TranslucentBackground + QSS çakışmasını önler: layout boşluklarını
+        zemin rengiyle doldurur; QSS bu alanlara uygulanamaz."""
+        from ui.theme import theme_manager
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), QColor(theme_manager.palette["CLR_BG"]))
+        painter.end()
+        super().paintEvent(event)
+
+    def _on_device_changed(self, combo_idx: int):
+        device_idx = self.mic_combo.itemData(combo_idx)
+        if device_idx is not None:
+            raw_text = self.mic_combo.itemText(combo_idx)
+            clean_name = raw_text.replace(" (Default)", "")
+
+            if " (Default)" in raw_text:
+                self.settings.set("device_index", -1)
+                self.settings.set("device_name", "")
+                self.append_log_entry("...", "MIC", "Switched to dynamic default tracking.")
+            else:
+                self.settings.set("device_index", device_idx)
+                self.settings.set("device_name", clean_name)
+                self.append_log_entry("...", "MIC", f"Microphone locked: {clean_name}")
+                
+            self.device_changed.emit(device_idx)
+
+# ----------------------------------------------------------------- public
+    def set_loading_indicator(self, visible: bool):
+        if visible:
+            self.level_bar.setRange(0, 0)  # İndeterminate (Sonsuz) yükleme modu
+            p = theme_manager.palette
+            self.level_bar.setStyleSheet(f"QProgressBar::chunk {{ background-color: {p['CLR_YELLOW']}; border-radius: 2px; }}")
+            self._last_level_color = p["CLR_YELLOW"]
+        else:
+            self.level_bar.setRange(0, 100)  # Normal moda dön
+            self.level_bar.setValue(0)
+            self.update_level(0.0)
+
+    def _make_log_html_line(self, level: str, component: str, message: str, ts: str) -> str:
+        _DISPLAY: dict[str, str] = {"...": "INFO"}
+        lv = _DISPLAY.get(level.strip(), level.strip())[:4].ljust(4).replace(" ", "&nbsp;")
+        cp = component.strip()[:3].ljust(3).replace(" ", "&nbsp;")
+        safe_msg = html.escape(message)
+        lvl_clean = level.strip()
+        palette_key = _LEVEL_PALETTE_KEY.get(lvl_clean)
+        lvl_class = _PALETTE_KEY_TO_CSS.get(palette_key, "lvl-def") if palette_key else "lvl-def"
+        return (
+            f"<span class='ts'>[{ts}]</span>&nbsp;&nbsp;"
+            f"<span class='{lvl_class}'>{lv}</span>&nbsp;&nbsp;"
+            f"<span class='cp'>{cp}</span>&nbsp;&nbsp;"
+            f"<span class='msg'>{safe_msg}</span>"
+        )
+
+    def _update_log_stylesheet(self, *args):
+        p = theme_manager.palette
+        css = f"""
+        body {{ background-color: {p['CLR_BG_DEEP']}; margin: 0; padding: 0; }}
+        .ts {{ color: {p['CLR_TEXT_FAINT']}; }}
+        .lvl-ok {{ color: {p['CLR_OK']}; font-weight: bold; }}
+        .lvl-err {{ color: {p['CLR_ERR']}; font-weight: bold; }}
+        .lvl-wrn {{ color: {p['CLR_WARN']}; font-weight: bold; }}
+        .lvl-idle {{ color: {p['CLR_IDLE']}; font-weight: bold; }}
+        .lvl-info {{ color: {p['CLR_INFO']}; font-weight: bold; }}
+        .lvl-def {{ color: {p['CLR_TEXT']}; font-weight: bold; }}
+        .cp {{ color: {p['CLR_TEXT_MUTED']}; }}
+        .msg {{ color: {p['CLR_TEXT_CONTENT']}; }}
+        """
+        # Stil artik tamamen global temadan (theme.py) geliyor
+        doc = self.log_box.document()
+        doc.setDefaultStyleSheet(css)
+        doc.clear()
+        for level, component, message in self._log_entries:
+            self.log_box.append(self._make_log_html_line(level, component, message, ""))
+        sb = self.log_box.verticalScrollBar()
+        sb.setValue(sb.maximum())
+        self.set_status(*self._status_cache)
+
+    def append_log_entry(self, level: str, component: str, message: str) -> None:
+        ts = QDateTime.currentDateTime().toString("hh:mm:ss")
+        self._log_entries.append((level, component, message))
+        if len(self._log_entries) > 100:
+            self._log_entries = self._log_entries[-100:]
+        self.log_box.append(self._make_log_html_line(level, component, message, ts))
+        scrollbar = self.log_box.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
+
+    def update_level(self, value: float):
+        if self.level_bar.maximum() == 0:
+            return  # Bar yükleme modundayken gelen mikrofon sesini yoksay
+            
+        from core.settings import STATE_LISTENING
+        if value > 0.0 and self._status_cache[0] != STATE_LISTENING:
+            return  # Kayıt durdurulduktan sonra kuyruktan gelen gecikmeli sinyalleri yoksay
+
+        pct = max(0, min(100, int(value * 100)))
+        self.level_bar.setValue(pct)
+        p = theme_manager.palette
+        if pct < 25:
+            color = p["CLR_INFO"]
+        elif pct < 50:
+            color = p["CLR_OK"]
+        elif pct < 75:
+            color = p["CLR_WARN"]
+        else:
+            color = p["CLR_ERR"]
+        # QProgressBar global stil dosyasındaki formata uymak için renkleri özelliğe taşıyabiliriz.
+        # Global stylesheet'te ::chunk dinamik olarak color özelliğine göre boyanamadığı için
+        # küçük bir inline eklenti ile destekliyoruz.
+        if getattr(self, '_last_level_color', None) != color:
+            self._last_level_color = color
+            self.level_bar.setStyleSheet(
+                f"QProgressBar::chunk {{ background-color: {color}; border-radius: 2px; }}"
+            )
+
+    def set_status(self, text: str, level: str = "OK"):
+        self._status_cache = (text, level)
+        text = t(text)
+        p = theme_manager.palette
+
+        # İkon (LED) durum rengini alır, metin (Donanım Baskısı) her zaman sönük kalır
+        icon_color = p.get(_LEVEL_PALETTE_KEY.get(level, "CLR_IDLE"), p["CLR_TEXT_MUTED"])
+        text_color = p["CLR_TEXT_STATUS"]
+        
+        from ui.utils import colorize_svg_icon
+            
+        icon_pixmap = colorize_svg_icon(ICN_DOT, icon_color).pixmap(14, 14)
+        self.status_icon_label.setPixmap(icon_pixmap)
+
+        safe_text = html.escape(text)
+        self.status_label.setText(f"<span style='color: {text_color};'>{safe_text}</span>")
+        self.status_label.setStyleSheet("font-weight: bold;")
+
+    def _on_status_label_click(self, _event) -> None:
+        if self._status_clickable:
+            self._open_settings_dialog()
+
+    def show_model_missing_guidance(self) -> None:
+        self.append_log_entry("INFO", "STT", t("dashboard.model_missing_guidance"))
+        if not self.log_widget.isVisible():
+            self._toggle_logs()
+        self._status_clickable = True
+        self.status_label.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.status_icon_label.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def clear_model_missing_guidance(self) -> None:
+        self._status_clickable = False
+        self.status_label.unsetCursor()
+        self.status_icon_label.unsetCursor()
+
+    def closeEvent(self, event) -> None:
+        """Teardown/kapanış sırasında QTimer'ların memory leak yaratmasını önler."""
+        for timer in self.findChildren(QTimer):
+            if timer.isActive():
+                timer.stop()
+        super().closeEvent(event)
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        if event.key() == Qt.Key.Key_Escape:
+            self.hide()
+        else:
+            super().keyPressEvent(event)
+
+    def selected_device_index(self) -> int | None:
+        return self.mic_combo.currentData()
+
+    def set_download_state(self, active: bool) -> None:
+        self.set_loading_indicator(active)
+        if self._settings_dialog is not None:
+            self._settings_dialog.set_download_state(active)
+
+    def on_download_complete(self, model_dir: str) -> None:
+        if self._settings_dialog is not None:
+            self._settings_dialog.on_download_complete(model_dir)
+        self.model_dir_changed.emit(model_dir)
+
+    def show_help(self):
+        from ui.help_window import HelpWindow
+        if self._help_window is None:
+            self._help_window = HelpWindow(settings=self.settings)
+        self._help_window.show()
+        self._help_window.raise_()
+        self._help_window.activateWindow()
+        QTimer.singleShot(10, self._position_help_beside_dashboard)
+
+    def _position_help_beside_dashboard(self) -> None:
+        if self._help_window is None:
+            return
+        screen = QApplication.primaryScreen().availableGeometry()
+        dash_geo = self.frameGeometry()
+        help_geo = self._help_window.frameGeometry()
+
+        x = dash_geo.x() - help_geo.width() - 5
+        y = screen.y() + screen.height() - help_geo.height()
+
+        from ui.utils_win import get_dwm_visual_bounds
+        bounds = get_dwm_visual_bounds(int(self._help_window.winId()))
+        if bounds:
+            _, _, _, d_bottom = bounds
+            offset_bottom = d_bottom - self._help_window.y()
+            y = screen.y() + screen.height() - offset_bottom
+
+        if x < screen.left():
+            x = dash_geo.right() + 5
+
+        self._help_window.move(x, y)
+
+    def _open_settings_dialog(self) -> None:
+        from ui.settings_dialog import SettingsDialog
+        if self._settings_dialog is not None and self._settings_dialog.isVisible():
+            self._settings_dialog.close()
+            return
+
+        if self._settings_dialog is None:
+            self._settings_dialog = SettingsDialog(settings=self.settings, parent=self)
+            self._settings_dialog.hotkey_changed.connect(self._on_hotkey_from_dialog)
+            self._settings_dialog.capture_mode_changed.connect(self.hotkey_capture_mode)
+            self._settings_dialog.model_dir_changed.connect(self.model_dir_changed)
+            self._settings_dialog.model_reload_requested.connect(self.model_reload_requested)
+            self._settings_dialog.download_model_requested.connect(self.download_model_requested)
+            self._settings_dialog.log_entry.connect(self.append_log_entry)
+            self._settings_dialog.finished.connect(self._update_settings_btn_style)
+
+        # --- Hizalama Mantığı (Sidecar) ---
+        # Dashboard'ın _position_bottom_right ile aynı formül:
+        # availableGeometry + DWM görsel sınırları kullanılarak alt kenar hizalaması.
+        self._settings_dialog.show()
+        self._settings_dialog.raise_()
+        self._settings_dialog.activateWindow()
+        self._update_settings_btn_style()
+        QTimer.singleShot(10, self._position_settings_beside_dashboard)
+
+    def _update_settings_btn_style(self, *args) -> None:
+        is_active = self._settings_dialog is not None and self._settings_dialog.isVisible()
+        self.btn_settings.setProperty("isActive", is_active)
+        self.btn_settings.set_active(is_active)
+        self.btn_settings.style().unpolish(self.btn_settings)
+        self.btn_settings.style().polish(self.btn_settings)
+
+    def _position_settings_beside_dashboard(self) -> None:
+        if self._settings_dialog is None:
+            return
+        screen = QApplication.primaryScreen().availableGeometry()
+        dash_geo = self.frameGeometry()
+        sett_geo = self._settings_dialog.frameGeometry()
+
+        x = dash_geo.x() - sett_geo.width() - 5
+        y = screen.y() + screen.height() - sett_geo.height()
+
+        from ui.utils_win import get_dwm_visual_bounds
+        bounds = get_dwm_visual_bounds(int(self._settings_dialog.winId()))
+        if bounds:
+            _, _, _, d_bottom = bounds
+            offset_bottom = d_bottom - self._settings_dialog.y()
+            y = screen.y() + screen.height() - offset_bottom
+
+        if x < screen.left():
+            x = dash_geo.right() + 5
+
+        self._settings_dialog.move(x, y)
+
+    def _on_hotkey_from_dialog(self, key: str) -> None:
+        self.hotkey_changed.emit(key)

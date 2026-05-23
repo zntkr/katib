@@ -1,0 +1,7 @@
+PySide6
+faster-whisper
+numpy
+sounddevice
+keyboard
+pyperclip
+huggingface_hub
