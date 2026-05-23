@@ -141,8 +141,9 @@ class TestDashboardLog:
 class TestDashboardStatus:
     def test_set_status_text(self, dashboard):
         from core.settings import STATE_LISTENING
+        from core.i18n import t
         dashboard.set_status(STATE_LISTENING)
-        assert STATE_LISTENING in dashboard.status_label.text()
+        assert t(STATE_LISTENING) in dashboard.status_label.text()
 
     def test_set_status_color(self, dashboard):
         from ui.theme import theme_manager
@@ -151,7 +152,8 @@ class TestDashboardStatus:
 
     def test_default_status_is_waiting(self, dashboard):
         from core.settings import STATE_READY
-        assert STATE_READY in dashboard.status_label.text()
+        from core.i18n import t
+        assert t(STATE_READY) in dashboard.status_label.text()
 
 
 class TestDashboardLevel:
@@ -252,7 +254,8 @@ class TestTrayApp:
         tray = TrayApp(mock_settings)
         tray.set_recording(True)
         from core.settings import STATE_LISTENING
-        assert STATE_LISTENING in tray.dashboard.status_label.text()
+        from core.i18n import t
+        assert t(STATE_LISTENING) in tray.dashboard.status_label.text()
         tray.tray.hide()
         tray.dashboard.close()
 
@@ -261,7 +264,8 @@ class TestTrayApp:
         tray = TrayApp(mock_settings)
         tray.set_recording(False)
         from core.settings import STATE_READY
-        assert STATE_READY in tray.dashboard.status_label.text()
+        from core.i18n import t
+        assert t(STATE_READY) in tray.dashboard.status_label.text()
         tray.tray.hide()
         tray.dashboard.close()
 
@@ -314,7 +318,7 @@ class TestTrayApp:
         tray.transcription_worker.is_ready = False
         tray.osd = MagicMock()
         tray.on_hotkey_pressed()
-        tray.osd.setStateError.assert_called_once_with("Model Yok")
+        tray.osd.setStateError.assert_called_once_with("status.no_model")
         tray.tray.hide()
         tray.dashboard.close()
 

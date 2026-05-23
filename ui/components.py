@@ -88,7 +88,7 @@ class SettingGroup(QFrame):
 
         self.title_label.setObjectName("settingCardTitle")
 
-    def add_widget_row(self, label_text: str, widget: QWidget, full_width: bool = False, widget_width: int = 136):
+    def add_widget_row(self, label_text: str, widget: QWidget, full_width: bool = False, widget_width: int | None = 136):
         from ui.theme import G_1, theme_manager
         p = theme_manager.palette
         lbl = QLabel(label_text)
@@ -103,7 +103,8 @@ class SettingGroup(QFrame):
             lay.setContentsMargins(0, 0, 0, 0)
             lay.setSpacing(G_1)  # 8-pt grid spacing
             lay.addWidget(lbl, stretch=1)
-            widget.setFixedWidth(widget_width)
+            if widget_width is not None:
+                widget.setFixedWidth(widget_width)
             lay.addWidget(widget)
             self.group_layout.addLayout(lay)
 

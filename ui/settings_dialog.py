@@ -15,17 +15,39 @@ from core.settings import (
     DEFAULT_DOWNLOAD_PARENT, COMPUTE_TYPE_OPTIONS_CPU,
     SETTINGS_SCHEMA
 )
-from ui.theme import G_1, G_2, G_4, PANEL_WIDTH, FONT_SIZE_SM, WIDGET_WIDTH_SM, theme_manager
-from ui.components import SettingGroup, NoScrollComboBox
+from ui.theme import G_1, G_2, PANEL_WIDTH, FONT_SIZE_SM, theme_manager
+from ui.components import SettingGroup, NoScrollComboBox, DynamicIconButton
+from ui.icons import ICN_DOWNLOAD, ICN_TICK
 from core.i18n import t, available_languages
 
 class SettingsDialog(QDialog):
+    _DEFAULT_PROMPTS: dict[str, str] = {
+        "ar": "مرحباً. أقوم اليوم بتدوين ملاحظاتي بالصوت.",
+        "de": "Hallo. Ich diktiere heute meine Notizen per Sprache.",
+        "el": "Γεια σας. Σήμερα υπαγορεύω τις σημειώσεις μου φωνητικά.",
+        "en": "Hello. I'm dictating my notes using voice today.",
+        "es": "Hola. Hoy estoy dictando mis notas por voz.",
+        "fa": "سلام. امروز یادداشت‌های خود را به صورت صوتی دیکته می‌کنم.",
+        "fr": "Bonjour. Je dicte mes notes à voix haute aujourd'hui.",
+        "hi": "नमस्ते। आज मैं अपने नोट्स आवाज़ से बोल रहा हूँ।",
+        "id": "Halo. Hari ini saya mendiktekan catatan saya secara lisan.",
+        "it": "Ciao. Oggi sto dettando le mie note a voce.",
+        "ja": "こんにちは。今日は音声でメモを書き取っています。",
+        "ko": "안녕하세요. 오늘 음성으로 메모를 받아쓰고 있습니다.",
+        "pt": "Olá. Hoje estou ditando minhas anotações por voz.",
+        "ru": "Привет. Сегодня я диктую свои заметки голосом.",
+        "tr": "Merhaba. Bugün notlarımı sesli olarak dikte ediyorum.",
+        "ur": "السلام علیکم۔ آج میں اپنے نوٹس آواز سے لکھوا رہا ہوں۔",
+        "zh": "你好。今天我正在用语音记录我的笔记。",
+    }
+
     hotkey_changed           = Signal(str)
     model_dir_changed        = Signal(str)
     model_reload_requested   = Signal()
     download_model_requested = Signal(str, str)
     log_entry                = Signal(str, str, str)
     capture_mode_changed     = Signal(bool)  # True=capture started, False=finished
+    language_change_requested = Signal(str)
 
     def __init__(self, settings, parent: QWidget | None = None):
         flags = (
@@ -102,9 +124,10 @@ class SettingsDialog(QDialog):
         # --- GROUP: GENERAL ---
         genel_grp = SettingGroup(t("settings.group_general"))
         self.btn_hotkey = QPushButton()
+        self.btn_hotkey.setProperty("isIconBtn", True)
         self.btn_hotkey.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_hotkey.clicked.connect(self._start_hotkey_capture)
-        genel_grp.add_widget_row(t("settings.hotkey_label"), self.btn_hotkey, widget_width=80)
+        genel_grp.add_widget_row(t("settings.hotkey_label"), self.btn_hotkey, widget_width=None)
 
         self._chk_startup = QCheckBox()
         self._chk_startup.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -128,17 +151,7 @@ class SettingsDialog(QDialog):
         for name, code in available_languages():
             self._lang_combo.addItem(name, userData=code)
         self._lang_combo.currentIndexChanged.connect(self._on_app_language_changed)
-        self._btn_restart = QPushButton(t("settings.restart_now"))
-        self._btn_restart.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._btn_restart.setEnabled(False)
-        self._btn_restart.clicked.connect(self._restart_app)
-        lang_widget = QWidget()
-        lang_lay = QHBoxLayout(lang_widget)
-        lang_lay.setContentsMargins(0, 0, 0, 0)
-        lang_lay.setSpacing(G_1)
-        lang_lay.addWidget(self._lang_combo, 1)
-        lang_lay.addWidget(self._btn_restart)
-        genel_grp.add_widget_row(t("settings.app_language_label"), lang_widget, full_width=True)
+        genel_grp.add_widget_row(t("settings.app_language_label"), self._lang_combo, full_width=True)
         self.container_layout.addWidget(genel_grp)
 
         # --- GROUP: MODEL ---
@@ -159,12 +172,13 @@ class SettingsDialog(QDialog):
         
         self.model_select_combo.currentIndexChanged.connect(self._on_combo_index_changed)
         
-        self.btn_download = QPushButton(t("settings.download"))
-        self.btn_download.setFixedWidth(WIDGET_WIDTH_SM)
+        p = theme_manager.palette
+        self.btn_download = DynamicIconButton(ICN_DOWNLOAD, p["CLR_YELLOW"])
+        self.btn_download.setToolTip(t("settings.download"))
         self.btn_download.clicked.connect(self._on_download_clicked)
         dl_widget = QWidget()
         dl_lay = QHBoxLayout(dl_widget)
-        dl_lay.setContentsMargins(0,0,0,0)
+        dl_lay.setContentsMargins(0, 0, 0, 0)
         dl_lay.setSpacing(G_1)
         dl_lay.addWidget(self.model_select_combo, 1)
         dl_lay.addWidget(self.btn_download)
@@ -218,24 +232,26 @@ class SettingsDialog(QDialog):
                 le.setMinimumWidth(50)
                 le.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
                 
-                btn_save = QPushButton(t("settings.save"))
-                btn_save.setFixedWidth(72)
-                btn_save.setCursor(Qt.CursorShape.PointingHandCursor)
-                btn_save.setEnabled(False)  # disabled initially
-                
+                btn_save = DynamicIconButton(ICN_TICK, theme_manager.palette["CLR_YELLOW"])
+                btn_save.setEnabled(False)
+
                 def _make_save_handler(k, input_w, btn):
                     def on_text_changed(text):
                         is_changed = text != self.settings.get(k, "")
                         btn.setEnabled(is_changed)
-                        if is_changed and btn.text() == "✓":
-                            btn.setText(t("settings.save"))
-                            
+                        btn.set_active(is_changed)
+
                     def on_save():
                         if not btn.isEnabled(): return
                         self._on_dynamic_changed(k, input_w.text())
-                        btn.setText("✓")
+                        if k == "initial_prompt":
+                            lang = self.settings.get("language", "auto")
+                            if lang != "auto":
+                                prompts = self.settings.get("initial_prompts") or {}
+                                prompts[lang] = input_w.text()
+                                self.settings.set("initial_prompts", prompts)
                         btn.setEnabled(False)
-                        QTimer.singleShot(1500, lambda: btn.setText(t("settings.save")) if not btn.isEnabled() else None)
+                        btn.set_active(False)
                     return on_text_changed, on_save
                     
                 text_handler, save_handler = _make_save_handler(sdef.key, le, btn_save)
@@ -286,27 +302,36 @@ class SettingsDialog(QDialog):
         self.main_layout.addWidget(self.scroll_area)
 
 
-        # Re-apply after the expanding policy overrides the 80 px fixed width on btn_hotkey.
-        # language and compute_combo are now full_width=True, so the 80 px override is removed.
-        self.btn_hotkey.setFixedWidth(WIDGET_WIDTH_SM)
-
     def _on_dynamic_changed(self, key: str, value):
         self.settings.set(key, value)
+        if key == "language":
+            self._load_prompt_for_language(value)
+
+    def _load_prompt_for_language(self, lang: str) -> None:
+        le = self._dynamic_widgets.get("initial_prompt")
+        if not isinstance(le, QLineEdit):
+            return
+        if lang == "auto":
+            prompt = ""
+        else:
+            saved = (self.settings.get("initial_prompts") or {}).get(lang)
+            prompt = saved if saved is not None else self._DEFAULT_PROMPTS.get(lang, "")
+        le.blockSignals(True)
+        le.setText(prompt)
+        le.blockSignals(False)
+        self.settings.set("initial_prompt", prompt)
+        parent_w = le.parentWidget()
+        if parent_w:
+            btn = parent_w.findChild(DynamicIconButton)
+            if btn:
+                btn.setEnabled(False)
+                btn.set_active(False)
 
     def _on_app_language_changed(self, _idx: int) -> None:
         code = self._lang_combo.currentData()
         if code:
             self.settings.set("app_language", code)
-            self._btn_restart.setEnabled(True)
-            self.log_entry.emit("...", "APP", t("settings.restart_for_language"))
-
-    def _restart_app(self) -> None:
-        import sys
-        import subprocess
-        subprocess.Popen([sys.executable] + sys.argv)
-        app = QApplication.instance()
-        if app:
-            app.quit()
+            self.language_change_requested.emit(code)
 
     def _on_startup_toggled(self, checked: bool) -> None:
         try:
@@ -482,12 +507,10 @@ class SettingsDialog(QDialog):
         if not target_path: return
         is_installed = validate_model_dir(str(target_path)) is not None
         
-        self.btn_download.setText(t("settings.download"))
         repo = self.model_select_combo.currentData()
-        if repo and str(repo).startswith("custom:"):
-            self.btn_download.setEnabled(False)
-        else:
-            self.btn_download.setEnabled(not is_installed)
+        can_download = not is_installed and not (repo and str(repo).startswith("custom:"))
+        self.btn_download.setEnabled(can_download)
+        self.btn_download.set_active(can_download)
             
         self._refresh_model_combo_badges()
 
@@ -498,7 +521,10 @@ class SettingsDialog(QDialog):
         if not target_path: return
         is_installed = validate_model_dir(str(target_path)) is not None
         if not is_installed:
-            reply = QMessageBox.question(self, t("settings.download_confirm_title"), t("settings.download_confirm_msg"), QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            model_name = self.model_select_combo.currentText().split(" (")[0]
+            msg = t("settings.download_confirm_msg").format(model=model_name)
+            reply = QMessageBox.question(self, t("settings.download_confirm_title"), msg, QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            self.model_select_combo.setFocus()
             if reply == QMessageBox.StandardButton.Yes:
                 self.download_model_requested.emit(str(DEFAULT_DOWNLOAD_PARENT), selected_repo)
 
@@ -562,9 +588,10 @@ class SettingsDialog(QDialog):
                     btn = parent_w.findChild(QPushButton)
                     if btn:
                         btn.setEnabled(False)
-                        btn.setText(t("settings.save"))
             widget.blockSignals(False)
             
+        self._load_prompt_for_language(self.settings.get("language", "auto"))
+
         try:
             from core.startup import get_startup_enabled
             self._chk_startup.blockSignals(True)
@@ -602,7 +629,7 @@ class SettingsDialog(QDialog):
 
     def set_download_state(self, active: bool) -> None:
         self.btn_download.setEnabled(not active)
-        if active: self.btn_download.setText(t("settings.downloading"))
+        self.btn_download.set_active(not active)
 
     def on_download_complete(self, model_dir: str) -> None:
         self._update_model_path_label(model_dir)

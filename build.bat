@@ -5,7 +5,7 @@ setlocal
 set PYTHON_EXE=C:\Python314\python.exe
 
 echo [1/1] PyInstaller ile CPU-Only paketleniyor...
-"%PYTHON_EXE%" -m PyInstaller Dikte.spec --clean
+"%PYTHON_EXE%" -m PyInstaller Katib.spec --clean
 if %ERRORLEVEL% NEQ 0 (
     echo.
     echo [HATA] PyInstaller paketlemesi basarisiz oldu! Islemler durduruluyor.

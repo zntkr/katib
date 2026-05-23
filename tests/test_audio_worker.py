@@ -73,7 +73,7 @@ class TestStartRecording:
              patch("sounddevice.InputStream") as mock_stream_cls:
             mock_stream_cls.return_value = MagicMock()
             worker.start_recording()
-        assert any("başladı" in m.lower() for m in logs)
+        assert any("started" in m.lower() for m in logs)
 
     def test_start_recording_emits_error_on_failure(self, qapp, mock_settings):
         worker = AudioWorker(mock_settings)
@@ -83,7 +83,7 @@ class TestStartRecording:
              patch("sounddevice.InputStream", side_effect=Exception("cihaz yok")):
             worker.start_recording()
         assert len(errors) == 1
-        assert "Mikrofon açılamadı" in errors[0]
+        assert "osd.mic_open_failed" in errors[0]
 
     def test_stream_is_none_after_error(self, qapp, mock_settings):
         worker = AudioWorker(mock_settings)
@@ -144,7 +144,7 @@ class TestStartRecording:
             worker.start_recording()
 
         assert stream_open_count == 1, "Fallback denenmemeli"
-        assert errors == ["Mikrofon bağlı değil"]
+        assert errors == ["osd.mic_not_connected"]
         assert worker._stream is None
 
 class TestStopRecording:
@@ -374,7 +374,7 @@ class TestGracefulDegradation:
         worker._intentional_close = False
         worker._on_stream_finished()
         assert len(errors) == 1
-        assert "koptu" in errors[0].lower()
+        assert "disconnected" in errors[0].lower()
 
     def test_on_stream_finished_unexpected_emits_log(self, qapp, mock_settings):
         worker = AudioWorker(mock_settings)
@@ -382,7 +382,7 @@ class TestGracefulDegradation:
         worker.log_entry.connect(lambda l, c, m: logs.append(m))
         worker._intentional_close = False
         worker._on_stream_finished()
-        assert any("koptu" in m for m in logs)
+        assert any("connection lost" in m.lower() for m in logs)
 
     def test_on_stream_finished_unexpected_resets_level_bar(self, qapp, mock_settings):
         worker = AudioWorker(mock_settings)
@@ -438,8 +438,7 @@ class TestRun:
         worker.log_entry.connect(lambda l, c, m: logs.append((l, c, m)))
         worker._stop_event.set()   # wait() anında döner
         worker.run()
-        from core.settings import STATE_READY
-        assert any(l == "OK" and STATE_READY in m for l, _, m in logs)
+        assert any(l == "OK" and "ready" in m.lower() for l, _, m in logs)
 
     def test_run_returns_when_stop_event_set(self, qapp, mock_settings):
         worker = AudioWorker(mock_settings)
@@ -462,7 +461,7 @@ class TestStopRecordingException:
         worker.log_entry.connect(lambda l, c, m: logs.append((l, c, m)))
         with patch("numpy.concatenate", side_effect=ValueError("shape mismatch")):
             worker.stop_recording()
-        assert any(l == "ERR" and "birleştirme" in m for l, _, m in logs)
+        assert any(l == "ERR" and "merge error" in m.lower() for l, _, m in logs)
 
     def test_concatenate_error_emits_error_occurred(self, qapp, mock_settings):
         worker = self._worker_with_chunk(qapp, mock_settings)
@@ -470,7 +469,7 @@ class TestStopRecordingException:
         worker.error_occurred.connect(errors.append)
         with patch("numpy.concatenate", side_effect=ValueError("shape mismatch")):
             worker.stop_recording()
-        assert any("birleştirme" in e for e in errors)
+        assert any("audio_merge_error" in e for e in errors)
 
 
 class TestAudioCallbackException:
@@ -483,7 +482,7 @@ class TestAudioCallbackException:
         indata = np.ones((1024, 1), dtype="float32")
         with patch("numpy.sqrt", side_effect=RuntimeError("math error")):
             worker._audio_callback(indata, 1024, None, None)
-        assert any(l == "ERR" and "akışı kesildi" in m for l, _, m in logs)
+        assert any(l == "ERR" and "interrupted" in m.lower() for l, _, m in logs)
 
     def test_callback_exception_does_not_propagate(self, qapp, mock_settings):
         """sounddevice callback'i exception yutmamalı; aksi hâlde stream çöker."""
@@ -504,7 +503,7 @@ class TestOnStreamFinishedException:
         with patch.object(worker, "level_changed") as mock_level:
             mock_level.emit.side_effect = RuntimeError("emit failed")
             worker._on_stream_finished()
-        assert any(l == "ERR" and "kapanma hatası" in m for l, _, m in logs)
+        assert any(l == "ERR" and "close error" in m.lower() for l, _, m in logs)
 
     def test_inner_exception_does_not_propagate(self, qapp, mock_settings):
         worker = AudioWorker(mock_settings)
@@ -525,7 +524,7 @@ class TestCloseStreamException:
         mock_stream.stop.side_effect = RuntimeError("cihaz meşgul")
         worker._stream = mock_stream
         worker._close_stream()
-        assert any(l == "WRN" and "kapatılamadı" in m for l, _, m in logs)
+        assert any(l == "WRN" and "could not be closed" in m.lower() for l, _, m in logs)
 
     def test_stream_stop_error_still_clears_stream(self, qapp, mock_settings):
         """Exception sonrası finally: _stream = None garantisi."""
@@ -544,7 +543,7 @@ class TestCloseStreamException:
         mock_stream.close.side_effect = RuntimeError("close hatası")
         worker._stream = mock_stream
         worker._close_stream()
-        assert any(l == "WRN" and "kapatılamadı" in m for l, _, m in logs)
+        assert any(l == "WRN" and "could not be closed" in m.lower() for l, _, m in logs)
 
 class TestDeviceAvailable:
     def test_device_available_exception_returns_false(self, qapp, mock_settings):
@@ -595,7 +594,7 @@ class TestRefreshDevices:
         with p1, p2:
             worker.refresh_devices()
         labels = [label for label, _, _ in emitted[0]]
-        assert any("(Varsayılan)" in lbl for lbl in labels)
+        assert any("(Default)" in lbl for lbl in labels)
 
     def test_exactly_one_default(self, qapp, mock_settings):
         worker = AudioWorker(mock_settings)
@@ -644,7 +643,7 @@ class TestRefreshDevices:
         worker.log_entry.connect(lambda l, c, m: logs.append(m))
         with patch("sounddevice.query_devices", side_effect=Exception("donanım hatası")):
             worker.refresh_devices()
-        assert any("alınamadı" in m for m in logs)
+        assert any("could not retrieve" in m.lower() for m in logs)
 
 
 # ── EKSİK KALAN 10 SATIRIN (%100 KAPSAM) TESTLERİ ─────────────────────────────
@@ -670,7 +669,7 @@ class TestStartRecordingDeviceUnavailable:
         errors = []
         worker.error_occurred.connect(errors.append)
         worker.start_recording()
-        assert any("seçili değil" in e for e in errors)
+        assert any("osd.mic_no_device" in e for e in errors)
         assert worker._stream is None
 
     def test_device_not_found(self, qapp, mock_settings):
@@ -680,7 +679,7 @@ class TestStartRecordingDeviceUnavailable:
         worker.error_occurred.connect(errors.append)
         with patch.object(worker, "_device_available", return_value=False):
             worker.start_recording()
-        assert any("bulunamadı" in e for e in errors)
+        assert any("osd.mic_not_found" in e for e in errors)
         assert worker._stream is None
 
 class TestStopRecordingShortDuration:
@@ -693,8 +692,8 @@ class TestStopRecordingShortDuration:
         logs = []
         worker.log_entry.connect(lambda l, c, m: logs.append((l, m)))
         worker.stop_recording()
-        
-        assert any(l == "WRN" and "çok kısa" in m for l, m in logs)
+
+        assert any(l == "WRN" and "too short" in m.lower() for l, m in logs)
 
 class TestDeviceAvailableBranches:
     def test_returns_false_if_no_input_channels(self, qapp, mock_settings):

@@ -74,7 +74,7 @@ class TestSettingsDialog:
         mock_startfile.assert_not_called()
         assert len(logs) == 1
         assert logs[0][0] == "WRN"
-        assert "henüz oluşturulmamış" in logs[0][2]
+        assert "Log folder has not been created yet." in logs[0][2]
 
     def test_init_with_startup_exception(self, qapp, mock_settings):
         from ui.settings_dialog import SettingsDialog
@@ -106,7 +106,7 @@ class TestSettingsDialog:
     def test_start_hotkey_capture(self, dialog):
         dialog._start_hotkey_capture()
         assert dialog._capturing_hotkey is True
-        assert "Tuşa Basın" in dialog.btn_hotkey.text()
+        assert "Press a key..." in dialog.btn_hotkey.text()
 
     def test_inline_hotkey_capture_success(self, dialog):
         dialog._start_hotkey_capture()

@@ -38,6 +38,13 @@ def qapp():
 
 
 @pytest.fixture(autouse=True)
+def _init_i18n():
+    """Tüm testler için varsayılan dili İngilizce olarak ayarlar."""
+    from core.i18n import set_language
+    set_language("en")
+
+
+@pytest.fixture(autouse=True)
 def _stub_qt_os_hooks():
     """QMediaDevices Windows IMMDeviceEnumerator hook'unu devre dışı bırakır.
     Aksi takdirde test bitiminde COM thread process'i bloke eder."""

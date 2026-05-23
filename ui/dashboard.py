@@ -51,6 +51,7 @@ class DashboardWindow(QWidget):
     model_reload_requested    = Signal()
     refresh_devices_requested = Signal()
     download_model_requested  = Signal(str, str)
+    language_change_requested = Signal(str)
 
     def __init__(self, settings, icon_idle: QIcon, parent: QWidget | None = None):
         flags = (
@@ -64,7 +65,7 @@ class DashboardWindow(QWidget):
         super().__init__(parent, flags)
         self.setObjectName("DashboardWindow")
         self.settings = settings
-        self.setWindowTitle(f"{APP_NAME} — {t('dashboard.title')}")
+        self.setWindowTitle(APP_NAME)
         self.setWindowIcon(icon_idle)
 
         # ── White Flash Prevention ────────────────────────────────────────
@@ -108,7 +109,7 @@ class DashboardWindow(QWidget):
             self._do_audio_inputs_changed()
 
     def _do_audio_inputs_changed(self) -> None:
-        self.append_log_entry("...", "MIC", t("dashboard.device_refreshed"))
+        self.append_log_entry("...", "MIC", "", "dashboard.device_refreshed")
         self._populate_devices()
 
     # ------------------------------------------------------------------ build
@@ -130,10 +131,11 @@ class DashboardWindow(QWidget):
         self.log_box.setObjectName("log_box")
         self.log_box.setOpenExternalLinks(False)
         self.log_box.setFont(QFont("Consolas", FONT_SIZE_SM))
+        self.log_box.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
         self.log_box.setFixedHeight(LOG_BOX_HEIGHT)
         self.log_box.setLineWrapMode(QTextBrowser.LineWrapMode.WidgetWidth)
         self.log_box.document().setMaximumBlockCount(100)
-        self._log_entries: list[tuple[str, str, str]] = []
+        self._log_entries: list[tuple[str, str, str, str, str]] = []
         log_layout.addWidget(self.log_box)
 
         root.addWidget(self.log_widget)
@@ -286,7 +288,7 @@ class DashboardWindow(QWidget):
         if select_idx != -1:
             self.mic_combo.setCurrentIndex(select_idx)
         if not items:
-            self.append_log_entry("WRN", "MIC", t("dashboard.no_mic_found"))
+            self.append_log_entry("WRN", "MIC", "", "dashboard.no_mic_found")
             self.mic_combo.setEnabled(False)
         else:
             self.mic_combo.setEnabled(True)
@@ -314,9 +316,10 @@ class DashboardWindow(QWidget):
         from ui.utils_win import get_dwm_visual_bounds
         bounds = get_dwm_visual_bounds(int(self.winId()))
         if bounds:
+            dpr = QApplication.primaryScreen().devicePixelRatio()
             _, _, d_right, d_bottom = bounds
-            offset_right = d_right - geo.x()
-            offset_bottom = d_bottom - geo.y()
+            offset_right = int(d_right / dpr) - geo.x()
+            offset_bottom = int(d_bottom / dpr) - geo.y()
             x = screen.x() + screen.width() - offset_right
             y = screen.y() + screen.height() - offset_bottom
 
@@ -404,18 +407,20 @@ class DashboardWindow(QWidget):
         doc = self.log_box.document()
         doc.setDefaultStyleSheet(css)
         doc.clear()
-        for level, component, message in self._log_entries:
-            self.log_box.append(self._make_log_html_line(level, component, message, ""))
+        for level, component, message, i18n_key, ts in self._log_entries:
+            display = t(i18n_key) if i18n_key else message
+            self.log_box.append(self._make_log_html_line(level, component, display, ts))
         sb = self.log_box.verticalScrollBar()
         sb.setValue(sb.maximum())
         self.set_status(*self._status_cache)
 
-    def append_log_entry(self, level: str, component: str, message: str) -> None:
+    def append_log_entry(self, level: str, component: str, message: str, i18n_key: str = "") -> None:
         ts = QDateTime.currentDateTime().toString("hh:mm:ss")
-        self._log_entries.append((level, component, message))
+        self._log_entries.append((level, component, message, i18n_key, ts))
         if len(self._log_entries) > 100:
             self._log_entries = self._log_entries[-100:]
-        self.log_box.append(self._make_log_html_line(level, component, message, ts))
+        display = t(i18n_key) if i18n_key else message
+        self.log_box.append(self._make_log_html_line(level, component, display, ts))
         scrollbar = self.log_box.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
 
@@ -449,6 +454,7 @@ class DashboardWindow(QWidget):
     def set_status(self, text: str, level: str = "OK"):
         self._status_cache = (text, level)
         text = t(text)
+        text = text[:1].upper() + text[1:]
         p = theme_manager.palette
 
         # The icon (LED) takes the status colour; the text always stays muted.
@@ -469,7 +475,7 @@ class DashboardWindow(QWidget):
             self._open_settings_dialog()
 
     def show_model_missing_guidance(self) -> None:
-        self.append_log_entry("INFO", "STT", t("dashboard.model_missing_guidance"))
+        self.append_log_entry("INFO", "STT", "", "dashboard.model_missing_guidance")
         if not self.log_widget.isVisible():
             self._toggle_logs()
         self._status_clickable = True
@@ -529,8 +535,9 @@ class DashboardWindow(QWidget):
         from ui.utils_win import get_dwm_visual_bounds
         bounds = get_dwm_visual_bounds(int(self._help_window.winId()))
         if bounds:
+            dpr = QApplication.primaryScreen().devicePixelRatio()
             _, _, _, d_bottom = bounds
-            offset_bottom = d_bottom - self._help_window.y()
+            offset_bottom = int(d_bottom / dpr) - self._help_window.y()
             y = screen.y() + screen.height() - offset_bottom
 
         if x < screen.left():
@@ -553,6 +560,7 @@ class DashboardWindow(QWidget):
             self._settings_dialog.download_model_requested.connect(self.download_model_requested)
             self._settings_dialog.log_entry.connect(self.append_log_entry)
             self._settings_dialog.finished.connect(self._update_settings_btn_style)
+            self._settings_dialog.language_change_requested.connect(self.language_change_requested)
 
         # Sidecar alignment — same formula as _position_bottom_right:
         # availableGeometry + DWM visual bounds for bottom-edge alignment.
@@ -561,6 +569,14 @@ class DashboardWindow(QWidget):
         self._settings_dialog.activateWindow()
         self._update_settings_btn_style()
         QTimer.singleShot(10, self._position_settings_beside_dashboard)
+
+    def _refresh_language_tooltips(self) -> None:
+        self.setWindowTitle(APP_NAME)
+        self.btn_copy_transcript.setToolTip(t("dashboard.copy_tooltip"))
+        self.btn_toggle_log.setToolTip(t("dashboard.console_tooltip"))
+        self.btn_settings.setToolTip(t("dashboard.settings_tooltip"))
+        self.set_status(*self._status_cache)
+        self._update_log_stylesheet()
 
     def _update_settings_btn_style(self, *args) -> None:
         is_active = self._settings_dialog is not None and self._settings_dialog.isVisible()
@@ -582,8 +598,9 @@ class DashboardWindow(QWidget):
         from ui.utils_win import get_dwm_visual_bounds
         bounds = get_dwm_visual_bounds(int(self._settings_dialog.winId()))
         if bounds:
+            dpr = QApplication.primaryScreen().devicePixelRatio()
             _, _, _, d_bottom = bounds
-            offset_bottom = d_bottom - self._settings_dialog.y()
+            offset_bottom = int(d_bottom / dpr) - self._settings_dialog.y()
             y = screen.y() + screen.height() - offset_bottom
 
         if x < screen.left():

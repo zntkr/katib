@@ -99,6 +99,7 @@ Katib, Windows üzerinde çalışan, tamamen çevrimdışı (offline) bir ses-me
     2. **Operation (Operasyon)**: OSD üzerinden kayıt/işleme durumu ve kritik hataların takibi.
 - **Deterministic Specificity (Belirleyici Spesifiklik)**: Hata mesajları genel ("Hata oluştu") değil, spesifik ("Mikrofon Susturuldu" veya "Cihaz Koptu") olmalıdır. Sistem neden bozulduğunu biliyorsa bunu kullanıcıdan gizlemez.
 - Model boyutu ve donanım (CPU/GPU) ayarları `TranscriptionWorker` içindeki yapılandırmaya bağlıdır.
+- **Uygulama Dil Seçimi (App Language Selection)**: Desteklenen diller `translations/` dizinindeki JSON dosyalarına göre dinamik olarak listelenir (`core/i18n.py`). Sistem dili çalışma zamanında algılanarak dil listesinin (combobox) en üstünde, dinamik olarak yerelleştirilmiş `(Sistem)` / `(System)` etiketiyle sunulur. Dil seçimi değiştiğinde uygulama yeniden başlatılmaz; `TrayApp.apply_language()` çağrılır, tray menüsü rebuild edilir, Settings dialog kapatılıp yeni dille yeniden açılır (Live UI ilkesi).
 
 ## Anti-Patterns ve Yasaklar (Aşırı Mühendisliğe Karşı)
 Projenin basitliğini, düz yapısını (flat architecture) ve okunabilirliğini korumak esastır. Bu projeyi geliştiren AI ajanları aşağıdaki pratikleri **KESİNLİKLE dahil etmemelidir**:

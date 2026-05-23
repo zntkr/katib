@@ -82,9 +82,30 @@ def available_languages() -> list[tuple[str, str]]:
         "fa": "فارسی", "ur": "اردو",
     }
     try:
-        return [
+        langs = [
             (_NAMES.get(p.stem, p.stem), p.stem)
             for p in sorted(_translations_dir().glob("*.json"))
         ]
+        import locale
+        try:
+            sys_code = (locale.getdefaultlocale()[0] or "")[:2].lower()
+        except Exception:
+            sys_code = ""
+
+        sys_item = None
+        for item in langs:
+            if item[1] == sys_code:
+                sys_item = item
+                break
+
+        if sys_item:
+            langs.remove(sys_item)
+            system_tag = try_t("settings.group_system")
+            if system_tag == "settings.group_system":
+                system_tag = "Sistem" if sys_code == "tr" else "System"
+            new_name = f"{sys_item[0]} ({system_tag})"
+            langs.insert(0, (new_name, sys_item[1]))
+
+        return langs
     except Exception:
         return [("English", "en")]

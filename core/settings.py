@@ -12,7 +12,6 @@ DEFAULT_DOWNLOAD_PARENT = Path.home() / ".katib_app" / "models"
 
 MSG_MODEL_NOT_FOUND  = "status.no_model"
 MSG_MIC_UNAVAILABLE  = "status.no_mic"
-STATE_RECORDING     = "status.recording"
 STATE_PROCESSING    = "status.writing"
 STATE_LISTENING     = "status.listening"
 STATE_READY         = "status.ready"

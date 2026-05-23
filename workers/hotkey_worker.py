@@ -25,7 +25,7 @@ class HotkeyWorker(BaseWorker):
                     currently_down = keyboard.is_pressed(self._key)
                 except Exception:
                     self.log_entry.emit("ERR", "KEY", "Keyboard read error")
-                    self.error_occurred.emit("Keyboard read error")
+                    self.error_occurred.emit("osd.keyboard_error")
                     time.sleep(1.0)
                     continue
 
@@ -46,7 +46,7 @@ class HotkeyWorker(BaseWorker):
 
         except Exception:
             self.log_entry.emit("ERR", "KEY", "Hotkey crashed")
-            self.error_occurred.emit("Hotkey not working")
+            self.error_occurred.emit("osd.hotkey_failed")
 
     def set_key(self, key: str):
         self._key         = key.lower()

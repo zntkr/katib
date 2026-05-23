@@ -61,7 +61,7 @@ class TranscriptionWorker(BaseWorker):
             except Exception as e:
                 detail = str(e) or "bilinmeyen hata"
                 self.log_entry.emit("ERR", "STT", f"Transcription crashed: {detail}")
-                self.error_occurred.emit("Transcription crashed")
+                self.error_occurred.emit("osd.stt_crashed")
             
     def _load_model(self):
         self.is_ready = False
@@ -110,7 +110,7 @@ class TranscriptionWorker(BaseWorker):
         except Exception as e:
             detail = str(e) or "bilinmeyen hata"
             self.log_entry.emit("ERR", "STT", f"Model failed to load: {detail}")
-            self.error_occurred.emit("Model failed to load")
+            self.error_occurred.emit("osd.model_load_failed")
             self.status_changed.emit("status.model_error", "ERR")
             self.loading_state_changed.emit(False)
 
@@ -132,7 +132,7 @@ class TranscriptionWorker(BaseWorker):
 
     def check_model_exists(self) -> bool:
         if not self._current_model_dir or not os.path.exists(self._current_model_dir):
-            self.error_occurred.emit("Model folder inaccessible")
+            self.error_occurred.emit("osd.model_inaccessible")
             self.log_entry.emit("ERR", "STT", "Model folder not found.")
             self.status_changed.emit("status.folder_error", "ERR")
             return False
@@ -146,7 +146,7 @@ class TranscriptionWorker(BaseWorker):
             self._queue.put_nowait(audio)
         except queue.Full:
             self.log_entry.emit("WRN", "STT", "Transcription in progress, skipped")
-            self.error_occurred.emit("Transcription in progress")
+            self.error_occurred.emit("osd.stt_busy")
 
     # ----------------------------------------------------------------- private
     @measure_time("STT", "Whisper Transcription")
@@ -188,6 +188,7 @@ class TranscriptionWorker(BaseWorker):
             
             if final_text is None:
                 self.log_entry.emit("WRN", "STT", "No speech detected")
+                self.error_occurred.emit("osd.no_speech")
                 return
 
             self.log_entry.emit("OK", "STT", f"Transcript: {final_text!r}")
@@ -195,7 +196,7 @@ class TranscriptionWorker(BaseWorker):
 
         except Exception:
             self.log_entry.emit("ERR", "STT", "Transcription error")
-            self.error_occurred.emit("Transcription error")
+            self.error_occurred.emit("osd.stt_error")
         finally:
             self.transcription_finished.emit()
             if self.is_ready:

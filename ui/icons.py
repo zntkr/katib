@@ -12,4 +12,5 @@ ICN_DOT = '<svg viewBox="0 0 24 24" fill="{color}"><circle cx="12" cy="12" r="8"
 
 ICN_TICK = '<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M3 8l3 3 7-7" stroke="{color}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 ICN_DOWN = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><polyline points="6 9 12 15 18 9" fill="none" stroke="{color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+ICN_DOWNLOAD = '<svg viewBox="0 0 24 24" fill="none" stroke="{color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><line x1="5" y1="20" x2="19" y2="20"/></svg>'
 ICN_UP = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><polyline points="18 15 12 9 6 15" fill="none" stroke="{color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'

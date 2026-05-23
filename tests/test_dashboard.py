@@ -15,7 +15,7 @@ def mock_dashboard():
 def test_device_changed_selects_default(mock_dashboard):
     """Kullanıcı '(Varsayılan)' etiketli bir cihaz seçtiğinde takibe dönüldüğünü test eder."""
     mock_dashboard.mic_combo.itemData.return_value = 1
-    mock_dashboard.mic_combo.itemText.return_value = "Logitech Mic (Varsayılan)"
+    mock_dashboard.mic_combo.itemText.return_value = "Logitech Mic (Default)"
 
     DashboardWindow._on_device_changed(mock_dashboard, 0)
 
@@ -23,7 +23,7 @@ def test_device_changed_selects_default(mock_dashboard):
         call("device_index", -1),
         call("device_name", "")
     ])
-    mock_dashboard.append_log_entry.assert_called_with("...", "MIC", "Dinamik varsayılan izleme moduna geçildi.")
+    mock_dashboard.append_log_entry.assert_called_with("...", "MIC", "Switched to dynamic default tracking.")
     mock_dashboard.device_changed.emit.assert_called_once_with(1)
 
 def test_device_changed_selects_specific_device(mock_dashboard):
@@ -37,7 +37,7 @@ def test_device_changed_selects_specific_device(mock_dashboard):
         call("device_index", 2),
         call("device_name", "Realtek Mic")
     ])
-    mock_dashboard.append_log_entry.assert_called_with("...", "MIC", "Mikrofon sabitlendi: Realtek Mic")
+    mock_dashboard.append_log_entry.assert_called_with("...", "MIC", "Microphone locked: Realtek Mic")
     mock_dashboard.device_changed.emit.assert_called_once_with(2)
 
 def test_device_changed_none_data(mock_dashboard):

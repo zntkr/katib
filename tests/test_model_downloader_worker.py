@@ -124,7 +124,7 @@ class TestRunSuccess:
 
     def test_emits_status_downloading_with_info(self, qapp, tmp_path, mock_settings):
         _, s = self._run(tmp_path, mock_settings)
-        downloading = [(t, c) for t, c in s["status"] if "İndiriliyor" in t]
+        downloading = [(t, c) for t, c in s["status"] if "status.downloading_model" in t]
         assert downloading
         assert downloading[0][1] == "INFO"
 
@@ -230,7 +230,7 @@ class TestRunFailure:
 
     def test_error_message_is_user_friendly(self, qapp, tmp_path, mock_settings):
         s = self._run_with_error(tmp_path, mock_settings, exc=Exception("MaxRetryError: Connection failed"))
-        assert "İnternet bağlantısı koptu" in s["errors"][0]
+        assert "osd.dl_no_internet" in s["errors"][0]
 
     def test_download_finished_not_emitted(self, qapp, tmp_path, mock_settings):
         s = self._run_with_error(tmp_path, mock_settings)
@@ -246,7 +246,7 @@ class TestRunFailure:
 
     def test_emits_status_error_level(self, qapp, tmp_path, mock_settings):
         s = self._run_with_error(tmp_path, mock_settings)
-        error_statuses = [(t, c) for t, c in s["status"] if "Hata" in t]
+        error_statuses = [(t, c) for t, c in s["status"] if "status.download_error" in t]
         assert error_statuses
         assert error_statuses[0][1] == "ERR"
 
@@ -279,7 +279,7 @@ class TestRunFailure:
         with patch("huggingface_hub.snapshot_download", side_effect=partial_download):
             worker.run()
 
-        assert any("temizlendi" in m or "rollback" in m.lower() for m in logs)
+        assert any("Rollback" in m or "rollback" in m.lower() for m in logs)
 
     def test_rollback_when_temp_missing_does_not_crash(self, qapp, tmp_path, mock_settings):
         """snapshot_download temp dir oluşturmadan çöküyorsa rollback güvenli olmalı."""
@@ -338,7 +338,7 @@ class TestRunFailure:
                        side_effect=PermissionError("kilitli")):
                 worker.run()
 
-        assert any(lvl == "WRN" and "silinemedi" in m for lvl, m in logs)
+        assert any(lvl == "WRN" and "Temporary files could not be deleted" in m for lvl, m in logs)
 
 
 # ──────────────────────────────── mevcut model değiştirme (replace) ─────────
@@ -453,7 +453,7 @@ class TestPreexistingTempDir:
         with patch("huggingface_hub.snapshot_download", side_effect=_fake_download):
             worker.run()
 
-        assert any("temizleniyor" in m.lower() for m in logs)
+        assert any("cleaning up" in m.lower() for m in logs)
 
     def test_success_still_completes_after_stale_cleanup(self, qapp, tmp_path, mock_settings):
         temp_dir = tmp_path / f".temp_{FINAL_MODEL_DIR_NAME}"
@@ -507,7 +507,7 @@ class TestPreFlightDiskCheck:
 
         # İndirme fonksiyonu asla çağrılmamalı ve disk hatası fırlatılmalı
         assert len(errors) == 1
-        assert "yeterli yer yok" in errors[0].lower()
+        assert "osd.dl_no_space" in errors[0]
         mock_download.assert_not_called()
 
     @pytest.mark.parametrize("repo_id, free_space, should_pass", [
@@ -537,7 +537,7 @@ class TestPreFlightDiskCheck:
             assert len(errors) == 0
         else:
             assert len(errors) == 1
-            assert "yeterli yer yok" in errors[0].lower()
+            assert "osd.dl_no_space" in errors[0]
 
 
 # ───────────────────────────────────────── hata mesajı eşleştirmeleri ──────
@@ -554,12 +554,12 @@ class TestExceptionMessageMapping:
             worker.run()
         return errors[0] if errors else None
 
-    @pytest.mark.parametrize("exc_text, expected_ui_text", [
-        ("No space left on device", "yeterli boş alan yok"),
-        ("404 Client Error: Repository Not Found", "Model bulunamadı"),
-        ("MaxRetryError: Connection failed", "İnternet bağlantısı koptu"),
-        ("Bilinmeyen rastgele bir hata", "İndirme başarısız"),
+    @pytest.mark.parametrize("exc_text, expected_osd_key", [
+        ("No space left on device", "osd.dl_no_space"),
+        ("404 Client Error: Repository Not Found", "osd.dl_model_not_found"),
+        ("MaxRetryError: Connection failed", "osd.dl_no_internet"),
+        ("Bilinmeyen rastgele bir hata", "osd.dl_failed"),
     ])
-    def test_exception_message_translations(self, qapp, tmp_path, exc_text, expected_ui_text, mock_settings):
+    def test_exception_message_translations(self, qapp, tmp_path, exc_text, expected_osd_key, mock_settings):
         msg = self._run_with_exception(tmp_path, mock_settings, exc_text)
-        assert expected_ui_text in msg
+        assert expected_osd_key in msg

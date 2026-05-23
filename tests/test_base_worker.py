@@ -34,7 +34,7 @@ class TestMeasureTimeDecorator:
         level, component, message = logs[0]
         assert level == "OK"
         assert component == "TST"
-        assert "[Örnek İşlem] tamamlandı:" in message
+        assert "[Örnek İşlem] completed:" in message
 
     def test_measures_elapsed_time_accurately(self, qapp):
         worker = DummyWorker()

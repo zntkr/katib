@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
-from PySide6.QtCore import QObject, Slot
+from PySide6.QtCore import QObject, Slot, QTimer
 
 from core.settings import APP_NAME, MSG_MIC_UNAVAILABLE, MSG_MODEL_NOT_FOUND, STATE_LISTENING, STATE_READY
 from core.i18n import t
@@ -37,7 +37,36 @@ class TrayApp(QObject):
         self.dashboard = DashboardWindow(settings=self.settings, icon_idle=self._icon_idle)
         self._build_tray()
 
+    _RTL_LANGS = {"ar", "fa", "ur"}
+
     # ------------------------------------------------------------------ tray
+    @Slot(str)
+    def apply_language(self, lang_code: str) -> None:
+        from PySide6.QtCore import Qt
+        from core.i18n import set_language
+        set_language(lang_code)
+        direction = Qt.LayoutDirection.RightToLeft if lang_code in self._RTL_LANGS else Qt.LayoutDirection.LeftToRight
+        app = QApplication.instance()
+        if isinstance(app, QApplication):
+            app.setLayoutDirection(direction)
+        if hasattr(self, 'tray'):
+            self.tray.hide()
+            self.tray.deleteLater()
+        self._build_tray()
+        self.dashboard._refresh_language_tooltips()
+        if self.osd:
+            self.osd.refresh_language()
+        QTimer.singleShot(0, self._reopen_settings_after_language_change)
+
+    def _reopen_settings_after_language_change(self) -> None:
+        dlg = self.dashboard._settings_dialog
+        was_visible = dlg is not None and dlg.isVisible()
+        if dlg is not None:
+            dlg.close()
+            self.dashboard._settings_dialog = None
+        if was_visible:
+            self.dashboard._open_settings_dialog()
+
     def _build_tray(self):
         self.tray = QSystemTrayIcon(self._icon_idle)
         self.tray.setToolTip(f"{APP_NAME} — {t(STATE_READY)}")

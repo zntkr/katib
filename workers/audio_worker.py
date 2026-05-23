@@ -116,12 +116,10 @@ class AudioWorker(BaseWorker):
             return  # already recording
 
         if not self._device_available():
-            msg = (
-                "No microphone selected." if self._device_index is None
-                else "Microphone not found"
-            )
-            self.log_entry.emit("ERR", "MIC", msg)
-            self.error_occurred.emit(msg)
+            log_msg = "No microphone selected." if self._device_index is None else "Microphone not found"
+            osd_key = "osd.mic_no_device" if self._device_index is None else "osd.mic_not_found"
+            self.log_entry.emit("ERR", "MIC", log_msg)
+            self.error_occurred.emit(osd_key)
             if self._device_index is not None:
                 self.mic_unavailable.emit()
             return
@@ -150,7 +148,7 @@ class AudioWorker(BaseWorker):
             if "-9996" in str(e) or "Invalid device" in str(e):
                 self._stream = None
                 self.log_entry.emit("ERR", "MIC", "Microphone not connected")
-                self.error_occurred.emit("Microphone not connected")
+                self.error_occurred.emit("osd.mic_not_connected")
                 self.mic_unavailable.emit()
                 return
             # Device doesn't support 16 kHz; open at native rate and resample in stop_recording.
@@ -174,12 +172,12 @@ class AudioWorker(BaseWorker):
             except Exception as e:
                 self._stream = None
                 self.log_entry.emit("ERR", "MIC", f"Microphone could not be opened: {e}")
-                self.error_occurred.emit("Microphone could not be opened")
+                self.error_occurred.emit("osd.mic_open_failed")
                 self.mic_unavailable.emit()
         except Exception as e:
             self._stream = None
             self.log_entry.emit("ERR", "MIC", f"Microphone could not be opened: {e}")
-            self.error_occurred.emit("Microphone could not be opened")
+            self.error_occurred.emit("osd.mic_open_failed")
             self.mic_unavailable.emit()
 
     def stop_recording(self):
@@ -211,13 +209,14 @@ class AudioWorker(BaseWorker):
                 return
             if float(np.sqrt(np.mean(audio ** 2))) < 0.001:
                 self.log_entry.emit("WRN", "MIC", "Audio too quiet, skipped")
+                self.error_occurred.emit("osd.audio_too_quiet")
                 self.audio_failed.emit()
                 return
             self.log_entry.emit("OK", "MIC", f"Recording complete ({duration:.1f}s)")
             self.audio_ready.emit(audio)
         except Exception as e:
             self.log_entry.emit("ERR", "MIC", f"Audio merge error: {e}")
-            self.error_occurred.emit("Audio merge error")
+            self.error_occurred.emit("osd.audio_merge_error")
 
     # ----------------------------------------------------------------- private
     def _device_available(self) -> bool:
@@ -270,7 +269,7 @@ class AudioWorker(BaseWorker):
                 return
             self._stream = None
             self.log_entry.emit("ERR", "MIC", "Connection lost")
-            self.error_occurred.emit("Microphone disconnected")
+            self.error_occurred.emit("osd.mic_disconnected")
             self.mic_unavailable.emit()
             self.level_changed.emit(0.0)
             self.refresh_devices()  # auto-refresh the device list

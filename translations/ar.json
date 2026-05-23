@@ -1,0 +1,147 @@
+{
+    "status": {
+        "ready": "جاهز",
+        "listening": "يستمع...",
+        "writing": "يكتب",
+        "no_model": "لا يوجد نموذج",
+        "no_mic": "لا يوجد ميكروفون",
+        "loading_model": "جارٍ تحميل النموذج...",
+        "downloading_model": "جارٍ التنزيل...",
+        "model_error": "خطأ في النموذج",
+        "folder_error": "خطأ في المجلد",
+        "disk_full": "القرص ممتلئ",
+        "download_error": "خطأ في التنزيل"
+    },
+    "tray": {
+        "menu": {
+            "dashboard": "لوحة التحكم",
+            "settings": "الإعدادات",
+            "user_guide": "دليل المستخدم",
+            "quit": "إنهاء"
+        }
+    },
+    "dashboard": {
+        "title": "لوحة التحكم",
+        "copy_tooltip": "نسخ آخر نص",
+        "copied_tooltip": "تم النسخ!",
+        "console_tooltip": "إظهار/إخفاء الطرفية",
+        "settings_tooltip": "الإعدادات",
+        "no_mic_found": "لم يُعثر على ميكروفون.",
+        "model_missing_guidance": "لم يُعثر على نموذج. انتقل إلى الإعدادات ← النموذج للتنزيل أو تحديد مجلد موجود.",
+        "device_refreshed": "تغيرت قائمة الأجهزة، جارٍ التحديث..."
+    },
+    "settings": {
+        "title": "الإعدادات",
+        "group_general": "عام",
+        "group_model": "النموذج",
+        "group_processing": "المعالجة",
+        "group_system": "النظام",
+        "hotkey_label": "مفتاح الاختصار",
+        "startup_label": "التشغيل عند بدء ويندوز",
+        "ai_model_label": "نموذج الذكاء الاصطناعي",
+        "browse": "استعراض...",
+        "download": "تنزيل",
+        "downloading": "...",
+        "path_not_selected": "المسار: غير محدد",
+        "save": "حفظ",
+        "user_guide": "دليل المستخدم",
+        "open_log_folder": "فتح مجلد السجلات",
+        "reset_settings": "إعادة ضبط الإعدادات",
+        "hotkey_capture": "اضغط مفتاحاً...",
+        "invalid_folder_title": "مجلد غير صالح",
+        "invalid_folder_msg": "يرجى تحديد مجلد يحتوي على ملفات نموذج Whisper.",
+        "download_confirm_title": "تنزيل النموذج",
+        "download_confirm_msg": "تنزيل '{model}'?",
+        "custom_folder": "مخصص: {name}",
+        "startup_enabled": "مفعّل",
+        "startup_disabled": "معطّل",
+        "log_folder_missing": "لم يتم إنشاء مجلد السجلات بعد.",
+        "select_folder_dialog": "تحديد مجلد النموذج",
+        "app_language_label": "لغة التطبيق"
+    },
+    "help": {
+        "title": "دليل المستخدم",
+        "how_to_use": "طريقة الاستخدام",
+        "settings_section": "الإعدادات",
+        "troubleshooting": "استكشاف الأخطاء",
+        "step1": "١. انقر على الحقل الذي تريد الكتابة فيه.",
+        "step2": "٢. اضغط مع الاستمرار على {hotkey}، تحدث، ثم أفلت.",
+        "step3": "٣. تتم معالجة الصوت بالكامل دون إنترنت؛ يُدرج النص عند المؤشر.",
+        "status_rec": "REC      →  تسجيل الصوت",
+        "status_writing": "WRITING  →  معالجة النموذج",
+        "status_warning": "تحذير  →  يظهر ٣ ثوانٍ، يُغلق تلقائياً",
+        "hotkey_title": "مفتاح الاختصار",
+        "hotkey_desc": "عيّن أي مفتاح في الإعدادات ← عام.",
+        "model_title": "النموذج",
+        "model_desc": "وازن بين السرعة والدقة. النماذج الأصغر أسرع؛ والنماذج الأكبر أكثر دقة.",
+        "model": {
+            "col_model": "النموذج",
+            "col_size": "الحجم",
+            "col_speed": "السرعة",
+            "col_accuracy": "الدقة",
+            "speed_vfast": "سريع جداً",
+            "speed_fast": "سريع",
+            "speed_balanced": "متوازن",
+            "speed_slow": "بطيء",
+            "speed_vslow": "بطيء جداً",
+            "acc_low": "منخفضة",
+            "acc_fair": "مقبولة",
+            "acc_good": "جيدة",
+            "acc_high": "عالية",
+            "acc_max": "قصوى"
+        },
+        "ai_prompt_title": "موجّه الذكاء الاصطناعي",
+        "ai_prompt_desc": "استخدم الإعدادات ← المعالجة ← موجّه الذكاء الاصطناعي لإعطاء النموذج سياقاً أو قواعد تنسيق:",
+        "ai_prompt_ex1": "\"هذه وثيقة تقنية.\"",
+        "ai_prompt_ex2": "\"استخدم أحرفاً صغيرة فقط، بدون ترقيم.\"",
+        "trouble_title1": "تظهر رسالة \"لا يوجد ميكروفون\"",
+        "trouble_desc1": "حدد جهازك من قائمة الميكروفون في لوحة التحكم. إن لم يظهر، افصله وأعد توصيله.",
+        "trouble_title2": "لم يُتعرف على الكلام أو النتيجة فارغة",
+        "trouble_desc2": "تحقق من مستوى صوت الميكروفون وحالة كتمه. التسجيلات القصيرة جداً (أقل من ٠٫٥ ثانية) تُتجاهل.",
+        "trouble_title3": "تُكتب كلمات خاطئة",
+        "trouble_desc3": "جرّب نموذجاً أكبر، أو أضف سياقاً متخصصاً في الإعدادات ← المعالجة ← موجّه الذكاء الاصطناعي.",
+        "trouble_title4": "التطبيق لا يفتح / رمز علبة النظام مفقود",
+        "trouble_desc4": "قد يكون التطبيق يعمل بالفعل في الخلفية. ابحث عن {app} في إدارة المهام.",
+        "trouble_title5": "لم يُكتب النص رغم التعرف على الكلام",
+        "trouble_desc5": "انقر على الحقل المستهدف قبل التحدث حتى يكون التركيز عليه."
+    },
+    "schema": {
+        "language": {
+            "label": "لغة الكلام"
+        },
+        "compute_type": {
+            "label": "الدقة",
+            "tooltip": "تغيير هذا يعيد تحميل النموذج."
+        },
+        "initial_prompt": {
+            "label": "موجّه الذكاء الاصطناعي",
+            "tooltip": "أعطِ النموذج سياقاً أو تعليمات تنسيق."
+        }
+    },
+    "app": {
+        "started": "بدأ — مفتاح الاختصار: {key}",
+        "shutting_down": "جارٍ الإيقاف..."
+    },
+    "osd": {
+        "mic_no_device": "لم يُحدد ميكروفون",
+        "mic_not_found": "الميكروفون غير موجود",
+        "mic_not_connected": "الميكروفون غير متصل",
+        "mic_open_failed": "تعذّر فتح الميكروفون",
+        "mic_disconnected": "انقطع اتصال الميكروفون",
+        "audio_merge_error": "خطأ في معالجة الصوت",
+        "keyboard_error": "خطأ في قراءة لوحة المفاتيح",
+        "hotkey_failed": "مفتاح الاختصار لا يعمل",
+        "stt_crashed": "توقف النسخ",
+        "model_load_failed": "فشل تحميل النموذج",
+        "model_inaccessible": "مجلد النموذج غير متاح",
+        "stt_busy": "النسخ قيد التنفيذ",
+        "stt_error": "خطأ في النسخ",
+        "dl_no_space": "مساحة القرص غير كافية",
+        "dl_model_not_found": "النموذج غير موجود",
+        "dl_no_internet": "انقطع الاتصال",
+        "dl_failed": "فشل التنزيل",
+        "recording_too_short": "التسجيل قصير جداً",
+        "audio_too_quiet": "مستوى الإشارة منخفض جداً",
+        "no_speech": "لم يُكتشف كلام"
+    }
+}

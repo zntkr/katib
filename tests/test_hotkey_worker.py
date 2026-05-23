@@ -200,14 +200,14 @@ class TestRunKeyboardError:
         logs = []
         worker.log_entry.connect(lambda l, c, m: logs.append((l, c, m)))
         self._run_with_keyboard_error(worker)
-        assert any(l == "ERR" and "Klavye okuma hatası" in m for l, _, m in logs)
+        assert any(l == "ERR" and "Keyboard read error" in m for l, _, m in logs)
 
     def test_keyboard_error_emits_error_occurred(self, qapp, mock_settings):
         worker = HotkeyWorker(mock_settings, key="f9")
         errors = []
         worker.error_occurred.connect(errors.append)
         self._run_with_keyboard_error(worker)
-        assert any("Klavye okuma hatası" in e for e in errors)
+        assert any("osd.keyboard_error" in e for e in errors)
 
     def test_keyboard_error_component_is_key(self, qapp, mock_settings):
         worker = HotkeyWorker(mock_settings, key="f9")
@@ -320,14 +320,14 @@ class TestRunOuterCrash:
         logs = []
         worker.log_entry.connect(lambda l, c, m: logs.append((l, c, m)))
         self._run_with_outer_crash(worker)
-        assert any(l == "ERR" and "çöktü" in m for l, _, m in logs)
+        assert any(l == "ERR" and "Hotkey crashed" in m for l, _, m in logs)
 
     def test_outer_crash_emits_error_occurred(self, qapp, mock_settings):
         worker = HotkeyWorker(mock_settings, key="f9")
         errors = []
         worker.error_occurred.connect(errors.append)
         self._run_with_outer_crash(worker)
-        assert any("Kısayol çalışmıyor" in e for e in errors)
+        assert any("osd.hotkey_failed" in e for e in errors)
 
     def test_outer_crash_run_does_not_raise(self, qapp, mock_settings):
         """run() exception'ı dışarı sızdırmamalı — QThread mekanizması bozulur."""

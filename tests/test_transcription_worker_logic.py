@@ -13,6 +13,7 @@ from workers.transcription_worker import (
     _RELOAD,
     _ReloadCommand,
 )
+from core.settings import MSG_MODEL_NOT_FOUND
 
 AUDIO = np.zeros(1600, dtype="float32")
 
@@ -231,7 +232,7 @@ class TestLoadModelNoValidDir:
     def test_emits_status_not_selected(self, qapp, mock_settings):
         _, s = self._run(qapp, mock_settings)
         texts = [t for t, _ in s["status"]]
-        assert any("Model Yok" in t for t in texts)
+        assert any(MSG_MODEL_NOT_FOUND in t for t in texts)
 
     def test_emits_model_missing(self, qapp, mock_settings):
         _, s = self._run(qapp, mock_settings)
@@ -358,7 +359,7 @@ class TestLoadModelFailure:
 
     def test_error_message_contains_exception_text(self, qapp, mock_settings):
         _, s = self._run(qapp, mock_settings, exc=Exception("model bozuk"))
-        assert "Model yüklenemedi" in s["errors"][0]
+        assert "osd.model_load_failed" in s["errors"][0]
 
     def test_emits_err_log(self, qapp, mock_settings):
         _, s = self._run(qapp, mock_settings)
@@ -367,7 +368,7 @@ class TestLoadModelFailure:
     def test_emits_status_model_error(self, qapp, mock_settings):
         _, s = self._run(qapp, mock_settings)
         texts = [t for t, _ in s["status"]]
-        assert any("Hata" in t for t in texts)
+        assert any("status.model_error" in t for t in texts)
 
     def test_loading_state_sequence_true_then_false(self, qapp, mock_settings):
         """Yükleme başladıktan sonra hata olsa bile spinner kapatılmalı."""
@@ -393,7 +394,7 @@ class TestLoadModelFallbackLogging:
             mock_cls.return_value = MagicMock()
             worker._load_model()
         wrn_msgs = [m for lvl, _, m in s["logs"] if lvl == "WRN"]
-        assert any("geçersiz" in m for m in wrn_msgs)
+        assert any("invalid" in m for m in wrn_msgs)
 
     def test_no_wrn_log_when_dir_unchanged(self, qapp, mock_settings):
         mock_settings.set("model_dir", "/doğru/klasör")
@@ -404,7 +405,7 @@ class TestLoadModelFallbackLogging:
             mock_cls.return_value = MagicMock()
             worker._load_model()
         wrn_msgs = [m for lvl, _, m in s["logs"] if lvl == "WRN"]
-        assert not any("geçersiz" in m for m in wrn_msgs)
+        assert not any("invalid" in m for m in wrn_msgs)
 
 
 # ──────────────────────────────── _transcribe: model None ───────────────────
@@ -530,7 +531,7 @@ class TestTranscribeException:
 
     def test_error_message_contains_exception_text(self, qapp, mock_settings):
         s = self._run_with_error(qapp, mock_settings, exc=Exception("transkripsiyon hatası"))
-        assert "Çeviri hatası" in s["errors"][0]
+        assert "osd.stt_error" in s["errors"][0]
 
     def test_emits_err_log(self, qapp, mock_settings):
         s = self._run_with_error(qapp, mock_settings)

@@ -173,4 +173,4 @@ class TestHandleException:
             except RuntimeError as exc:
                 hook(type(exc), exc, exc.__traceback__)
         logged = mock_err.call_args[0][0]
-        assert "kesildi" in logged
+        assert "truncated" in logged

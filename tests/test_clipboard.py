@@ -66,7 +66,7 @@ class TestClipboardInjectText:
         mock_clipboard.setMimeData.assert_called_with(mock_backup_mime)
 
         # Log fonksiyonu başarı mesajı ile çağrılmış mı?
-        mock_log_callback.assert_called_once_with("OK", "STT", 'Yazıldı: "Test metni"')
+        mock_log_callback.assert_called_once_with("OK", "STT", 'Written: "Test metni"')
 
     @patch("PySide6.QtGui.QGuiApplication")
     @patch("PySide6.QtCore.QTimer")
@@ -94,7 +94,7 @@ class TestClipboardInjectText:
         
         # Metin başarıyla yapıştırılmış ve loglanmış olmalı
         mock_keyboard_send.assert_called_once_with("ctrl+v")
-        mock_log_callback.assert_called_once_with("OK", "STT", 'Yazıldı: "Sadece metin"')
+        mock_log_callback.assert_called_once_with("OK", "STT", 'Written: "Sadece metin"')
 
     @patch("PySide6.QtGui.QGuiApplication")
     @patch("PySide6.QtCore.QTimer")
@@ -127,7 +127,7 @@ class TestClipboardInjectText:
         restore_callback()
         
         # Hata yakalanmalı ve WRN logu atılmalı
-        mock_log_callback.assert_called_with("WRN", "SYS", "Pano geri yüklenemedi: Pano Kilitli")
+        mock_log_callback.assert_called_with("WRN", "SYS", "Clipboard restore failed: Pano Kilitli")
 
     @patch("PySide6.QtGui.QGuiApplication")
     def test_inject_text_exception_handling(self, mock_qgui):

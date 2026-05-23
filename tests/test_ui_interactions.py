@@ -87,7 +87,7 @@ class TestDashboardMethods:
 
     def test_populate_devices_empty_emits_warning(self, dashboard):
         logs = []
-        dashboard.append_log_entry = lambda l, c, m: logs.append(l)
+        dashboard.append_log_entry = lambda l, c, m, k="": logs.append(l)
         dashboard.populate_devices([])
         assert "WRN" in logs
 
@@ -196,8 +196,9 @@ class TestDashboardMethods:
 
     def test_set_status_ok(self, dashboard):
         from core.settings import STATE_READY
+        from core.i18n import t
         dashboard.set_status(STATE_READY, "OK")
-        assert STATE_READY in dashboard.status_label.text()
+        assert t(STATE_READY) in dashboard.status_label.text()
 
     def test_set_status_err(self, dashboard):
         dashboard.set_status("Hata", "ERR")
@@ -215,7 +216,7 @@ class TestDashboardMethods:
     def test_model_missing_guidance_appends_info_log(self, dashboard):
         dashboard.show_model_missing_guidance()
         html = dashboard.log_box.toHtml()
-        assert "Model bulunamadı" in html
+        assert "No model found" in html
 
     def test_model_missing_guidance_makes_status_label_clickable(self, dashboard):
         assert not dashboard._status_clickable
@@ -425,7 +426,7 @@ class TestSettingsDialogInteractions:
 
     def test_start_hotkey_capture_changes_button_text(self, settings_dialog):
         settings_dialog._start_hotkey_capture()
-        assert settings_dialog.btn_hotkey.text() == "Tuşa Basın..."
+        assert settings_dialog.btn_hotkey.text() == "Press a key..."
         assert settings_dialog._capturing_hotkey is True
 
     def test_end_hotkey_capture_restores_button(self, settings_dialog):
@@ -630,7 +631,7 @@ class TestSettingsDialogInteractions:
     def test_dynamic_widget_change_saves_setting(self, settings_dialog, mock_settings):
         lang_widget = settings_dialog._dynamic_widgets.get("language")
         assert lang_widget is not None
-        lang_widget.setCurrentIndex(1)
+        lang_widget.setCurrentIndex(0)
         assert mock_settings.get("language") is None  # "auto" → None dönüşümü
 
     # ── badge "not installed" branch ─────────────────────────────────────────
@@ -822,7 +823,7 @@ class TestDashboardCoverage:
             dashboard._copy_last_transcript()
             callback = mock_timer.call_args[0][1]
             callback()
-        assert dashboard.btn_copy_transcript.toolTip() == "Son transkripti kopyala"
+        assert dashboard.btn_copy_transcript.toolTip() == "Copy last transcript"
 
     def test_toggle_logs_keeps_bottom_edge_fixed(self, dashboard):
         with patch.object(dashboard, "_position_bottom_right") as mock_pos, \

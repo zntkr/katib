@@ -53,7 +53,7 @@ class ModelDownloaderWorker(BaseWorker):
             user_msg = f"Not enough disk space! (Required: {req_gb:.1f} GB, Free: {free_gb:.1f} GB)"
 
             self.log_entry.emit("ERR", "DL", user_msg)
-            self.error_occurred.emit(user_msg)
+            self.error_occurred.emit("osd.dl_no_space")
             self.status_changed.emit("status.disk_full", "ERR")
             self.download_state_changed.emit(False)
             return
@@ -108,14 +108,18 @@ class ModelDownloaderWorker(BaseWorker):
             err_msg = str(e)
             if "No space left" in err_msg or "Disk full" in err_msg:
                 user_msg = "Not enough disk space! Please free up space and try again."
+                osd_key = "osd.dl_no_space"
             elif "404" in err_msg or "Repository Not Found" in err_msg:
                 user_msg = "Model not found! Please check the model name."
+                osd_key = "osd.dl_model_not_found"
             elif "Connection" in err_msg or "MaxRetryError" in err_msg:
                 user_msg = "Internet connection lost."
+                osd_key = "osd.dl_no_internet"
             else:
                 user_msg = "Download failed. Please try again."
+                osd_key = "osd.dl_failed"
 
             self.log_entry.emit("ERR", "DL", user_msg)
-            self.error_occurred.emit(user_msg)
+            self.error_occurred.emit(osd_key)
             self.status_changed.emit("status.download_error", "ERR")
             self.download_state_changed.emit(False)

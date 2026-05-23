@@ -10,7 +10,7 @@ from pathlib import Path
 from PySide6.QtWidgets import QApplication
 from core.settings import (
     APP_NAME, MSG_MODEL_NOT_FOUND, MSG_MIC_UNAVAILABLE,
-    STATE_RECORDING, STATE_PROCESSING, STATE_LISTENING, STATE_READY,
+    STATE_PROCESSING, STATE_LISTENING, STATE_READY,
 )
 import PySide6.QtSvg  # required for SVG plugin registration
 import warnings
@@ -162,8 +162,11 @@ def main():
         _lang = _sys_code if _sys_code in _available else "en"
         settings_manager.set("app_language", _lang)
     _i18n_set_language(_lang)
+    if _lang in {"ar", "fa", "ur"}:
+        from PySide6.QtCore import Qt
+        app.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
     for _k in (MSG_MODEL_NOT_FOUND, MSG_MIC_UNAVAILABLE,
-               STATE_RECORDING, STATE_PROCESSING, STATE_LISTENING, STATE_READY):
+               STATE_PROCESSING, STATE_LISTENING, STATE_READY):
         if _t(_k) == _k:
             global_logger.warning("i18n: STATUS key missing in catalog: '%s'", _k)
     theme_manager.apply_theme(app)
@@ -257,15 +260,6 @@ def main():
         hotkey_worker.log_entry.connect(_file_log_bridge)
         downloader_worker.log_entry.connect(_file_log_bridge)
 
-        # Forward WRN log entries to OSD (3 s, only user-visible categories).
-        _OSD_WRN_CATS = {"MIC", "STT", "KEY"}
-        def _wrn_to_osd(lvl, cat, msg):
-            if lvl == "WRN" and cat in _OSD_WRN_CATS:
-                osd.setStateError(msg)
-
-        audio_worker.log_entry.connect(_wrn_to_osd)
-        transcription_worker.log_entry.connect(_wrn_to_osd)
-        hotkey_worker.log_entry.connect(_wrn_to_osd)
 
 
         # Microphone change → update audio worker + clear error flag
@@ -297,6 +291,8 @@ def main():
         downloader_worker.status_changed.connect(tray.dashboard.set_status)
         downloader_worker.download_state_changed.connect(tray.dashboard.set_download_state)
         downloader_worker.download_finished.connect(tray.dashboard.on_download_complete)
+
+        tray.dashboard.language_change_requested.connect(tray.apply_language)
 
         # ---------------------------------------------------- start workers
         global_logger.info("Starting worker threads...")

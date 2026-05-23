@@ -62,7 +62,7 @@ class TestSettingsManager:
         sm = SettingsManager()
         sm.set("language", "auto")
         sm.reset_processing_settings()
-        assert sm.get("language") == "tr"  # default'a döner
+        assert sm.get("language") is None  # default'a (auto) döner, get() None üretir
 
 
 # ──────────────────────────────────────── validate_model_dir ────────────────

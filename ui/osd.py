@@ -2,8 +2,8 @@ from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QGraphicsOpacityEffe
 from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import QFont, QPalette, QPainter, QPaintEvent, QColor
 
-from ui.theme import theme_manager, G_1, G_2, FONT_SIZE_MD, FONT_SIZE_LG, PANEL_WIDTH, OSD_BOTTOM_MARGIN
-from core.settings import STATE_RECORDING, STATE_PROCESSING, STATE_READY
+from ui.theme import theme_manager, G_1, G_2, FONT_SIZE_MD, FONT_SIZE_OSD, PANEL_WIDTH, OSD_BOTTOM_MARGIN
+from core.settings import STATE_LISTENING, STATE_PROCESSING, STATE_READY
 from core.i18n import t, try_t
 from ui.icons import ICN_DOT
 from ui.utils import colorize_svg_icon
@@ -45,6 +45,8 @@ class MinimalOSD(QWidget):
         self._error_timer = QTimer(self)
         self._error_timer.setSingleShot(True)
         self._error_timer.timeout.connect(self._hide_after_error)
+        self._osd_state: str = "ready"
+        self._osd_error_msg: str = ""
         self._build_ui()
         self._setup_animations()
 
@@ -90,7 +92,9 @@ class MinimalOSD(QWidget):
         c_layout.addWidget(self.icon_label)
         
         self.text_label = QLabel(t(STATE_READY).upper())
-        self.text_label.setFont(QFont("Segoe UI Variable Display", FONT_SIZE_LG, QFont.Weight.Bold))
+        _osd_font = QFont("Segoe UI Variable Display", -1, QFont.Weight.Bold)
+        _osd_font.setPixelSize(FONT_SIZE_OSD)
+        self.text_label.setFont(_osd_font)
         c_layout.addWidget(self.text_label)
         
         root.addWidget(self.container)
@@ -125,17 +129,27 @@ class MinimalOSD(QWidget):
         self.update()  # repaint if the theme changed
 
     # --- Public API (State Management) ---
+    def refresh_language(self):
+        if self._osd_state == "recording":
+            self.text_label.setText(t(STATE_LISTENING).upper())
+        elif self._osd_state == "processing":
+            self.text_label.setText(t(STATE_PROCESSING).upper())
+        elif self._osd_state == "error":
+            self.text_label.setText(try_t(self._osd_error_msg).upper()[:60])
+
     def setStateRecording(self):
+        self._osd_state = "recording"
         p = theme_manager.palette
-        self.text_label.setText(t(STATE_RECORDING))
+        self.text_label.setText(t(STATE_LISTENING).upper())
         self.text_label.setStyleSheet(f"color: {p['CLR_TEXT_STATUS']};")
         self.icon_label.setPixmap(colorize_svg_icon(ICN_DOT, p['CLR_ERR']).pixmap(ICON_SIZE, ICON_SIZE))
         self.pulse_timer.start(PULSE_INTERVAL_MS)
         self.show_osd()
 
     def setStateProcessing(self):
+        self._osd_state = "processing"
         p = theme_manager.palette
-        self.text_label.setText(t(STATE_PROCESSING))
+        self.text_label.setText(t(STATE_PROCESSING).upper())
         self.text_label.setStyleSheet(f"color: {p['CLR_TEXT_STATUS']};")
         self.icon_label.setPixmap(colorize_svg_icon(ICN_DOT, p['CLR_INFO']).pixmap(ICON_SIZE, ICON_SIZE))
         self.pulse_timer.stop()
@@ -143,6 +157,8 @@ class MinimalOSD(QWidget):
         self.show_osd()
 
     def setStateError(self, msg: str):
+        self._osd_state = "error"
+        self._osd_error_msg = msg
         p = theme_manager.palette
         text = try_t(msg).upper()[:60]
         self.text_label.setText(text)

@@ -9,7 +9,8 @@ G_1, G_2, G_3, G_4, G_5, G_6 = 8, 16, 24, 32, 40, 48
 # ── Typography Scale ─────────────────────────────────────────────
 FONT_SIZE_SM = 8   # pt — log box, helper labels
 FONT_SIZE_MD = 9   # pt — general UI default
-FONT_SIZE_LG = 10  # pt — OSD, toolbar icons
+FONT_SIZE_LG = 10  # pt — toolbar icons
+FONT_SIZE_OSD = 14 # px — OSD overlay
 
 # ── Panel Dimensions ────────────────────────────────────────────
 PANEL_WIDTH = 320      # px — shared width for Dashboard, OSD, and SettingsDialog
@@ -217,6 +218,34 @@ class ThemeManager:
         QFrame#settingCard QLineEdit {{ border: 1px solid {p['CLR_BORDER']}; }}
         QFrame#settingCard QLineEdit:hover {{ border-color: {p['CLR_HOVER_BORDER']}; }}
         QFrame#settingCard QLineEdit:focus {{ border-color: {p['CLR_FOCUS_BORDER']}; }}
+
+        /* --- TRAY / CONTEXT MENU --- */
+        QMenu {{
+            background-color: {p['CLR_BG_ELEVATED']};
+            color: {p['CLR_TEXT']};
+            border: 1px solid {p['CLR_BORDER_LIGHT']};
+            border-radius: 4px;
+            padding: 4px;
+        }}
+        QMenu::item {{
+            padding: 6px 24px 6px 12px;
+            border-radius: 2px;
+        }}
+        QMenu::item:selected {{
+            background-color: {p['CLR_BG_HOVER']};
+            color: {p['CLR_TEXT']};
+        }}
+        QMenu::item:pressed {{
+            background-color: {p['CLR_PRESSED_BG']};
+        }}
+        QMenu::item:disabled {{
+            color: {p['CLR_TEXT_MUTED']};
+        }}
+        QMenu::separator {{
+            height: 1px;
+            background-color: {p['CLR_BORDER']};
+            margin: 4px 8px;
+        }}
 
         /* --- FINAL ENFORCEMENT --- */
         #DashboardWindow {{ background-color: {p['CLR_BG']}; }}
