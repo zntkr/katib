@@ -14,17 +14,23 @@ def colorize_svg_icon(source: str, color_hex: str, size: int = 16) -> QIcon:
     else:
         renderer = QSvgRenderer(source)
         
-    pixmap = QPixmap(size, size)
+    from PySide6.QtWidgets import QApplication
+    from PySide6.QtCore import QRectF
+    dpr = QApplication.primaryScreen().devicePixelRatio() if QApplication.instance() else 1.0
+    physical_size = int(size * dpr)
+
+    pixmap = QPixmap(physical_size, physical_size)
     pixmap.fill(Qt.GlobalColor.transparent)
-    
+    pixmap.setDevicePixelRatio(dpr)
+
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-    renderer.render(painter)
-    
+    renderer.render(painter, QRectF(0, 0, size, size))
+
     painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
-    painter.fillRect(pixmap.rect(), QColor(color_hex))
+    painter.fillRect(QRectF(0, 0, size, size), QColor(color_hex))
     painter.end()
-    
+
     return QIcon(pixmap)
 
 def qt_key_to_keyboard(qt_key: int) -> str | None:

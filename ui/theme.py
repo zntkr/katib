@@ -94,7 +94,7 @@ class ThemeManager:
 
         from ui.icons import ICN_TICK, ICN_DOWN, ICN_UP
 
-        url_tick = _get_cached_svg("tick", ICN_TICK.replace("{color}", p['CLR_BG_DEEP']))
+        url_tick_yellow = _get_cached_svg("tick_yellow", ICN_TICK.replace("{color}", p['CLR_YELLOW']))
         url_down = _get_cached_svg("down", ICN_DOWN.replace("{color}", p['CLR_FG3']))
         url_down_disabled = _get_cached_svg("down_disabled", ICN_DOWN.replace("{color}", p['CLR_TEXT_MUTED']))
         url_down_hover = _get_cached_svg("down_hover", ICN_DOWN.replace("{color}", p['CLR_FG2']))
@@ -136,7 +136,7 @@ class ThemeManager:
         QComboBox QAbstractItemView::item:hover {{ background-color: {p['CLR_BG_HOVER']}; }}
         QComboBox QAbstractItemView::item:selected {{ background-color: {p['CLR_BG_ACTIVE']}; color: {p['CLR_TEXT']}; font-weight: bold; border-left: 2px solid {p['CLR_YELLOW']}; }}
         QComboBox QAbstractItemView::item:pressed {{ background-color: {p['CLR_PRESSED_BG']}; color: {p['CLR_TEXT']}; }}
-        QComboBox QAbstractItemView QScrollBar:vertical {{ background-color: {p['CLR_BG_SURFACE']}; }}
+        QComboBox QAbstractItemView QScrollBar:vertical {{ background-color: {p['CLR_BG_DEEP']}; }}
 
         QSpinBox, QDoubleSpinBox {{ background-color: {p['CLR_BG_ELEVATED']}; border: 1px solid {p['CLR_BORDER']}; border-radius: 2px; padding: 2px 4px; min-height: 20px; }}
         QSpinBox:hover, QDoubleSpinBox:hover {{ border-color: {p['CLR_HOVER_BORDER']}; }}
@@ -175,7 +175,7 @@ class ThemeManager:
 
         QScrollBar:vertical {{
             border: none;
-            background-color: {p['CLR_BG_SURFACE']};
+            background-color: {p['CLR_BG_DEEP']};
             width: 8px;
             margin: 0;
         }}
@@ -196,8 +196,8 @@ class ThemeManager:
 
         QCheckBox {{ spacing: 6px; }}
         QCheckBox::indicator {{ width: 13px; height: 13px; border: 1px solid {p['CLR_BORDER']}; border-radius: 2px; background-color: {p['CLR_BG_ELEVATED']}; }}
-        QCheckBox::indicator:hover {{ border-color: {p['CLR_HOVER_BORDER']}; }}
-        QCheckBox::indicator:checked {{ background-color: {p['CLR_INFO']}; border-color: {p['CLR_INFO']}; image: {url_tick}; }}
+        QCheckBox::indicator:hover {{ border-color: {p['CLR_TEXT_STATUS']}; }}
+        QCheckBox::indicator:checked {{ background-color: {p['CLR_BG_DEEP']}; border-color: transparent; image: {url_tick_yellow}; }}
 
         /* --- DASHBOARD BUTTON STATES --- */
         QPushButton#btn_settings[isActive="true"], QPushButton#btn_toggle_log[isActive="true"] {{ 

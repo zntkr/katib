@@ -110,14 +110,14 @@ class SettingGroup(QFrame):
 
 class DynamicIconButton(QPushButton):
     """SVG icon button: muted at rest, brighter on hover, coloured when pressed/active."""
-    def __init__(self, svg_path_or_str: str, action_color: str, fallback_text: str = "", parent=None, idle_color: str | None = None, disabled_color: str | None = None):
+    def __init__(self, svg_path_or_str: str, action_color: str, fallback_text: str = "", parent=None, idle_color: str | None = None, disabled_color: str | None = None, hover_color: str | None = None):
         super().__init__(parent)
         self.setProperty("isIconBtn", True)
 
         from ui.theme import theme_manager
         p = theme_manager.palette
         self.idle_color = idle_color if idle_color else p["CLR_IDLE"]  # default muted beige
-        self.hover_color = p["CLR_TEXT"]          # bright cream on hover
+        self.hover_color = hover_color if hover_color else p["CLR_TEXT"]  # bright cream on hover
         self.action_color = action_color          # identity colour when pressed/active
         self.disabled_color = disabled_color if disabled_color else p["CLR_BG"]  # sunken dark when disabled
         

@@ -63,7 +63,7 @@ class SettingsDialog(QDialog):
         # The dialog container itself must be focusable: no child widget
         # highlights on open, but Tab navigation still works correctly.
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.setWindowTitle(f"{APP_NAME} — {t('settings.title')}")
+        self.setWindowTitle(f"{APP_NAME} - {t('settings.title')}")
         self.setFixedWidth(PANEL_WIDTH)
 
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -127,6 +127,10 @@ class SettingsDialog(QDialog):
         self.btn_hotkey.setProperty("isIconBtn", True)
         self.btn_hotkey.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_hotkey.clicked.connect(self._start_hotkey_capture)
+        from ui.theme import G_4
+        self.btn_hotkey.setFixedHeight(G_4)
+        self.btn_hotkey.setMinimumWidth(G_4)
+        self.btn_hotkey.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
         genel_grp.add_widget_row(t("settings.hotkey_label"), self.btn_hotkey, widget_width=None)
 
         self._chk_startup = QCheckBox()
@@ -155,7 +159,8 @@ class SettingsDialog(QDialog):
         self.container_layout.addWidget(genel_grp)
 
         # --- GROUP: MODEL ---
-        model_grp = SettingGroup(t("settings.group_model"))
+        self._model_grp = SettingGroup(t("settings.group_model"))
+        model_grp = self._model_grp
         self.model_select_combo = NoScrollComboBox()
         self._model_combo_base_labels: dict[str, str] = {}
         for key, info in WHISPER_MODELS.items():
@@ -173,7 +178,7 @@ class SettingsDialog(QDialog):
         self.model_select_combo.currentIndexChanged.connect(self._on_combo_index_changed)
         
         p = theme_manager.palette
-        self.btn_download = DynamicIconButton(ICN_DOWNLOAD, p["CLR_YELLOW"])
+        self.btn_download = DynamicIconButton(ICN_DOWNLOAD, p["CLR_YELLOW"], idle_color=p["CLR_YELLOW"], hover_color=p["CLR_YELLOW"])
         self.btn_download.setToolTip(t("settings.download"))
         self.btn_download.clicked.connect(self._on_download_clicked)
         dl_widget = QWidget()
@@ -301,6 +306,12 @@ class SettingsDialog(QDialog):
         self.scroll_area.setWidget(self.container)
         self.main_layout.addWidget(self.scroll_area)
 
+
+    def scroll_to_model(self) -> None:
+        def _do():
+            self.scroll_area.ensureWidgetVisible(self._model_grp)
+            self.model_select_combo.setFocus()
+        QTimer.singleShot(50, _do)
 
     def _on_dynamic_changed(self, key: str, value):
         self.settings.set(key, value)
@@ -510,7 +521,6 @@ class SettingsDialog(QDialog):
         repo = self.model_select_combo.currentData()
         can_download = not is_installed and not (repo and str(repo).startswith("custom:"))
         self.btn_download.setEnabled(can_download)
-        self.btn_download.set_active(can_download)
             
         self._refresh_model_combo_badges()
 
@@ -629,7 +639,6 @@ class SettingsDialog(QDialog):
 
     def set_download_state(self, active: bool) -> None:
         self.btn_download.setEnabled(not active)
-        self.btn_download.set_active(not active)
 
     def on_download_complete(self, model_dir: str) -> None:
         self._update_model_path_label(model_dir)

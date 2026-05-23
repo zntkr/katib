@@ -27,7 +27,7 @@ MIN_RECORDING_DURATION   = 0.5    # seconds — shorter recordings are discarded
 
 
 def _resample(audio: np.ndarray, orig_sr: int, target_sr: int) -> np.ndarray:
-    """Lineer interpolasyonla örnekleme hızı dönüştürür. Konuşma tanıma için yeterli kalite."""
+    """Linear interpolation resample. Sufficient quality for speech recognition."""
     if orig_sr == target_sr:
         return audio
     new_len = int(len(audio) * target_sr / orig_sr)
@@ -67,7 +67,6 @@ class AudioWorker(BaseWorker):
     # ------------------------------------------------------------------ QThread
     def run(self):
         """Keeps the thread alive; recording is managed externally via start/stop."""
-        self.log_entry.emit("OK", "MIC", "Ready")
         self._stop_event.wait()   # blocks while False; stop() calls set() to unblock
 
     def stop(self):
@@ -98,9 +97,13 @@ class AudioWorker(BaseWorker):
                 sd._initialize()
             all_devices = sd.query_devices()
             default_in  = sd.default.device[0]
+            hostapis    = sd.query_hostapis()
+            wasapi_idx  = next((i for i, h in enumerate(hostapis) if "WASAPI" in h["name"]), None)
             items = []
             for i, dev in enumerate(all_devices):
                 if dev["max_input_channels"] > 0:
+                    if wasapi_idx is not None and dev["hostapi"] != wasapi_idx:
+                        continue
                     label = dev["name"] + (" (Default)" if i == default_in else "")
                     items.append((label, i, i == default_in))
             self.devices_ready.emit(items)

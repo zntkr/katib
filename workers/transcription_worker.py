@@ -69,7 +69,6 @@ class TranscriptionWorker(BaseWorker):
         valid_dir = self.settings.get_resolved_model_dir()
 
         if not valid_dir:
-            self.log_entry.emit("WRN", "STT", "No model found")
             self.status_changed.emit(MSG_MODEL_NOT_FOUND, "WARN")
             self.model_missing.emit()
             return

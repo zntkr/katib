@@ -182,7 +182,7 @@ class DashboardWindow(QWidget):
         self.btn_copy_transcript.clicked.connect(self._copy_last_transcript)
         status_row.addWidget(self.btn_copy_transcript)
 
-        self.btn_toggle_log = DynamicIconButton(ICN_TERMINAL, p["CLR_TEXT"], "\uE756")
+        self.btn_toggle_log = DynamicIconButton(ICN_TERMINAL, p["CLR_YELLOW"], "\uE756", idle_color=p["CLR_FG3"])
         self.btn_toggle_log.setObjectName("btn_toggle_log")
         self.btn_toggle_log.setFixedSize(G_4, G_4)
         self.btn_toggle_log.setToolTip(t("dashboard.console_tooltip"))
@@ -199,7 +199,7 @@ class DashboardWindow(QWidget):
         self.mic_combo.currentIndexChanged.connect(self._on_device_changed)
         mic_row.addWidget(self.mic_combo)
         
-        self.btn_settings = DynamicIconButton(ICN_SETTINGS, p["CLR_TEXT"], "\uE713")
+        self.btn_settings = DynamicIconButton(ICN_SETTINGS, p["CLR_YELLOW"], "\uE713", idle_color=p["CLR_FG3"])
         self.btn_settings.setObjectName("btn_settings")
         self.btn_settings.setFixedSize(G_4, G_4)
         self.btn_settings.setToolTip(t("dashboard.settings_tooltip"))
@@ -289,8 +289,11 @@ class DashboardWindow(QWidget):
             self.mic_combo.setCurrentIndex(select_idx)
         if not items:
             self.append_log_entry("WRN", "MIC", "", "dashboard.no_mic_found")
+            self.mic_combo.setPlaceholderText(t("dashboard.no_mic_found"))
+            self.mic_combo.setCurrentIndex(-1)
             self.mic_combo.setEnabled(False)
         else:
+            self.mic_combo.setPlaceholderText("")
             self.mic_combo.setEnabled(True)
         self.mic_combo.blockSignals(False)
         # setCurrentIndex did not emit a signal because signals were blocked; notify the worker manually.
@@ -338,8 +341,8 @@ class DashboardWindow(QWidget):
         QTimer.singleShot(15, _finalize_position)
 
     def paintEvent(self, event: QPaintEvent) -> None:
-        """WA_TranslucentBackground + QSS çakışmasını önler: layout boşluklarını
-        zemin rengiyle doldurur; QSS bu alanlara uygulanamaz."""
+        """Fills layout gaps with the background colour — WA_TranslucentBackground
+        prevents QSS from reaching those areas."""
         from ui.theme import theme_manager
         painter = QPainter(self)
         painter.fillRect(self.rect(), QColor(theme_manager.palette["CLR_BG"]))
@@ -473,6 +476,8 @@ class DashboardWindow(QWidget):
     def _on_status_label_click(self, _event) -> None:
         if self._status_clickable:
             self._open_settings_dialog()
+            if self._settings_dialog:
+                self._settings_dialog.scroll_to_model()
 
     def show_model_missing_guidance(self) -> None:
         self.append_log_entry("INFO", "STT", "", "dashboard.model_missing_guidance")
@@ -481,6 +486,11 @@ class DashboardWindow(QWidget):
         self._status_clickable = True
         self.status_label.setCursor(Qt.CursorShape.PointingHandCursor)
         self.status_icon_label.setCursor(Qt.CursorShape.PointingHandCursor)
+        def _auto_open():
+            self._open_settings_dialog()
+            if self._settings_dialog:
+                self._settings_dialog.scroll_to_model()
+        QTimer.singleShot(50, _auto_open)
 
     def clear_model_missing_guidance(self) -> None:
         self._status_clickable = False
@@ -564,6 +574,7 @@ class DashboardWindow(QWidget):
 
         # Sidecar alignment — same formula as _position_bottom_right:
         # availableGeometry + DWM visual bounds for bottom-edge alignment.
+        self._settings_dialog.setWindowOpacity(0.0)
         self._settings_dialog.show()
         self._settings_dialog.raise_()
         self._settings_dialog.activateWindow()
@@ -578,7 +589,7 @@ class DashboardWindow(QWidget):
         self.set_status(*self._status_cache)
         self._update_log_stylesheet()
 
-    def _update_settings_btn_style(self, *args) -> None:
+    def _update_settings_btn_style(self, *_) -> None:
         is_active = self._settings_dialog is not None and self._settings_dialog.isVisible()
         self.btn_settings.setProperty("isActive", is_active)
         self.btn_settings.set_active(is_active)
@@ -607,6 +618,7 @@ class DashboardWindow(QWidget):
             x = dash_geo.right() + 5
 
         self._settings_dialog.move(x, y)
+        self._settings_dialog.setWindowOpacity(1.0)
 
     def _on_hotkey_from_dialog(self, key: str) -> None:
         self.hotkey_changed.emit(key)
