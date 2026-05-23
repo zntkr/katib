@@ -24,8 +24,8 @@ class HotkeyWorker(BaseWorker):
                 try:
                     currently_down = keyboard.is_pressed(self._key)
                 except Exception:
-                    self.log_entry.emit("ERR", "KEY", "Klavye okuma hatası")
-                    self.error_occurred.emit("Klavye okuma hatası")
+                    self.log_entry.emit("ERR", "KEY", "Keyboard read error")
+                    self.error_occurred.emit("Keyboard read error")
                     time.sleep(1.0)
                     continue
 
@@ -45,8 +45,8 @@ class HotkeyWorker(BaseWorker):
                 time.sleep(0.05)  # 50 ms polling — CPU-friendly
 
         except Exception:
-            self.log_entry.emit("ERR", "KEY", "Kısayol tuşu çöktü")
-            self.error_occurred.emit("Kısayol çalışmıyor")
+            self.log_entry.emit("ERR", "KEY", "Hotkey crashed")
+            self.error_occurred.emit("Hotkey not working")
 
     def set_key(self, key: str):
         self._key         = key.lower()

@@ -17,7 +17,7 @@ ICON_SIZE = 14
 
 class MinimalOSD(QWidget):
     """
-    Katib esnasında sağ altta beliren, etkileşimsiz (click-through) ve minimalist durum göstergesi.
+    Minimal, click-through status indicator shown at the bottom-center of the screen during dictation.
     """
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)

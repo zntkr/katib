@@ -23,7 +23,7 @@ warnings.filterwarnings("ignore", category=UserWarning) # suppress Python (Whisp
 
 # ── Logging System ────────────────────────────────────────────────────
 class StreamToLogger(io.TextIOBase):
-    """Konsol çıktılarını (print, tqdm, kütüphane hataları) log dosyasına yönlendirir."""
+    """Redirects console output (print, tqdm, library errors) to the log file."""
     def __init__(self, logger: logging.Logger, level: int):
         super().__init__()
         self.logger = logger
@@ -137,10 +137,10 @@ def main():
     from PySide6.QtCore import QSharedMemory
     _shared_memory = QSharedMemory("Katib_SingleInstance_Mutex")
     if not _shared_memory.create(1):
-        global_logger.warning("Uygulama zaten çalışıyor. İkinci başlatma girişimi engellendi.")
+        global_logger.warning("Application already running. Blocking second launch attempt.")
         sys.exit(0)
 
-    global_logger.info("QApplication başlatılıyor...")
+    global_logger.info("Starting QApplication...")
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
 
@@ -167,13 +167,13 @@ def main():
         if _t(_k) == _k:
             global_logger.warning("i18n: STATUS key missing in catalog: '%s'", _k)
     theme_manager.apply_theme(app)
-    global_logger.info("Tema ve ayarlar yüklendi.")
+    global_logger.info("Theme and settings loaded.")
 
     # Qt environment is ready — import UI module now.
     # Workers are imported deferred, after the event loop starts.
     from ui.tray_app import TrayApp
 
-    global_logger.info("Arayüz (Tray/Dashboard) oluşturuluyor...")
+    global_logger.info("Building UI (Tray/Dashboard)...")
     tray = TrayApp(settings=settings_manager)
     app.setWindowIcon(tray._icon_idle)
 
@@ -185,14 +185,14 @@ def main():
     _workers = {}
 
     def _deferred_init():
-        global_logger.info("Arka plan işlemleri (Deferred Init) başlatılıyor...")
+        global_logger.info("Starting deferred initialization...")
         from workers.hotkey_worker import HotkeyWorker
         from workers.audio_worker import AudioWorker
         from workers.transcription_worker import TranscriptionWorker
         from workers.model_downloader_worker import ModelDownloaderWorker
         from ui.osd import MinimalOSD
 
-        global_logger.info("Worker nesneleri oluşturuluyor...")
+        global_logger.info("Creating workers...")
         hotkey_worker        = HotkeyWorker(settings=settings_manager, key=settings_manager.get("hotkey", "F9"))
         audio_worker         = AudioWorker(settings=settings_manager)
         transcription_worker = TranscriptionWorker(settings=settings_manager)
@@ -209,7 +209,7 @@ def main():
         tray.osd = osd
 
         # ---------------------------------------------------- signal wiring
-        global_logger.info("Sinyal kablolaması (Wiring) yapılıyor...")
+        global_logger.info("Wiring signals...")
 
         # Key pressed/released → directly trigger TrayApp QObject slots (thread-safe)
         hotkey_worker.hotkey_pressed.connect(tray.on_hotkey_pressed)
@@ -299,7 +299,7 @@ def main():
         downloader_worker.download_finished.connect(tray.dashboard.on_download_complete)
 
         # ---------------------------------------------------- start workers
-        global_logger.info("Worker thread'leri başlatılıyor...")
+        global_logger.info("Starting worker threads...")
         transcription_worker.start()
         audio_worker.start()
         hotkey_worker.start()
@@ -307,7 +307,7 @@ def main():
         tray.dashboard.show()
         tray.dashboard.raise_()
         tray.dashboard.append_log_entry("OK", "APP", _t("app.started").format(key=settings_manager.get('hotkey', 'F9').upper()))
-        global_logger.info("Sistem hazır ve dinlemede.")
+        global_logger.info("System ready.")
 
     # ----------------------------------------------------- graceful shutdown
     def shutdown():
@@ -348,7 +348,7 @@ def main():
     # permanent hangs, so we terminate at OS level immediately instead.
     import time
     time.sleep(0.25)
-    global_logger.info("Sistem temiz şekilde kapatıldı (os._exit).")
+    global_logger.info("Clean shutdown (os._exit).")
     logging.shutdown()
     os._exit(0)
 

@@ -32,12 +32,12 @@ def inject_text(text: str, log_callback=None) -> None:
                     clipboard.setMimeData(old_mime_data)
                 except Exception as e:
                     if log_callback:
-                        log_callback("WRN", "SYS", f"Pano geri yüklenemedi: {e}")
+                        log_callback("WRN", "SYS", f"Clipboard restore failed: {e}")
             QTimer.singleShot(150, _restore)
 
         if log_callback:
-            log_callback("OK", "STT", f'Yazıldı: "{text.strip()}"')
+            log_callback("OK", "STT", f'Written: "{text.strip()}"')
 
     except Exception as e:
         if log_callback:
-            log_callback("ERR", "SYS", f"Pano işlemi başarısız: {e}")
+            log_callback("ERR", "SYS", f"Clipboard operation failed: {e}")
