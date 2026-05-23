@@ -6,29 +6,29 @@ from ui.theme import G_1, FONT_SIZE_SM
 from ui.utils import colorize_svg_icon
 
 class NoScrollComboBox(QComboBox):
-    """Scroll event'ini yutarak yanlışlıkla değer değişimini (veya üst scroll area'nın takılmasını) önler."""
+    """Swallows scroll events to prevent accidental value changes (and parent scroll area sticking)."""
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        
-        # Arayüzü kırmamak için, genişliği içeriğe göre değil layout'a göre belirler
+
+        # Width is driven by the layout, not by content, to avoid breaking the UI.
         self.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.setMinimumContentsLength(1)
         self.setMinimumWidth(50)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        
-        # Zırhlı Standartlar: Her combo en fazla 8 öğe gösterir
+
+        # Cap visible items at 8 to keep the dropdown compact.
         self.setMaxVisibleItems(8)
-        
-        # Veri Taşması Koruması: Uzun metinler arayüzü kırmaz, sağdan "..." ile kesilir
+
+        # Long text is elided on the right so it never breaks the layout.
         view = self.view()
         if view:
             view.setTextElideMode(Qt.TextElideMode.ElideRight)
             if isinstance(view, QListView):
                 view.setWordWrap(False)
-                
-        # Tooltip olaylarını dinleyerek sığan yazılarda tooltip'i yutmak için kalkan
+
+        # Event filter suppresses tooltips when the text already fits.
         self.installEventFilter(self)
         if self.view():
             self.view().viewport().installEventFilter(self)
@@ -37,17 +37,17 @@ class NoScrollComboBox(QComboBox):
         if event.type() == QEvent.Type.ToolTip:
             if obj == self:
                 if self.fontMetrics().horizontalAdvance(self.currentText()) <= self.width() - 32:
-                    return True  # Kutu içine sığıyorsa Tooltip gösterme
+                    return True  # text fits in combo box — suppress tooltip
             elif self.view() and obj == self.view().viewport():
                 if hasattr(event, "pos"):
                     index = self.view().indexAt(event.pos())
                     if index.isValid():
                         rect = self.view().visualRect(index)
                         if self.view().fontMetrics().horizontalAdvance(self.itemText(index.row())) <= rect.width() - 16:
-                            return True  # Menü içine sığıyorsa Tooltip gösterme
+                            return True  # text fits in menu item — suppress tooltip
         return super().eventFilter(obj, event)
 
-    # --- Otomatik Tooltip Enjeksiyonu ---
+    # --- Automatic Tooltip Injection ---
     def addItem(self, *args, **kwargs):
         super().addItem(*args, **kwargs)
         idx = self.count() - 1
@@ -62,8 +62,8 @@ class NoScrollComboBox(QComboBox):
         self.setItemData(index, text, Qt.ItemDataRole.ToolTipRole)
 
     def showPopup(self):
-        # Menü açıldığında, listeyi ComboBox'ın dış kasasıyla aynı genişliğe kilitler.
-        # Bu sayede uzun metinler ekranı taşırmaz, mecburen "..." ile kesilip tek satır kalır.
+        # Lock the dropdown list to the same width as the combo box shell on open.
+        # This forces long text to be elided to a single line rather than overflowing the screen.
         if self.view():
             self.view().setMinimumWidth(self.width())
             self.view().setMaximumWidth(self.width())
@@ -73,7 +73,7 @@ class NoScrollComboBox(QComboBox):
         event.ignore()
 
 class SettingGroup(QFrame):
-    """HUD Tarzı Gruplandırma Kutusu"""
+    """HUD-style grouping card."""
     def __init__(self, title: str, parent=None):
         super().__init__(parent)
         self.setObjectName("settingCard")
@@ -94,31 +94,31 @@ class SettingGroup(QFrame):
         lbl = QLabel(label_text)
         lbl.setStyleSheet(f"color: {p['CLR_TEXT_MUTED']};")
         lbl.setWordWrap(True)
-        lbl.setMinimumWidth(10) # Metnin esneyip alt satıra geçebilmesi için
+        lbl.setMinimumWidth(10)  # allow label to shrink and wrap to the next line
         if full_width:
             self.group_layout.addWidget(lbl)
             self.group_layout.addWidget(widget)
         else:
             lay = QHBoxLayout()
             lay.setContentsMargins(0, 0, 0, 0)
-            lay.setSpacing(G_1) # 8-pt Grid sistemi boşluğu
+            lay.setSpacing(G_1)  # 8-pt grid spacing
             lay.addWidget(lbl, stretch=1)
             widget.setFixedWidth(widget_width)
             lay.addWidget(widget)
             self.group_layout.addLayout(lay)
 
 class DynamicIconButton(QPushButton):
-    """Sakin durumda bej, hover durumunda krem, basıldığında/aktifken spesifik renk alan SVG butonu."""
+    """SVG icon button: muted at rest, brighter on hover, coloured when pressed/active."""
     def __init__(self, svg_path_or_str: str, action_color: str, fallback_text: str = "", parent=None, idle_color: str | None = None, disabled_color: str | None = None):
         super().__init__(parent)
         self.setProperty("isIconBtn", True)
-        
+
         from ui.theme import theme_manager
         p = theme_manager.palette
-        self.idle_color = idle_color if idle_color else p["CLR_IDLE"] # Belirtilmemişse varsayılan Soluk Bej
-        self.hover_color = p["CLR_TEXT"]          # Hover: Parlak Krem (Nötr aydınlanma)
-        self.action_color = action_color          # Pressed/Active: İkonun kimliği (Mavi/Sarı/Yeşil)
-        self.disabled_color = disabled_color if disabled_color else p["CLR_BG"] # Pasifken kasanın içine oyulmuş karanlık çukur
+        self.idle_color = idle_color if idle_color else p["CLR_IDLE"]  # default muted beige
+        self.hover_color = p["CLR_TEXT"]          # bright cream on hover
+        self.action_color = action_color          # identity colour when pressed/active
+        self.disabled_color = disabled_color if disabled_color else p["CLR_BG"]  # sunken dark when disabled
         
         is_raw_svg = svg_path_or_str.strip().startswith("<svg")
         if is_raw_svg or os.path.exists(svg_path_or_str):

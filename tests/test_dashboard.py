@@ -14,14 +14,11 @@ def mock_dashboard():
 
 def test_device_changed_selects_default(mock_dashboard):
     """Kullanıcı '(Varsayılan)' etiketli bir cihaz seçtiğinde takibe dönüldüğünü test eder."""
-    # 1. Setup: ComboBox'tan varsayılan cihaz seçilmiş gibi davran
     mock_dashboard.mic_combo.itemData.return_value = 1
     mock_dashboard.mic_combo.itemText.return_value = "Logitech Mic (Varsayılan)"
-    
-    # 2. Execute: Metodu tetikle
+
     DashboardWindow._on_device_changed(mock_dashboard, 0)
-    
-    # 3. Assert: Ayarlar sıfırlanmış mı? (Implicit State Reset)
+
     mock_dashboard.settings.set.assert_has_calls([
         call("device_index", -1),
         call("device_name", "")
@@ -31,14 +28,11 @@ def test_device_changed_selects_default(mock_dashboard):
 
 def test_device_changed_selects_specific_device(mock_dashboard):
     """Kullanıcı belirli bir cihaza tıkladığında cihazın mühürlendiğini test eder."""
-    # 1. Setup: ComboBox'tan spesifik bir cihaz seçilmiş gibi davran
     mock_dashboard.mic_combo.itemData.return_value = 2
     mock_dashboard.mic_combo.itemText.return_value = "Realtek Mic"
-    
-    # 2. Execute
+
     DashboardWindow._on_device_changed(mock_dashboard, 1)
-    
-    # 3. Assert: Cihaz ayarlara kazınmış mı? (Mühürleme)
+
     mock_dashboard.settings.set.assert_has_calls([
         call("device_index", 2),
         call("device_name", "Realtek Mic")

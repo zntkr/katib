@@ -1,8 +1,8 @@
 def inject_text(text: str, log_callback=None) -> None:
-    """Metni aktif pencereye pano aracılığıyla enjekte eder.
+    """Injects text into the active window via the clipboard.
 
-    Mevcut pano içeriğini (resim, dosya vb.) yedekler, metni yapıştırır,
-    ardından asenkron olarak eski panoyu geri yükler.
+    Backs up current clipboard contents (image, file, etc.), pastes the text,
+    then restores the old clipboard asynchronously.
     """
     import keyboard
     from PySide6.QtGui import QGuiApplication
@@ -19,7 +19,7 @@ def inject_text(text: str, log_callback=None) -> None:
                 old_mime_data.setData(fmt, current_mime_data.data(fmt))
 
         new_mime_data = QMimeData()
-        new_mime_data.setText(text + " ")  # imleci bir sonraki kelimeden ayır
+        new_mime_data.setText(text + " ")  # separate cursor from the next word
         clipboard.setMimeData(new_mime_data)
 
         QCoreApplication.processEvents()

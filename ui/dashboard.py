@@ -21,7 +21,7 @@ _LEVEL_PALETTE_KEY: dict[str, str] = {
     "ERR":  "CLR_ERR",
     "WARN": "CLR_WARN",
     "WRN":  "CLR_WARN",
-    "IDLE": "CLR_WARN",  # Model yükleniyor (turuncu)
+    "IDLE": "CLR_WARN",  # model loading (orange)
     "...":  "CLR_INFO",
     "INFO": "CLR_INFO",
     "↓":    "CLR_INFO",
@@ -46,7 +46,7 @@ from ui.components import NoScrollComboBox, DynamicIconButton
 class DashboardWindow(QWidget):
     device_changed            = Signal(int)
     hotkey_changed            = Signal(str)
-    hotkey_capture_mode       = Signal(bool)  # True=yakalama başladı, False=bitti
+    hotkey_capture_mode       = Signal(bool)  # True=capture started, False=finished
     model_dir_changed         = Signal(str)
     model_reload_requested    = Signal()
     refresh_devices_requested = Signal()
@@ -67,11 +67,12 @@ class DashboardWindow(QWidget):
         self.setWindowTitle(f"{APP_NAME} — {t('dashboard.title')}")
         self.setWindowIcon(icon_idle)
 
-        # ── Beyaz Flash Koruması ───────────────────────────────────────────
-        # WA_TranslucentBackground: DWM buffer'ı beyaz yerine şeffaf initialize
-        # eder; Qt ilk paint'te koyu arka planı çizer — kullanıcı beyaz görmez.
+        # ── White Flash Prevention ────────────────────────────────────────
+        # WA_TranslucentBackground: DWM initialises the buffer as transparent
+        # instead of white; Qt paints the dark background on the first paint —
+        # the user never sees a white flash.
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        # ───────────────────────────────────────────────────────────────────
+        # ─────────────────────────────────────────────────────────────────
 
         # ── Windows DWM Dark Mode ──────────────────────────────────────────
         try:
@@ -85,7 +86,7 @@ class DashboardWindow(QWidget):
 
         self._build_ui()
 
-        # Plug & Play: OS donanım olaylarını (deferred) dinle
+        # Listen for OS hardware events (deferred to avoid blocking __init__).
         QTimer.singleShot(100, self._init_media_devices)
 
     def _init_media_devices(self):
@@ -93,16 +94,16 @@ class DashboardWindow(QWidget):
         self._media_devices = QMediaDevices(self)
         self._media_devices.audioInputsChanged.connect(self._on_audio_inputs_changed)
         
-        # Debounce timer: Donanım olayları (plug/unplug) saniyede onlarca kez tetiklenebilir
+        # Debounce: hardware events (plug/unplug) can fire dozens of times per second.
         self._device_refresh_timer = QTimer(self)
         self._device_refresh_timer.setSingleShot(True)
-        self._device_refresh_timer.setInterval(500)  # Sinyal fırtınası bitene kadar 500ms bekle
+        self._device_refresh_timer.setInterval(500)  # wait 500 ms for the signal storm to settle
         self._device_refresh_timer.timeout.connect(self._do_audio_inputs_changed)
 
     def _on_audio_inputs_changed(self) -> None:
-        # Test ortamlarında timer henüz initialize edilmeden bu metot doğrudan çağrılabilir.
+        # In test environments this method may be called before the timer is initialised.
         if hasattr(self, "_device_refresh_timer"):
-            self._device_refresh_timer.start()  # Her yeni sinyalde sayacı sıfırla
+            self._device_refresh_timer.start()  # restart the timer on every new signal
         else:
             self._do_audio_inputs_changed()
 
@@ -118,7 +119,7 @@ class DashboardWindow(QWidget):
         
         p = theme_manager.palette
         
-        # ── LOG AREA (Üst Katman) ──────────────────────────────────────
+        # ── LOG AREA (Top Layer) ──────────────────────────────────────
         self.log_widget = QWidget()
         self.log_widget.setObjectName("log_widget")
         log_layout = QVBoxLayout(self.log_widget)
@@ -126,7 +127,7 @@ class DashboardWindow(QWidget):
         log_layout.setSpacing(G_1)
         
         self.log_box = QTextBrowser()
-        self.log_box.setObjectName("log_box")  # CSS için isim verdik
+        self.log_box.setObjectName("log_box")
         self.log_box.setOpenExternalLinks(False)
         self.log_box.setFont(QFont("Consolas", FONT_SIZE_SM))
         self.log_box.setFixedHeight(LOG_BOX_HEIGHT)
@@ -138,7 +139,7 @@ class DashboardWindow(QWidget):
         root.addWidget(self.log_widget)
         self.log_widget.hide()
 
-        # ── STATUS & LEVEL ROW (Orta Katman) ───────────────────────────
+        # ── STATUS & LEVEL ROW (Middle Layer) ─────────────────────────
         status_row = QHBoxLayout()
         status_row.setSpacing(G_1)
         status_row.setAlignment(Qt.AlignmentFlag.AlignVCenter)
@@ -188,7 +189,7 @@ class DashboardWindow(QWidget):
         
         root.addLayout(status_row)
 
-        # ── COMPACT HUD (Alt Katman) ───────────────────────────────────
+        # ── COMPACT HUD (Bottom Layer) ────────────────────────────────
         mic_row = QHBoxLayout()
         mic_row.setSpacing(G_1)
         
@@ -212,7 +213,7 @@ class DashboardWindow(QWidget):
         self.adjustSize()
         self.setFixedHeight(self.sizeHint().height())
 
-        # Tüm arayüz (Durum çubuğu dahil) inşa edildikten sonra stilleri uygula
+        # Apply styles after the full UI (including the status bar) is built.
         self._update_log_stylesheet()
 
     def _toggle_logs(self) -> None:
@@ -231,7 +232,7 @@ class DashboardWindow(QWidget):
         self.adjustSize()
         self.setFixedHeight(self.sizeHint().height())
 
-        # Alt kenarı sabit tut — pencere yukarı doğru büyür/küçülür, konum sıfırlanmaz
+        # Keep the bottom edge fixed — the window grows/shrinks upward without repositioning.
         self.move(self.x(), old_bottom - self.height())
 
     def _update_log_btn_style(self) -> None:
@@ -251,13 +252,12 @@ class DashboardWindow(QWidget):
     def set_last_transcript(self, text: str) -> None:
         self._last_transcript = text
         self.btn_copy_transcript.setEnabled(True)
-        # İkon otomatik olarak QIcon.Mode.Normal durumuna (parlak) geçecektir.
 
     def _populate_devices(self) -> None:
         self.refresh_devices_requested.emit()
 
     def populate_devices(self, items: list[tuple[str, int, bool]]) -> None:
-        """AudioWorker'ın devices_ready sinyalinden gelen listeyle combo'yu doldurur."""
+        """Populates the combo box from the list provided by AudioWorker's devices_ready signal."""
         if getattr(self, "_last_devices", None) == items:
             return
         self._last_devices = items
@@ -268,7 +268,7 @@ class DashboardWindow(QWidget):
         preferred_idx = -1
         default_idx   = -1
         for i, (label, index, is_default) in enumerate(items):
-            # Windows driver isimlerindeki gizli alt satır (\n) karakterlerini temizle
+            # Strip hidden newline characters that appear in some Windows driver names.
             label = label.replace("\r", "").replace("\n", " ").strip()
             
             self.mic_combo.addItem(label, userData=index)
@@ -291,16 +291,15 @@ class DashboardWindow(QWidget):
         else:
             self.mic_combo.setEnabled(True)
         self.mic_combo.blockSignals(False)
-        # blockSignals nedeniyle setCurrentIndex sinyali çıkmadı; worker'ı manuel bildir
+        # setCurrentIndex did not emit a signal because signals were blocked; notify the worker manually.
         if select_idx != -1:
             device_data = self.mic_combo.itemData(select_idx)
             if device_data is not None:
-                # DEDEKTİF MODU: Hangi mikrofonun nasıl seçildiğini izleyelim
                 reason = "Saved Preference" if preferred_idx != -1 else "System Default"
                 clean_name = self.mic_combo.itemText(select_idx).replace(" (Default)", "")
                 self.append_log_entry("...", "MIC", f"Auto-selected: {clean_name} ({reason})")
                 
-                # AYARLARI EZME! Sadece kullanıcı _on_device_changed ile müdahale ederse kaydet.
+                # Do NOT write settings here — only save when the user changes the device via _on_device_changed.
                 # self.settings.set("device_name", clean_name)
                 # self.settings.set("device_index", device_data)
                 self.device_changed.emit(device_data)
@@ -332,7 +331,7 @@ class DashboardWindow(QWidget):
             self._position_bottom_right()
             self.setWindowOpacity(1.0)
             
-        # Windows pencere çerçevesini (frame) ekledikten SONRA konumlandırmak için asenkron çağrı
+        # Position asynchronously so the Windows frame is already attached.
         QTimer.singleShot(15, _finalize_position)
 
     def paintEvent(self, event: QPaintEvent) -> None:
@@ -364,12 +363,12 @@ class DashboardWindow(QWidget):
 # ----------------------------------------------------------------- public
     def set_loading_indicator(self, visible: bool):
         if visible:
-            self.level_bar.setRange(0, 0)  # İndeterminate (Sonsuz) yükleme modu
+            self.level_bar.setRange(0, 0)  # indeterminate (infinite) loading mode
             p = theme_manager.palette
             self.level_bar.setStyleSheet(f"QProgressBar::chunk {{ background-color: {p['CLR_YELLOW']}; border-radius: 2px; }}")
             self._last_level_color = p["CLR_YELLOW"]
         else:
-            self.level_bar.setRange(0, 100)  # Normal moda dön
+            self.level_bar.setRange(0, 100)  # return to normal mode
             self.level_bar.setValue(0)
             self.update_level(0.0)
 
@@ -402,7 +401,6 @@ class DashboardWindow(QWidget):
         .cp {{ color: {p['CLR_TEXT_MUTED']}; }}
         .msg {{ color: {p['CLR_TEXT_CONTENT']}; }}
         """
-        # Stil artik tamamen global temadan (theme.py) geliyor
         doc = self.log_box.document()
         doc.setDefaultStyleSheet(css)
         doc.clear()
@@ -423,11 +421,11 @@ class DashboardWindow(QWidget):
 
     def update_level(self, value: float):
         if self.level_bar.maximum() == 0:
-            return  # Bar yükleme modundayken gelen mikrofon sesini yoksay
-            
+            return  # ignore microphone signals while the bar is in loading mode
+
         from core.settings import STATE_LISTENING
         if value > 0.0 and self._status_cache[0] != STATE_LISTENING:
-            return  # Kayıt durdurulduktan sonra kuyruktan gelen gecikmeli sinyalleri yoksay
+            return  # ignore delayed signals that arrive after recording has stopped
 
         pct = max(0, min(100, int(value * 100)))
         self.level_bar.setValue(pct)
@@ -440,9 +438,8 @@ class DashboardWindow(QWidget):
             color = p["CLR_WARN"]
         else:
             color = p["CLR_ERR"]
-        # QProgressBar global stil dosyasındaki formata uymak için renkleri özelliğe taşıyabiliriz.
-        # Global stylesheet'te ::chunk dinamik olarak color özelliğine göre boyanamadığı için
-        # küçük bir inline eklenti ile destekliyoruz.
+        # The global stylesheet cannot dynamically colour ::chunk by a property value,
+        # so we use a small inline override instead.
         if getattr(self, '_last_level_color', None) != color:
             self._last_level_color = color
             self.level_bar.setStyleSheet(
@@ -454,7 +451,7 @@ class DashboardWindow(QWidget):
         text = t(text)
         p = theme_manager.palette
 
-        # İkon (LED) durum rengini alır, metin (Donanım Baskısı) her zaman sönük kalır
+        # The icon (LED) takes the status colour; the text always stays muted.
         icon_color = p.get(_LEVEL_PALETTE_KEY.get(level, "CLR_IDLE"), p["CLR_TEXT_MUTED"])
         text_color = p["CLR_TEXT_STATUS"]
         
@@ -485,7 +482,7 @@ class DashboardWindow(QWidget):
         self.status_icon_label.unsetCursor()
 
     def closeEvent(self, event) -> None:
-        """Teardown/kapanış sırasında QTimer'ların memory leak yaratmasını önler."""
+        """Stops active QTimers on teardown to prevent memory leaks."""
         for timer in self.findChildren(QTimer):
             if timer.isActive():
                 timer.stop()
@@ -557,9 +554,8 @@ class DashboardWindow(QWidget):
             self._settings_dialog.log_entry.connect(self.append_log_entry)
             self._settings_dialog.finished.connect(self._update_settings_btn_style)
 
-        # --- Hizalama Mantığı (Sidecar) ---
-        # Dashboard'ın _position_bottom_right ile aynı formül:
-        # availableGeometry + DWM görsel sınırları kullanılarak alt kenar hizalaması.
+        # Sidecar alignment — same formula as _position_bottom_right:
+        # availableGeometry + DWM visual bounds for bottom-edge alignment.
         self._settings_dialog.show()
         self._settings_dialog.raise_()
         self._settings_dialog.activateWindow()

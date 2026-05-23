@@ -11,7 +11,7 @@ from workers.base_worker import BaseWorker
 if TYPE_CHECKING:
     pass  # sd.InputStream is a runtime type, accessed via sd module
 
-# Test ortamında sd mock'lanır; sd.PortAudioError gerçek exception class olmayabilir.
+# In test environments sd is mocked; sd.PortAudioError may not be a real exception class.
 try:
     _PortAudioError: type[Exception] = sd.PortAudioError  # type: ignore[assignment]
     if not (isinstance(_PortAudioError, type) and issubclass(_PortAudioError, Exception)):
@@ -22,8 +22,8 @@ except (AttributeError, TypeError):
 SAMPLE_RATE              = 16000
 CHANNELS                 = 1
 DTYPE                    = "float32"
-BLOCK_SIZE               = 1024   # her callback'te gelen frame sayısı
-MIN_RECORDING_DURATION   = 0.5    # saniye — daha kısa kayıtlar atlanır
+BLOCK_SIZE               = 1024   # frames per callback
+MIN_RECORDING_DURATION   = 0.5    # seconds — shorter recordings are discarded
 
 
 def _resample(audio: np.ndarray, orig_sr: int, target_sr: int) -> np.ndarray:
@@ -40,12 +40,12 @@ def _resample(audio: np.ndarray, orig_sr: int, target_sr: int) -> np.ndarray:
 
 class AudioWorker(BaseWorker):
     audio_ready        = Signal(object)  # numpy array (float32, 16kHz, mono)
-    level_changed      = Signal(float)   # 0.0 – 1.0 arası ses seviyesi
+    level_changed      = Signal(float)   # 0.0 – 1.0
     devices_ready      = Signal(list)    # list of (label: str, index: int, is_default: bool)
-    muted_detected     = Signal()        # Matematiksel 0.0 (Mute) tespiti
-    recording_finished = Signal()        # Kayıt durdurulduğunda (her durumda) fırlatılır
-    audio_failed       = Signal()        # Kayıt çok kısa veya sessizse fırlatılır
-    mic_unavailable    = Signal()        # Donanım erişilemiyor (bulunamadı / açılamadı / koptu)
+    muted_detected     = Signal()        # mathematical 0.0 (muted) detected
+    recording_finished = Signal()        # emitted when recording stops (in all cases)
+    audio_failed       = Signal()        # recording too short or silent
+    mic_unavailable    = Signal()        # hardware unreachable (not found / failed to open / disconnected)
 
     def __init__(self, settings, parent=None):
         super().__init__(parent)
@@ -57,7 +57,7 @@ class AudioWorker(BaseWorker):
         self._intentional_close: bool  = False
         self._native_sr: int           = SAMPLE_RATE
         self._fallback_warned: bool    = False
-        # Event başlangıçta unset (False); set() çağrısı thread'i durdurur.
+        # Initially unset (False); calling set() unblocks the thread's wait() and stops it.
         self._stop_event = threading.Event()
         self._silence_timer = QElapsedTimer()
         self._silence_notified = False
@@ -66,9 +66,9 @@ class AudioWorker(BaseWorker):
 
     # ------------------------------------------------------------------ QThread
     def run(self):
-        """Thread'i canlı tutar; kayıt start/stop ile dışarıdan yönetilir."""
+        """Keeps the thread alive; recording is managed externally via start/stop."""
         self.log_entry.emit("OK", "MIC", "Ready")
-        self._stop_event.wait()   # False → bloke; stop() set() yapınca açılır
+        self._stop_event.wait()   # blocks while False; stop() calls set() to unblock
 
     def stop(self):
         self._stop_event.set()
@@ -89,10 +89,10 @@ class AudioWorker(BaseWorker):
         self.log_entry.emit("OK", "MIC", f"Device → {label}")
 
     def refresh_devices(self) -> None:
-        """Kullanılabilir mikrofon listesini sorgular ve devices_ready sinyali ile iletir."""
+        """Queries available microphones and reports them via the devices_ready signal."""
         try:
-            # Windows'ta PortAudio cihaz listesini önbelleğe alır; yeni takılan
-            # mikrofon görünmez. Aktif kayıt yoksa yeniden başlatarak önbelleği temizle.
+            # PortAudio on Windows caches the device list; a newly plugged-in
+            # microphone won't appear. Reinitialise to clear the cache if not recording.
             if self._stream is None:
                 sd._terminate()
                 sd._initialize()
@@ -113,7 +113,7 @@ class AudioWorker(BaseWorker):
 
     def start_recording(self):
         if self._stream is not None:
-            return  # zaten kayıt var
+            return  # already recording
 
         if not self._device_available():
             msg = (
@@ -146,14 +146,14 @@ class AudioWorker(BaseWorker):
             self._silence_notified = False
             self.log_entry.emit("OK", "MIC", "Recording started")
         except _PortAudioError as e:
-            # paInvalidDevice (-9996): mic fiziksel olarak yok; fallback anlamsız.
+            # paInvalidDevice (-9996): mic is physically absent; fallback makes no sense.
             if "-9996" in str(e) or "Invalid device" in str(e):
                 self._stream = None
                 self.log_entry.emit("ERR", "MIC", "Microphone not connected")
                 self.error_occurred.emit("Microphone not connected")
                 self.mic_unavailable.emit()
                 return
-            # Cihaz 16kHz desteklemiyor; natif hızda aç, stop_recording'de resample edilir.
+            # Device doesn't support 16 kHz; open at native rate and resample in stop_recording.
             try:
                 dev_info = sd.query_devices(self._device_index)
                 native_sr = int(dev_info["default_samplerate"])
@@ -184,7 +184,7 @@ class AudioWorker(BaseWorker):
 
     def stop_recording(self):
         if self._stream is None:
-            self.recording_finished.emit() # Akış yoksa da bitti sayılır
+            self.recording_finished.emit()  # count as finished even if there was no stream
             return
 
         self._close_stream()
@@ -221,7 +221,7 @@ class AudioWorker(BaseWorker):
 
     # ----------------------------------------------------------------- private
     def _device_available(self) -> bool:
-        """Seçili cihazın hala sistemde var olup olmadığını kontrol eder."""
+        """Checks whether the selected device is still present in the system."""
         if self._device_index is None:
             return False
         try:
@@ -244,14 +244,14 @@ class AudioWorker(BaseWorker):
                     return
                 self.level_changed.emit(min(rms * 5.0, 1.0))
 
-                # --- Zırhlı Mantık: 0.0 (Mute) Kontrolü ---
+                # Mute detection: mathematical 0.0 sustained for > 1500 ms.
                 if rms == 0.0:
                     if not self._silence_timer.isValid():
                         self._silence_timer.start()
                     elif self._silence_timer.elapsed() > 1500 and not self._silence_notified:
                         self._silence_notified = True
                         self.muted_detected.emit()
-                        # Asenkron kısa bip — audio callback thread'ini bloke etmemek için ayrı thread
+                        # Short beep on a separate thread so the audio callback is not blocked.
                         import threading
                         threading.Thread(
                             target=lambda: (winsound.Beep(440, 100), winsound.Beep(440, 100)),
@@ -264,7 +264,7 @@ class AudioWorker(BaseWorker):
             self.log_entry.emit("ERR", "MIC", "Audio stream interrupted")
 
     def _on_stream_finished(self) -> None:
-        """Sounddevice stream kapandığında tetiklenir; _intentional_close=False ise donanım kopması demektir."""
+        """Called when the sounddevice stream closes; _intentional_close=False means hardware disconnection."""
         try:
             if self._intentional_close:
                 return
@@ -273,7 +273,7 @@ class AudioWorker(BaseWorker):
             self.error_occurred.emit("Microphone disconnected")
             self.mic_unavailable.emit()
             self.level_changed.emit(0.0)
-            self.refresh_devices() # Cihaz listesini otomatik tazele
+            self.refresh_devices()  # auto-refresh the device list
         except Exception:
             self.log_entry.emit("ERR", "MIC", "Stream close error")
 

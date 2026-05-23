@@ -3,24 +3,24 @@ import tempfile
 from PySide6.QtGui import QPalette, QColor
 from PySide6.QtWidgets import QApplication
 
-# ── 8-pt Grid Sistemi ────────────────────────────────────────────
+# ── 8-pt Grid System ─────────────────────────────────────────────
 G_1, G_2, G_3, G_4, G_5, G_6 = 8, 16, 24, 32, 40, 48
 
-# ── Tipografi Kademeleri ─────────────────────────────────────────
-FONT_SIZE_SM = 8   # pt — log kutusu, yardımcı etiketler
-FONT_SIZE_MD = 9   # pt — genel UI varsayılanı
-FONT_SIZE_LG = 10  # pt — OSD, toolbar ikonları
+# ── Typography Scale ─────────────────────────────────────────────
+FONT_SIZE_SM = 8   # pt — log box, helper labels
+FONT_SIZE_MD = 9   # pt — general UI default
+FONT_SIZE_LG = 10  # pt — OSD, toolbar icons
 
-# ── Panel Boyutları ──────────────────────────────────────────────
-PANEL_WIDTH = 320      # px — Dashboard, OSD ve SettingsDialog ortak genişliği
-WIDGET_WIDTH_SM = 80   # px — settings_dialog küçük buton/combobox genişliği
-COMBO_HEIGHT = G_4     # px — mic combo dış kabuk yüksekliği (Butonlarla tam hizalı)
-LOG_BOX_HEIGHT = 144   # px — dashboard log widget yüksekliği
-OSD_BOTTOM_MARGIN = 48 # px — OSD alt boşluğu (görev çubuğu payı)
+# ── Panel Dimensions ────────────────────────────────────────────
+PANEL_WIDTH = 320      # px — shared width for Dashboard, OSD, and SettingsDialog
+WIDGET_WIDTH_SM = 80   # px — small button/combobox width in settings_dialog
+COMBO_HEIGHT = G_4     # px — mic combo outer height (flush with buttons)
+LOG_BOX_HEIGHT = 144   # px — dashboard log widget height
+OSD_BOTTOM_MARGIN = 48 # px — OSD bottom offset (taskbar clearance)
 
-# ── PALETLER (Nord — Koyu / Açık) ───────────────────────────────
+# ── Palettes (Gruvbox Dark) ──────────────────────────────────────
 DARK_PALETTE = {
-    # Fonksiyonel durumlar (Gruvbox Bright Variants)
+    # Functional states (Gruvbox Bright Variants)
     "CLR_OK":        "#b8bb26",  # Green
     "CLR_ERR":       "#fb4934",  # Red
     "CLR_WARN":      "#fe8019",  # Orange
@@ -31,38 +31,38 @@ DARK_PALETTE = {
     "CLR_FG3":       "#bdae93",  # Beige (fg3)
     "CLR_LEVEL_LOW": "#b8bb26",
     "CLR_LEVEL_MID": "#fabd2f",  # Yellow
-    "CLR_YELLOW":    "#d79921",  # Hardal Sarısı (Terminal Vurgusu)
-    # Arkaplanlar — Gruvbox Hard kademeli yükseltme sistemi
-    "CLR_BG":          "#282828",  # bg0   (Medium) — Kasa/Ana Zemin
-    "CLR_BG_DEEP":     "#1d2021",  # bg0_h (Hard) — Ekran/Boşluk (Terminal)
-    "CLR_BG_SURFACE":  "#32302f",  # bg0_s (Soft) — Yardımcı katmanlar
-    "CLR_BG_ELEVATED": "#3c3836",  # bg1 — Butonlar/Paneller
-    "CLR_BG_HOVER":    "#504945",  # bg2 — Hover
-    "CLR_BG_ACTIVE":   "#665c54",  # bg3 — Pressed/Active
-    # Metin — Gruvbox light hiyerarşisi
+    "CLR_YELLOW":    "#d79921",  # mustard yellow (terminal accent)
+    # Backgrounds — Gruvbox Hard elevation ladder
+    "CLR_BG":          "#282828",  # bg0   (Medium) — main shell/ground
+    "CLR_BG_DEEP":     "#1d2021",  # bg0_h (Hard)   — screen/void (terminal)
+    "CLR_BG_SURFACE":  "#32302f",  # bg0_s (Soft)   — secondary layers
+    "CLR_BG_ELEVATED": "#3c3836",  # bg1             — buttons/panels
+    "CLR_BG_HOVER":    "#504945",  # bg2             — hover
+    "CLR_BG_ACTIVE":   "#665c54",  # bg3             — pressed/active
+    # Text — Gruvbox light hierarchy
     "CLR_TEXT":         "#ebdbb2",  # fg
     "CLR_TEXT_LABEL":   "#d5c4a1",  # fg1
     "CLR_TEXT_CONTENT": "#ebdbb2",  # fg
-        "CLR_TEXT_STATUS":  "#a89984",  # fg4 (durum metinleri)
+    "CLR_TEXT_STATUS":  "#a89984",  # fg4 (status text)
     "CLR_TEXT_MUTED":   "#928374",  # gray
     "CLR_TEXT_FAINT":   "#7c6f64",  # bg4
     "CLR_TEXT_CODE":    "#fabd2f",  # yellow
-    # Kenarlıklar
-    "CLR_BORDER":       "#32302f",  # bg0_s — çok sönük çerçeve
+    # Borders
+    "CLR_BORDER":       "#32302f",  # bg0_s — very subtle frame
     "CLR_BORDER_LIGHT": "#3c3836",  # bg1
-    "CLR_HOVER_BORDER": "#d79921",  # hardal sarısı
+    "CLR_HOVER_BORDER": "#d79921",  # mustard yellow
     "CLR_FOCUS_BORDER": "#fabd2f",  # yellow
-    # Etkileşim
+    # Interaction
     "CLR_HOVER_BG":   "#504945",  # bg2
     "CLR_PRESSED_BG": "#1d2021",  # hard bg
-    # Özel arka planlar
+    # Special backgrounds
     "CLR_TIP_BG":  "#3c3836",  # bg1
     "CLR_WARN_BG": "#32302f",  # bg0_s
     "CLR_CODE_BG": "#1d2021",  # hard bg
 }
 
 
-# ── DİNAMİK TEMA YÖNETİCİSİ ─────────────────────────────────────
+# ── Theme Manager ────────────────────────────────────────────────
 class ThemeManager:
     def __init__(self):
         self.is_dark = True

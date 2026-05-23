@@ -25,7 +25,7 @@ class SettingsDialog(QDialog):
     model_reload_requested   = Signal()
     download_model_requested = Signal(str, str)
     log_entry                = Signal(str, str, str)
-    capture_mode_changed     = Signal(bool)  # True=başladı, False=bitti
+    capture_mode_changed     = Signal(bool)  # True=capture started, False=finished
 
     def __init__(self, settings, parent: QWidget | None = None):
         flags = (
@@ -38,8 +38,8 @@ class SettingsDialog(QDialog):
         )
         super().__init__(parent, flags)
         self.settings = settings
-        # Diyalog konteynerinin kendisi odak alabilmeli: açılışta hiçbir
-        # child widget parlamaz, ama Tab navigasyonu bozulmaz.
+        # The dialog container itself must be focusable: no child widget
+        # highlights on open, but Tab navigation still works correctly.
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setWindowTitle(f"{APP_NAME} — {t('settings.title')}")
         self.setFixedWidth(PANEL_WIDTH)
@@ -48,7 +48,7 @@ class SettingsDialog(QDialog):
 
         self._capturing_hotkey = False
         
-        # Dinamik oluşturulan UI bileşenlerinin referanslarını tutar
+        # Holds references to dynamically-generated UI widgets keyed by setting name.
         self._dynamic_widgets = {}
 
         self._build_ui()
@@ -72,10 +72,10 @@ class SettingsDialog(QDialog):
         super().show()
         self.raise_()
         self.activateWindow()
-        # Top-level QDialog üzerinde setFocus() = activateWindow() — OS yeniden
-        # ilk ComboBox'a focus devreder. btn_hotkey (QPushButton) gerçek bir child
-        # widget olduğu için setFocus() override çalışır; :focus stili olmadığından
-        # kullanıcı görsel highlight görmez, Tab navigasyonu btn_hotkey'den devam eder.
+        # On a top-level QDialog, setFocus() is equivalent to activateWindow() — the OS
+        # would hand focus to the first ComboBox. Because btn_hotkey is a real child widget,
+        # setFocus() override works; there is no :focus style, so the user sees no highlight,
+        # but Tab navigation starts from btn_hotkey.
         QTimer.singleShot(0, self.btn_hotkey.setFocus)
 
     def _build_ui(self):
@@ -99,7 +99,7 @@ class SettingsDialog(QDialog):
         self.container_layout.setContentsMargins(0, 0, G_1, G_2)
         self.container_layout.setSpacing(G_2)
 
-        # --- GRUP: GENERAL ---
+        # --- GROUP: GENERAL ---
         genel_grp = SettingGroup(t("settings.group_general"))
         self.btn_hotkey = QPushButton()
         self.btn_hotkey.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -141,7 +141,7 @@ class SettingsDialog(QDialog):
         genel_grp.add_widget_row(t("settings.app_language_label"), lang_widget, full_width=True)
         self.container_layout.addWidget(genel_grp)
 
-        # --- GRUP: MODEL ---
+        # --- GROUP: MODEL ---
         model_grp = SettingGroup(t("settings.group_model"))
         self.model_select_combo = NoScrollComboBox()
         self._model_combo_base_labels: dict[str, str] = {}
@@ -150,7 +150,7 @@ class SettingsDialog(QDialog):
             self._model_combo_base_labels[info['repo_id']] = label
             self.model_select_combo.addItem(label, userData=info['repo_id'])
         
-        # Eylemsel öğe (Utilitarian yaklaşım: Sadece italik font, süsleme/girinti yok)
+        # Action item — italic font only, no decoration or indent.
         self.model_select_combo.addItem(t("settings.browse"), userData="browse_custom")
         browse_idx = self.model_select_combo.count() - 1
         action_font = QFont()
@@ -177,11 +177,11 @@ class SettingsDialog(QDialog):
         model_grp.group_layout.addWidget(self.lbl_model_path)
         self.container_layout.addWidget(model_grp)
 
-        # --- GRUP: PROCESSING ---
+        # --- GROUP: PROCESSING ---
 
         adv_grp = SettingGroup(t("settings.group_processing"))
-        
-        # ŞEMADAN OTOMATİK ARAYÜZ ÜRETİMİ (DATA-DRIVEN UI)
+
+        # Data-driven UI: widgets are generated automatically from the settings schema.
         for sdef in SETTINGS_SCHEMA:
             if sdef.ui_group != "Processing":
                 continue
@@ -221,7 +221,7 @@ class SettingsDialog(QDialog):
                 btn_save = QPushButton(t("settings.save"))
                 btn_save.setFixedWidth(72)
                 btn_save.setCursor(Qt.CursorShape.PointingHandCursor)
-                btn_save.setEnabled(False)  # Başlangıçta pasif
+                btn_save.setEnabled(False)  # disabled initially
                 
                 def _make_save_handler(k, input_w, btn):
                     def on_text_changed(text):
@@ -241,7 +241,7 @@ class SettingsDialog(QDialog):
                 text_handler, save_handler = _make_save_handler(sdef.key, le, btn_save)
                 le.textChanged.connect(text_handler)
                 btn_save.clicked.connect(save_handler)
-                le.returnPressed.connect(save_handler)  # Enter tuşu da kaydetsin
+                le.returnPressed.connect(save_handler)  # pressing Enter also saves
                 
                 hlay.addWidget(le)
                 hlay.addWidget(btn_save)
@@ -250,7 +250,7 @@ class SettingsDialog(QDialog):
                 real_input_widget = le
                 
             elif sdef.ui_widget == "custom":
-                # Özel iş mantığı olan widget'lar hala manuel tanımlanır
+                # Widgets with custom business logic are still defined manually.
                 if sdef.key == "compute_type":
                     self.compute_combo = NoScrollComboBox()
                     self.compute_combo.currentIndexChanged.connect(self._on_compute_type_changed)
@@ -266,7 +266,7 @@ class SettingsDialog(QDialog):
 
         self.container_layout.addWidget(adv_grp)
 
-        # --- GRUP: SYSTEM ---
+        # --- GROUP: SYSTEM ---
         system_grp = SettingGroup(t("settings.group_system"))
         btn_help = QPushButton(t("settings.user_guide"))
         btn_help.clicked.connect(self._open_help)
@@ -281,13 +281,13 @@ class SettingsDialog(QDialog):
         system_grp.group_layout.addWidget(btn_reset)
         self.container_layout.addWidget(system_grp)
 
-        self.container_layout.addStretch() # Elemanları yukarıda blokla
+        self.container_layout.addStretch()  # push all items to the top
         self.scroll_area.setWidget(self.container)
         self.main_layout.addWidget(self.scroll_area)
 
 
-        # Expanding policy btn_hotkey'nin 80px sabitini ezdiği için yeniden uygula.
-        # language ve compute_combo artık full_width=True — 80px override kaldırıldı.
+        # Re-apply after the expanding policy overrides the 80 px fixed width on btn_hotkey.
+        # language and compute_combo are now full_width=True, so the 80 px override is removed.
         self.btn_hotkey.setFixedWidth(WIDGET_WIDTH_SM)
 
     def _on_dynamic_changed(self, key: str, value):
@@ -355,8 +355,8 @@ class SettingsDialog(QDialog):
             self._last_combo_idx = idx
             if data and not str(data).startswith("custom:"):
                 self.settings.set("selected_model_repo", data)
-            
-            # --- Otomatik Geçiş (Auto-Apply) ---
+
+            # Auto-apply: switch immediately if the selected model is already installed.
             target_path = self._get_selected_model_path()
             if target_path and validate_model_dir(str(target_path)) is not None:
                 current_dir = self.settings.get("model_dir")
@@ -402,7 +402,7 @@ class SettingsDialog(QDialog):
     def _sync_combo_with_current_dir(self, current_dir: str):
         from pathlib import Path
         if not current_dir:
-            # model_dir yoksa selected_model_repo'ya göre combo'yu ayarla
+            # No model_dir — set the combo based on selected_model_repo instead.
             saved_repo = self.settings.get("selected_model_repo", "")
             if saved_repo:
                 idx = self.model_select_combo.findData(saved_repo)
@@ -545,7 +545,7 @@ class SettingsDialog(QDialog):
         self._refresh_model_combo_badges()
         self._populate_compute_type_options()
         
-        # Dinamik oluşturulan widget'lara şemadaki/db'deki değerleri yansıt
+        # Reflect schema/saved values back into dynamically-generated widgets.
         for key, widget in self._dynamic_widgets.items():
             val = self.settings.get(key)
             widget.blockSignals(True)
@@ -556,7 +556,7 @@ class SettingsDialog(QDialog):
                 if val is not None: widget.setValue(val)
             elif isinstance(widget, QLineEdit):
                 if val is not None: widget.setText(str(val))
-                # Save butonunu başlangıç durumuna (pasif) al
+                # Reset the Save button to its initial (disabled) state.
                 parent_w = widget.parentWidget()
                 if parent_w is not None:
                     btn = parent_w.findChild(QPushButton)

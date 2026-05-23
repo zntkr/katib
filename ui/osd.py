@@ -8,7 +8,7 @@ from core.i18n import t, try_t
 from ui.icons import ICN_DOT
 from ui.utils import colorize_svg_icon
 
-# --- OSD Sabitleri ---
+# --- OSD Constants ---
 OSD_HEIGHT = 56
 FADE_DURATION_MS = 250
 PULSE_INTERVAL_MS = 50
@@ -22,11 +22,10 @@ class MinimalOSD(QWidget):
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         
-        # --- Pencere Bayrakları (Flags) ---
-        # WindowStaysOnTopHint: Diğer pencerelerin üstünde kalır.
-        # FramelessWindowHint: Çerçevesiz (Mühendislik estetiği).
-        # Tool: Görev çubuğunda gözükmez.
-        # WindowTransparentForInput: Fare tıklamalarını arkasındaki pencereye geçirir.
+        # WindowStaysOnTopHint: floats above all other windows.
+        # FramelessWindowHint: no window chrome.
+        # Tool: hidden from the taskbar.
+        # WindowTransparentForInput: mouse clicks pass through to the window behind.
         self.setWindowFlags(
             Qt.WindowType.WindowStaysOnTopHint | 
             Qt.WindowType.FramelessWindowHint | 
@@ -35,7 +34,7 @@ class MinimalOSD(QWidget):
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         
-        # --- Şeffaflık ---
+        # --- Transparency ---
         pal = self.palette()
         pal.setColor(QPalette.ColorRole.Window, Qt.GlobalColor.transparent)
         self.setPalette(pal)
@@ -51,10 +50,9 @@ class MinimalOSD(QWidget):
 
     def paintEvent(self, event: QPaintEvent) -> None:
         """
-        Hap tasarımını (border-radius) QSS motoruna bırakmak yerine 
-        doğrudan native Qt grafik motoruyla (QPainter) çiziyoruz.
-        Bu, Intel GPU veya RDP gibi DWM saydamlık sorunu yaşanan
-        sistemlerde siyah köşe oluşumunu kökünden çözer.
+        Draws the pill shape (border-radius) directly with QPainter instead of
+        delegating to the QSS engine. This eliminates black-corner artefacts on
+        systems with DWM transparency issues (Intel GPU, RDP, etc.).
         """
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -75,23 +73,22 @@ class MinimalOSD(QWidget):
         
         self.container = QFrame()
         self.container.setObjectName("OSDContainer")
-        self._update_colors() # İlk renkleri uygula
+        self._update_colors()  # apply initial colours
         
         c_layout = QHBoxLayout(self.container)
         c_layout.setContentsMargins(G_2, 0, G_2, 0)
         c_layout.setSpacing(4)
         c_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
-        # Status Icon (sol tarafta, tıpkı dashboard badge gibi)
+        # Status icon — left side, matching the dashboard badge.
         self.icon_label = QLabel()
         self.icon_label.setFixedWidth(ICON_SIZE)
 
-        # İkon için Opacity Effect (Pulsing için)
+        # Opacity effect used for the pulsing animation during recording.
         self.icon_opacity = QGraphicsOpacityEffect(self.icon_label)
         self.icon_label.setGraphicsEffect(self.icon_opacity)
         c_layout.addWidget(self.icon_label)
         
-        # Status Text
         self.text_label = QLabel(t(STATE_READY).upper())
         self.text_label.setFont(QFont("Segoe UI Variable Display", FONT_SIZE_LG, QFont.Weight.Bold))
         c_layout.addWidget(self.text_label)
@@ -99,13 +96,12 @@ class MinimalOSD(QWidget):
         root.addWidget(self.container)
 
     def _setup_animations(self):
-        # Fade In/Out
         self.fade_anim = QPropertyAnimation(self, b"windowOpacity")
         self.fade_anim.setDuration(FADE_DURATION_MS)
         self.fade_anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
         self.fade_anim.finished.connect(self._on_hide_finished)
 
-        # Pulse (Kayıt esnasında)
+        # Pulse animation while recording.
         self.pulse_timer = QTimer(self)
         self.pulse_timer.timeout.connect(self._pulse_effect)
         self._pulse_val = 1.0
@@ -119,16 +115,16 @@ class MinimalOSD(QWidget):
 
     def _update_colors(self, *args):
         p = theme_manager.palette
-        # Arka plan native QPainter ile çizildiği için QSS sadece metinleri yönetir.
+        # Background is drawn by native QPainter, so QSS only manages text colours.
         self.container.setStyleSheet(f"""
             #OSDContainer {{ background: transparent; border: none; }}
             QLabel {{ color: {p['CLR_TEXT']}; background: transparent; }}
         """)
         if hasattr(self, 'text_label'):
             self.text_label.setStyleSheet(f"color: {p['CLR_TEXT_STATUS']};")
-        self.update() # Tema değişirse paintEvent'i yeniden tetikle
+        self.update()  # repaint if the theme changed
 
-    # --- Public API (Durum Yönetimi) ---
+    # --- Public API (State Management) ---
     def setStateRecording(self):
         p = theme_manager.palette
         self.text_label.setText(t(STATE_RECORDING))
@@ -195,7 +191,7 @@ class MinimalOSD(QWidget):
         self.move(x, y)
 
     def closeEvent(self, event) -> None:
-        """Teardown/kapanış sırasında QTimer ve animasyonların memory leak yaratmasını önler."""
+        """Stops timers and animations on teardown to prevent memory leaks."""
         self.pulse_timer.stop()
         self._error_timer.stop()
         self.fade_anim.stop()

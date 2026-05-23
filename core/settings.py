@@ -119,17 +119,17 @@ def validate_model_dir(path: str | None) -> str | None:
 
 
 def find_fallback_model_dir(parent_path: Path) -> str | None:
-    """Verilen ana dizin altındaki geçerli ilk model klasörünü döndürür."""
+    """Returns the first valid model directory found under the given parent."""
     if not parent_path.exists() or not parent_path.is_dir():
         return None
-    
+
     try:
-        # parent_path'in kendisini kontrol et (belki doğrudan oraya atılmıştır)
+        # Check parent_path itself first (model may have been placed directly there).
         res = validate_model_dir(str(parent_path))
         if res:
             return res
-            
-        # Alt dizinleri gez
+
+        # Walk immediate subdirectories.
         for item in parent_path.iterdir():
             if item.is_dir():
                 res = validate_model_dir(str(item))
@@ -192,13 +192,13 @@ class SettingsManager:
         return val
 
     def get_resolved_model_dir(self) -> str | None:
-        """Kayıtlı dizini doğrular, geçersizse fallback taraması yapar."""
+        """Validates the saved model dir; falls back to scanning if invalid."""
         current = self.get("model_dir")
         validated = validate_model_dir(current)
         if validated:
             return validated
-        
-        # Fallback mekanizması
+
+        # Fallback: scan the default download location.
         fallback = find_fallback_model_dir(DEFAULT_DOWNLOAD_PARENT)
         if fallback:
             self.set("model_dir", fallback)
@@ -215,7 +215,7 @@ class SettingsManager:
             self.save()
 
     def set_many(self, mapping: dict) -> None:
-        """Birden fazla ayarı tek bir JSON yazımıyla atomik olarak kaydeder."""
+        """Saves multiple settings atomically with a single JSON write."""
         if not mapping:
             return
         for key, value in mapping.items():

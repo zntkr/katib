@@ -17,8 +17,8 @@ if TYPE_CHECKING:
 
 class TrayApp(QObject):
     """
-    QApplication'dan miras almaz.
-    QApplication main.py'de yaratıldıktan SONRA örneklenir.
+    Does not inherit from QApplication.
+    Instantiated AFTER QApplication is created in main.py.
     """
 
     def __init__(self, settings, parent: QObject | None = None):

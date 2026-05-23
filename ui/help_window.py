@@ -24,7 +24,7 @@ def _lbl(text: str, muted: bool = False, bold: bool = False, wrap: bool = True) 
 
 
 def _accent_block(lines: list[str]) -> QFrame:
-    """Sol kenarda CLR_INFO çizgili monospace blok."""
+    """Monospace block with a CLR_INFO accent bar on the left edge."""
     p = theme_manager.palette
     frame = QFrame()
     frame.setStyleSheet(f"""
@@ -49,7 +49,7 @@ def _accent_block(lines: list[str]) -> QFrame:
 
 
 def _table(headers: list[str], rows: list[list[str]]) -> QFrame:
-    """Basit QLabel grid tablosu."""
+    """Simple QLabel grid table."""
     p = theme_manager.palette
     frame = QFrame()
     frame.setStyleSheet(f"background: transparent; border: none;")
@@ -235,7 +235,7 @@ class HelpWindow(QWidget):
         super().changeEvent(event)
 
     def closeEvent(self, event) -> None:
-        """Teardown/kapanış sırasında QTimer'ların memory leak yaratmasını önler."""
+        """Stops active QTimers on teardown to prevent memory leaks."""
         for timer in self.findChildren(QTimer):
             if timer.isActive():
                 timer.stop()

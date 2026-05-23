@@ -7,9 +7,9 @@ from core.settings import DEFAULT_DOWNLOAD_PARENT, WHISPER_MODELS
 
 
 class ModelDownloaderWorker(BaseWorker):
-    download_finished      = Signal(str)   # final model dir path (başarıda)
-    status_changed         = Signal(str, str)       # text, level — "OK"|"ERR"|"INFO"
-    download_state_changed = Signal(bool)           # True=başladı, False=bitti/hata
+    download_finished      = Signal(str)        # final model dir path (on success)
+    status_changed         = Signal(str, str)   # text, level — "OK"|"ERR"|"INFO"
+    download_state_changed = Signal(bool)       # True=started, False=finished/error
 
     def __init__(self, settings, parent=None):
         super().__init__(parent)
@@ -18,7 +18,7 @@ class ModelDownloaderWorker(BaseWorker):
         self._repo_id: str = ""
 
     def stop(self) -> None:
-        pass  # Downloader OS seviyesinde (os._exit) öldürülecek
+        pass  # Downloader is killed at OS level via os._exit
 
     # ---------------------------------------------------------- public control
     def start_download(self, target_parent: str, repo_id: str) -> None:
@@ -36,8 +36,8 @@ class ModelDownloaderWorker(BaseWorker):
         target_parent = self._target_parent
         target_parent.mkdir(parents=True, exist_ok=True)
 
-        # ─── PRE-FLIGHT CHECK (UÇUŞ ÖNCESİ DİSK KONTROLÜ) ─────────────
-        # Bilinmeyen / harici bir model girilirse güvenli sınır olarak 4 GB kabul edilir
+        # ─── PRE-FLIGHT DISK CHECK ───────────────────────────────────────
+        # For unknown / external models, assume 4 GB as a safe upper bound.
         required_space_bytes = 4 * 1024**3
         for model_info in WHISPER_MODELS.values():
             if model_info["repo_id"] == self._repo_id:
@@ -63,7 +63,7 @@ class ModelDownloaderWorker(BaseWorker):
         final_dir = target_parent / final_dir_name
         temp_dir  = target_parent / f".temp_{final_dir_name}"
 
-        # Önceki yarım indirmeden kalma temp klasör varsa temizle
+        # Clean up any leftover temp directory from a previous incomplete download.
         if temp_dir.exists():
             self.log_entry.emit("...", "DL", "Cleaning up previous incomplete download...")
             shutil.rmtree(temp_dir, ignore_errors=True)
@@ -79,9 +79,9 @@ class ModelDownloaderWorker(BaseWorker):
                 local_dir=str(temp_dir),
             )
 
-            # Atomik rename: indirme tamamsa ancak o zaman hedef klasöre taşı
+            # Atomic rename: only move to the target directory once the download is complete.
             if final_dir.exists():
-                # Var olan modeli geçici backup'a al, yenisini yerleştir, backup'ı sil
+                # Back up the existing model, put the new one in place, then delete the backup.
                 backup_dir = target_parent / f".old_{final_dir_name}"
                 if backup_dir.exists():
                     shutil.rmtree(backup_dir, ignore_errors=True)
@@ -97,7 +97,7 @@ class ModelDownloaderWorker(BaseWorker):
             self.download_finished.emit(str(final_dir))
 
         except Exception as e:
-            # Rollback: yarım kalan temp klasörü sil
+            # Rollback: delete the incomplete temp directory.
             if temp_dir.exists():
                 try:
                     shutil.rmtree(temp_dir)

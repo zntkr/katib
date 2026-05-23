@@ -30,7 +30,7 @@ class HotkeyWorker(BaseWorker):
                     continue
 
                 if self._paused:
-                    self._is_key_down = False  # duraklatıldığında state'i temizle
+                    self._is_key_down = False  # clear state while paused
                     time.sleep(0.05)
                     continue
 
@@ -42,7 +42,7 @@ class HotkeyWorker(BaseWorker):
                     self._is_key_down = False
                     self.hotkey_released.emit()
 
-                time.sleep(0.05)  # 50 ms polling — CPU dostu
+                time.sleep(0.05)  # 50 ms polling — CPU-friendly
 
         except Exception:
             self.log_entry.emit("ERR", "KEY", "Kısayol tuşu çöktü")
@@ -50,19 +50,19 @@ class HotkeyWorker(BaseWorker):
 
     def set_key(self, key: str):
         self._key         = key.lower()
-        self._is_key_down = False   # yarım kalmış state'i sıfırla
+        self._is_key_down = False  # clear any half-finished state
 
     def pause(self) -> None:
-        """Kısayol yakalama modu gibi durumlarda hotkey'i geçici olarak devre dışı bırakır."""
+        """Temporarily disables the hotkey, e.g. during hotkey-capture mode."""
         self._paused = True
         self._is_key_down = False
 
     def resume(self) -> None:
-        """Hotkey dinlemeyi yeniden etkinleştirir.
-        
-        Tuş hâlâ fiziksel olarak basılıysa _is_key_down=True yaparak worker'ı
-        'zaten tutuluydu' moduna alır. Bir sonraki hotkey_pressed ancak tuş
-        bırakılıp tekrar basıldığında tetiklenir — sihirli timer gerekmez.
+        """Re-enables hotkey listening.
+
+        If the key is still physically held, _is_key_down is set to True so
+        the worker enters 'already held' mode. The next hotkey_pressed fires
+        only after the key is released and pressed again — no magic timer needed.
         """
         import keyboard
         self._is_key_down = keyboard.is_pressed(self._key)

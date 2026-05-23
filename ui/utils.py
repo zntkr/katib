@@ -2,13 +2,13 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon
 
 def colorize_svg_icon(source: str, color_hex: str, size: int = 16) -> QIcon:
-    """Belirtilen SVG dosyasını veya ham SVG metnini QPixmap olarak çizer ve belirtilen renkle doldurur."""
+    """Renders the given SVG file or raw SVG string as a QPixmap and fills it with the specified colour."""
     from PySide6.QtSvg import QSvgRenderer
     from PySide6.QtGui import QPixmap, QPainter, QColor, QIcon
     from PySide6.QtCore import Qt, QByteArray
 
     if source.strip().startswith("<svg"):
-        # Prototipteki gibi {color} değişkeni varsa siyahla değiştir ki renderer çizebilsin.
+        # Replace the {color} placeholder with black so the renderer can draw the shape.
         svg_data = source.replace("{color}", "#000000").encode('utf-8')
         renderer = QSvgRenderer(QByteArray(svg_data))
     else:
@@ -28,7 +28,7 @@ def colorize_svg_icon(source: str, color_hex: str, size: int = 16) -> QIcon:
     return QIcon(pixmap)
 
 def qt_key_to_keyboard(qt_key: int) -> str | None:
-    """Qt key kodunu keyboard kütüphanesinin anladığı isme çevirir."""
+    """Converts a Qt key code to the name understood by the keyboard library."""
     from PySide6.QtCore import Qt as _Qt
     if _Qt.Key.Key_F1.value <= qt_key <= _Qt.Key.Key_F12.value:
         return f"f{qt_key - _Qt.Key.Key_F1.value + 1}"
@@ -56,7 +56,7 @@ def qt_key_to_keyboard(qt_key: int) -> str | None:
     return None
 
 def _make_icon(color_hex: str | None = None) -> QIcon:
-    """Testler ve placeholder'lar için düz renkli QIcon oluşturur."""
+    """Creates a solid-colour QIcon for tests and placeholders."""
     from PySide6.QtGui import QPixmap, QColor
     from PySide6.QtCore import Qt
     px = QPixmap(16, 16)

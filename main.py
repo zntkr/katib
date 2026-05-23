@@ -12,16 +12,16 @@ from core.settings import (
     APP_NAME, MSG_MODEL_NOT_FOUND, MSG_MIC_UNAVAILABLE,
     STATE_RECORDING, STATE_PROCESSING, STATE_LISTENING, STATE_READY,
 )
-import PySide6.QtSvg  # Svg plugin kaydı için gerekli
+import PySide6.QtSvg  # required for SVG plugin registration
 import warnings
 import signal
 
-os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"  # Symlink uyarısını gizle
-os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"     # Konsol olmadığı için tqdm çökmelerini engelle
-os.environ["CT2_VERBOSE"] = "-3"                     # CTranslate2 (C++) donanım uyarılarını tamamen kapat
-warnings.filterwarnings("ignore", category=UserWarning) # Python (Whisper) uyarılarını yoksay
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"  # suppress symlink warnings
+os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"     # prevent tqdm crashes when there is no console
+os.environ["CT2_VERBOSE"] = "-3"                     # silence all CTranslate2 (C++) hardware warnings
+warnings.filterwarnings("ignore", category=UserWarning) # suppress Python (Whisper) warnings
 
-# ── Loglama Sistemi (Sektör Standardı) ────────────────────────────────
+# ── Logging System ────────────────────────────────────────────────────
 class StreamToLogger(io.TextIOBase):
     """Konsol çıktılarını (print, tqdm, kütüphane hataları) log dosyasına yönlendirir."""
     def __init__(self, logger: logging.Logger, level: int):
@@ -44,14 +44,14 @@ def setup_logging():
     log_dir = base_dir / APP_NAME / "Logs"
     log_file = log_dir / "katib.log"
 
-    # Görev 3: Klasör oluşturma işlemi sıkı sistem iznine takılırsa uygulamanın Fatal Error verip çökmesini önlüyoruz.
+    # Prevent a Fatal Error crash if directory creation is blocked by strict system permissions.
     try:
         log_dir.mkdir(parents=True, exist_ok=True)
-        
+
         handlers_list: list[logging.Handler] = [RotatingFileHandler(str(log_file), maxBytes=5*1024*1024, backupCount=3, encoding='utf-8')]
         if sys.stdout is not None:
             handlers_list.append(logging.StreamHandler(sys.stdout))
-            
+
         logging.basicConfig(
             handlers=handlers_list,
             level=logging.INFO,
@@ -59,7 +59,7 @@ def setup_logging():
             datefmt="%Y-%m-%d %H:%M:%S"
         )
     except Exception:
-        # Dosya sistemine yazılmazsa fallback olarak basit (sadece stream) loglama konfigürasyonu
+        # Fallback to stream-only logging if the filesystem is not writable.
         logging.basicConfig(
             level=logging.INFO,
             format="%(asctime)s | %(levelname)-8s | %(message)s",
@@ -67,45 +67,44 @@ def setup_logging():
         )
     logger = logging.getLogger(APP_NAME)
 
-    # --noconsole modunda stdout/stderr None olur. Kütüphanelerin write()
-    # ile çökmelerini önlemek ve gizli hataları kaydetmek için devnull yerine logger'a bağlıyoruz.
+    # In --noconsole mode stdout/stderr are None. Route them to the logger instead of
+    # /dev/null so library write() calls don't crash and hidden errors are captured.
     if sys.stdout is None:
         sys.stdout = typing.cast(typing.TextIO, StreamToLogger(logger, logging.INFO))
     if sys.stderr is None:
         sys.stderr = typing.cast(typing.TextIO, StreamToLogger(logger, logging.ERROR))
 
-    # Yakalanamayan (unhandled) hataları global olarak logla
+    # Log all unhandled exceptions globally.
     def handle_exception(exc_type, exc_value, exc_traceback):
         if issubclass(exc_type, KeyboardInterrupt):
-            logger.info("Terminalden kesinti (KeyboardInterrupt) alındı.")
+            logger.info("KeyboardInterrupt received from terminal.")
             sys.__excepthook__(exc_type, exc_value, exc_traceback)
             return
 
-        # Standart traceback metnini oluştur
         exception_list = traceback.format_exception(exc_type, exc_value, exc_traceback)
         exception_text = "".join(exception_list)
 
-        # Log mesajına yerel değişkenleri ekle
+        # Include local variables from each frame for easier post-mortem debugging.
         log_message = [
-            "Yakalanamayan Hata (Unhandled Exception):\n",
+            "Unhandled Exception:\n",
             exception_text,
-            "\n" + "="*20 + " YEREL DEĞİŞKENLER (LOCALS) " + "="*20 + "\n"
+            "\n" + "="*20 + " LOCALS " + "="*20 + "\n"
         ]
 
         tb = exc_traceback
         while tb is not None:
             frame = tb.tb_frame
             log_message.append(
-                f"\n--- Dosya: {frame.f_code.co_filename}, Satır: {frame.f_lineno}, Fonksiyon: {frame.f_code.co_name} ---\n"
+                f"\n--- File: {frame.f_code.co_filename}, Line: {frame.f_lineno}, Function: {frame.f_code.co_name} ---\n"
             )
             try:
-                # pprint ile daha okunaklı hale getir, derinliği ve toplam boyutu limitle
+                # Limit depth and total size to keep log entries readable.
                 locals_str = pprint.pformat(frame.f_locals, indent=2, width=120, depth=3, compact=True)
                 if len(locals_str) > 4096:
-                    locals_str = locals_str[:4096] + "\n... (içerik çok uzun olduğu için kesildi)"
+                    locals_str = locals_str[:4096] + "\n... (truncated)"
                 log_message.append(locals_str)
             except Exception as e:
-                log_message.append(f"<Yerel değişkenler okunurken hata: {e}>")
+                log_message.append(f"<Error reading locals: {e}>")
             
             log_message.append("\n")
             tb = tb.tb_next
@@ -118,13 +117,13 @@ def setup_logging():
 global_logger = setup_logging()
 global_logger.info("=== Katib Starting ===")
 
-# ── QApplication ilk ve tek satırda yaratılır ──────────────────────────────
-# Qt nesneleri (QPixmap, QIcon, QWidget vb.) ancak bundan SONRA var olabilir.
-# Bu yüzden diğer tüm import'lar QApplication'dan SONRA gelir.
+# ── QApplication ─────────────────────────────────────────────────────────
+# Qt objects (QPixmap, QIcon, QWidget, etc.) can only exist AFTER QApplication.
+# Therefore all other imports come AFTER QApplication is created.
 
 
 def _sigint_handler(signum, frame):
-    global_logger.info("Terminalden kesinti (SIGINT) alındı, kapanıyor...")
+    global_logger.info("SIGINT received from terminal, shutting down...")
     app = QApplication.instance()
     if app:
         app.quit()
@@ -133,8 +132,8 @@ def _sigint_handler(signum, frame):
 
 def main():
     signal.signal(signal.SIGINT, _sigint_handler)
-    # ── Tek örnek kilidi (Cross-Platform) ──────────────────────────────────
-    # İkinci başlatma girişimini sessizce engeller; QSharedMemory süreç boyunca yaşar.
+    # ── Single-Instance Lock ──────────────────────────────────────────────
+    # Silently prevents a second launch; QSharedMemory lives for the process lifetime.
     from PySide6.QtCore import QSharedMemory
     _shared_memory = QSharedMemory("Katib_SingleInstance_Mutex")
     if not _shared_memory.create(1):
@@ -145,9 +144,8 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
 
-    # Fusion stili bazen CSS renklerini ezebiliyor; devre dışı bırakıyoruz.
+    # The Fusion style can override CSS colors; we leave it disabled.
 
-    # YENİ MİMARİ: Theme Manager'ı çağırıp tüm sistemi tek satırda boyuyoruz
     from ui.theme import theme_manager
     from core.settings import SettingsManager
 
@@ -171,18 +169,18 @@ def main():
     theme_manager.apply_theme(app)
     global_logger.info("Tema ve ayarlar yüklendi.")
 
-    # Qt ortamı hazır — sadece UI modülünü içe aktar.
-    # Worker'lar event loop başladıktan sonra (deferred) import edilir.
+    # Qt environment is ready — import UI module now.
+    # Workers are imported deferred, after the event loop starts.
     from ui.tray_app import TrayApp
 
     global_logger.info("Arayüz (Tray/Dashboard) oluşturuluyor...")
     tray = TrayApp(settings=settings_manager)
     app.setWindowIcon(tray._icon_idle)
 
-    # ── Ertelenmiş başlatma ───────────────────────────────────────────────
-    # show() kasıtlı olarak _deferred_init'in SONUNDA çağrılır.
-    # Tüm ağır import'lar bitmeden show() çağrılırsa main thread bloke olur;
-    # DWM'nin ilk beyaz frame'i WM_PAINT işlenene kadar ekranda kalır (flash).
+    # ── Deferred Startup ──────────────────────────────────────────────────
+    # show() is intentionally called at the END of _deferred_init.
+    # Calling show() before all heavy imports finish blocks the main thread,
+    # leaving DWM's initial white frame visible until WM_PAINT is processed (flash).
 
     _workers = {}
 
@@ -204,8 +202,8 @@ def main():
         _workers.update(hw=hotkey_worker, aw=audio_worker,
                         tw=transcription_worker, dw=downloader_worker)
 
-        # Görev 1: TrayApp'e worker referanslarını veriyoruz. Böylece sinyaller çalışırken
-        # UI manipülasyonları QObject üzerinden QueuedConnection ile güvenli Main Thread'e yönelecek.
+        # Give TrayApp references to the workers so UI manipulations
+        # are safely routed to the main thread via QueuedConnection.
         tray.transcription_worker = transcription_worker
         tray.audio_worker = audio_worker
         tray.osd = osd
@@ -213,20 +211,19 @@ def main():
         # ---------------------------------------------------- signal wiring
         global_logger.info("Sinyal kablolaması (Wiring) yapılıyor...")
 
-        # 1 & 2) Tuşa basıldı/bırakıldı → Doğrudan TrayApp QObject slotlarını tetikler (Thread-Safe)
+        # Key pressed/released → directly trigger TrayApp QObject slots (thread-safe)
         hotkey_worker.hotkey_pressed.connect(tray.on_hotkey_pressed)
         hotkey_worker.hotkey_released.connect(tray.on_hotkey_released)
 
-        # OSD Bağlantıları (Tek Operasyonel Görünürlük Kanalı)
-        # setStateRecording artık on_hotkey_pressed içinden çağrılıyor (model guard sonrası)
+        # OSD connections — setStateRecording is now called from inside on_hotkey_pressed (after model guard)
         audio_worker.audio_failed.connect(osd.hide_osd)
         transcription_worker.transcription_started.connect(osd.setStateProcessing)
         transcription_worker.transcription_finished.connect(osd.hide_osd)
 
-        # Mikrofon donanım hatası → Dashboard kalıcı durum + OSD geçici hata
+        # Microphone hardware error → persistent dashboard status + transient OSD error
         audio_worker.mic_unavailable.connect(tray.on_mic_unavailable)
 
-        # Tüm worker hataları → OSD + tray balonu
+        # All worker errors → OSD + tray balloon
         audio_worker.error_occurred.connect(lambda msg: osd.setStateError(msg))
         hotkey_worker.error_occurred.connect(lambda msg: osd.setStateError(msg))
         transcription_worker.error_occurred.connect(lambda msg: osd.setStateError(msg))
@@ -235,23 +232,19 @@ def main():
         transcription_worker.model_loaded.connect(tray.dashboard.clear_model_missing_guidance)
         downloader_worker.error_occurred.connect(lambda msg: osd.setStateError(msg))
 
-        # 3) Ham ses hazır → çeviri kuyruğuna ekle
         audio_worker.audio_ready.connect(transcription_worker.add_audio)
 
-        # 4) Çeviri tamamlandı → Main thread'de (TrayApp slot'u üzerinden) metni fırlat
         transcription_worker.text_ready.connect(tray.on_text_ready)
 
-        # 5) Ses seviyesi → progress bar
         audio_worker.level_changed.connect(tray.dashboard.update_level)
         transcription_worker.status_changed.connect(tray.dashboard.set_status)
         transcription_worker.loading_state_changed.connect(tray.dashboard.set_loading_indicator)
 
-        # 6) Log mesajları → dashboard
         audio_worker.log_entry.connect(tray.dashboard.append_log_entry)
         transcription_worker.log_entry.connect(tray.dashboard.append_log_entry)
         hotkey_worker.log_entry.connect(tray.dashboard.append_log_entry)
 
-        # UI loglarını da endüstri standardı olan disk loguna köprüle
+        # Bridge UI log entries to the disk log as well.
         def _file_log_bridge(lvl, cat, msg):
             log_str = f"[{cat}] {msg}"
             if lvl in ("ERR", "WRN"):
@@ -264,7 +257,7 @@ def main():
         hotkey_worker.log_entry.connect(_file_log_bridge)
         downloader_worker.log_entry.connect(_file_log_bridge)
 
-        # WRN logları → OSD (3 sn, kullanıcıya anlamlı kategoriler)
+        # Forward WRN log entries to OSD (3 s, only user-visible categories).
         _OSD_WRN_CATS = {"MIC", "STT", "KEY"}
         def _wrn_to_osd(lvl, cat, msg):
             if lvl == "WRN" and cat in _OSD_WRN_CATS:
@@ -275,28 +268,28 @@ def main():
         hotkey_worker.log_entry.connect(_wrn_to_osd)
 
 
-        # 8) Mikrofon değişimi → audio worker + hata bayrağını sıfırla
+        # Microphone change → update audio worker + clear error flag
         tray.dashboard.device_changed.connect(audio_worker.set_device)
         tray.dashboard.device_changed.connect(lambda _: tray.on_mic_available())
 
-        # 9) Kısayol değişimi → hotkey worker
+        # Hotkey change → update hotkey worker
         tray.dashboard.hotkey_changed.connect(hotkey_worker.set_key)
-        # Kısayol yakalama modunda hotkey worker duraklatılır → yanlış tıkta kayıt tetiklenmez
+        # Pause hotkey worker during capture mode so accidental presses don't start recording.
         tray.dashboard.hotkey_capture_mode.connect(
             lambda capturing: hotkey_worker.pause() if capturing else hotkey_worker.resume()
         )
 
-        # 10) Model klasörü veya hesaplama ayarı değişimi → transcription worker modeli baştan yükler
+        # Model folder or compute setting changed → reload model
         tray.dashboard.model_dir_changed.connect(transcription_worker.reload_model)
         tray.dashboard.model_reload_requested.connect(transcription_worker.reload_model)
 
-        # 11) Cihaz listesi: UI ister → AudioWorker sorgular → UI doldurur
+        # Device list: UI requests → AudioWorker queries → UI populates
         tray.dashboard.refresh_devices_requested.connect(audio_worker.refresh_devices)
         audio_worker.devices_ready.connect(tray.dashboard.populate_devices)
-        audio_worker.refresh_devices()   # başlangıçta combo'yu doldur
-        # dashboard.populate_devices seçilen mikrofonu bulup device_changed sinyaliyle set_device çağırır.
+        audio_worker.refresh_devices()   # populate combo on startup
+        # populate_devices finds the saved microphone and emits device_changed to call set_device.
 
-        # 13) Model indirici: UI → downloader → dashboard + transcription
+        # Model downloader: UI → downloader → dashboard + transcription
         tray.dashboard.download_model_requested.connect(downloader_worker.start_download)
         downloader_worker.log_entry.connect(tray.dashboard.append_log_entry)
         downloader_worker.error_occurred.connect(lambda _: tray.dashboard.set_loading_indicator(False))
@@ -318,17 +311,17 @@ def main():
 
     # ----------------------------------------------------- graceful shutdown
     def shutdown():
-        global_logger.info("=== Kapanış (Shutdown) Başlatıldı ===")
+        global_logger.info("=== Shutdown Started ===")
         tray.dashboard.append_log_entry("...", "APP", _t("app.shutting_down"))
-        
-        # Event loop bittikten sonra C++ tarafında çizim (QBackingStore) hatalarını önlemek için pencereleri gizle
+
+        # Hide windows to avoid C++-side drawing errors (QBackingStore) after the event loop ends.
         for window in QApplication.topLevelWidgets():
             window.hide()
         if hasattr(tray, 'tray'):
             tray.tray.hide()
 
-        # Arayüzü dondurmamak ve GIL Deadlock riskini sıfırlamak için
-        # iş parçacıklarına sadece yumuşak dur sinyali gönderiyoruz (wait yok).
+        # Send only a soft stop signal to worker threads — no wait() — to avoid
+        # freezing the UI or triggering a GIL deadlock.
         if 'hw' in _workers:
             global_logger.info("Arka plan Worker thread'leri durduruluyor...")
             _workers['hw'].stop()
@@ -341,19 +334,18 @@ def main():
     from PySide6.QtCore import QTimer
     QTimer.singleShot(0, _deferred_init)
 
-    # C++ Event Loop'un (app.exec) Python sinyallerini (Ctrl+C) bloke etmesini
-    # önlemek için Python yorumlayıcısını periyodik olarak uyandıran dummy timer.
+    # Periodically wake the Python interpreter so the C++ event loop (app.exec)
+    # does not block Python signals such as Ctrl+C (SIGINT).
     signal_timer = QTimer()
     signal_timer.timeout.connect(lambda: None)
     signal_timer.start(500)
 
     app.exec()
 
-    # Event loop (app.exec) bittikten sonra QTimer çalışmaz. 
-    # Worker'ların kapanması için gereken 250ms gecikmeyi burada veriyoruz.
-    # C++ seviyesinde çalışan QThread'leri Python içinde beklemek (wait) veya
-    # zorla öldürmek (terminate) kalıcı donmalara yol açtığı için 
-    # işlemi İşletim Sistemi seviyesinde (OS level) anında sonlandırıyoruz.
+    # After app.exec() returns, QTimers no longer run.
+    # Give workers the 250 ms they need to finish.
+    # Waiting (wait) or force-killing (terminate) C++ QThreads from Python causes
+    # permanent hangs, so we terminate at OS level immediately instead.
     import time
     time.sleep(0.25)
     global_logger.info("Sistem temiz şekilde kapatıldı (os._exit).")

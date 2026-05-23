@@ -16,10 +16,9 @@ def test_audio_worker_handles_unexpected_disconnect(mock_settings):
     # devices_ready sinyali refresh_devices çağrıldığında atılır
     worker.devices_ready.connect(refresh_spy)
     
-    # 1. Senaryo: Beklenmedik bir şekilde stream sonlanırsa (_intentional_close = False)
     worker._intentional_close = False
-    
-    # _on_stream_finished'i tetikle
+
+    # trigger _on_stream_finished
     with patch("sounddevice.query_devices", return_value=[]):
         worker._on_stream_finished()
     

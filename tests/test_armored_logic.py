@@ -27,12 +27,10 @@ def test_audio_worker_mute_timing_accuracy():
         # İlk çağrı: Timer başlar
         worker._audio_callback(silent_data, 1024, None, 0)
         
-        # 1. Aşama: 1000ms geçmiş gibi simüle et (Sinyal gelmemeli)
         with patch.object(worker._silence_timer, "elapsed", return_value=1000):
             worker._audio_callback(silent_data, 1024, None, 0)
         assert spy.count() == 0, "Mute sinyali 1.5 sn dolmadan fırlatıldı!"
-        
-        # 2. Aşama: 1600ms geçmiş gibi simüle et (Toplam 1.6sn > 1.5sn)
+
         with patch.object(worker._silence_timer, "elapsed", return_value=1600):
             worker._audio_callback(silent_data, 1024, None, 0)
         assert spy.count() >= 1, "Mute sinyali 1.5 sn geçmesine rağmen fırlatılmadı!"

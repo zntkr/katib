@@ -4,7 +4,7 @@ import queue
 import numpy as np
 from typing import TYPE_CHECKING
 
-_CPU_THREADS = 0  # 0: CTranslate2'nin donanımı otomatik analiz etmesine izin verir.
+_CPU_THREADS = 0  # 0: let CTranslate2 analyse hardware automatically.
 
 from PySide6.QtCore import Signal
 
@@ -28,8 +28,8 @@ class TranscriptionWorker(BaseWorker):
     text_ready            = Signal(str)
     status_changed        = Signal(str, str)  # text, level — "OK"|"ERR"|"WARN"|"IDLE"
     loading_state_changed = Signal(bool)
-    model_missing         = Signal()  # geçerli model dizini yok → indir butonu göster
-    model_loaded          = Signal()  # model başarıyla yüklendi → indir butonu gizle
+    model_missing         = Signal()  # no valid model directory → show download button
+    model_loaded          = Signal()  # model loaded successfully → hide download button
     transcription_started = Signal()
     transcription_finished = Signal()
 
@@ -47,9 +47,9 @@ class TranscriptionWorker(BaseWorker):
         self._load_model()
 
         while True:
-            audio = self._queue.get()   # bloklu bekleme — CPU kullanmaz
+            audio = self._queue.get()   # blocking wait — no CPU usage
 
-            if audio is None:           # zehir hapı: thread'i kapat
+            if audio is None:           # poison pill: shut down the thread
                 break
 
             if audio is _RELOAD:
@@ -115,13 +115,13 @@ class TranscriptionWorker(BaseWorker):
             self.loading_state_changed.emit(False)
 
     def stop(self):
-        # Dolu kuyrukta put() sonsuza bloklanır; önce bekleyen verileri temizle.
+        # put() would block forever on a full queue; drain it first.
         try:
             while True:
                 self._queue.get_nowait()
         except queue.Empty:
             pass
-        self._queue.put_nowait(None)    # döngüden çıkış sinyali
+        self._queue.put_nowait(None)    # exit signal for the run loop
 
     # ---------------------------------------------------------- public control
     def reload_model(self):
@@ -139,7 +139,7 @@ class TranscriptionWorker(BaseWorker):
         return True
 
     def add_audio(self, audio) -> None:
-        """AudioWorker'dan gelen numpy dizisini kuyruğa ekler; dolu ise reddeder."""
+        """Enqueues the numpy array from AudioWorker; rejects it if the queue is full."""
         if not self.is_ready:
             return
         try:
@@ -149,7 +149,7 @@ class TranscriptionWorker(BaseWorker):
             self.error_occurred.emit("Transcription in progress")
 
     # ----------------------------------------------------------------- private
-    @measure_time("STT", "Whisper Transkripsiyon")
+    @measure_time("STT", "Whisper Transcription")
     def _transcribe(self, audio):
         if self._model is None:
             self.log_entry.emit("ERR", "STT", "Model not loaded, cannot transcribe.")
@@ -184,7 +184,6 @@ class TranscriptionWorker(BaseWorker):
 
             raw_text = " ".join(seg.text for seg in segments).strip()
 
-            # --- Metin Filtreleme (Deep Module) ---
             final_text = self._filter.clean(raw_text)
             
             if final_text is None:

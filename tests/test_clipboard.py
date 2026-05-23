@@ -18,7 +18,6 @@ class TestClipboardInjectText:
         self, mock_qmimedata_cls, mock_keyboard_send, mock_qcore, mock_qtimer, mock_qgui
     ):
         """Panoda zaten bir veri varken (resim/dosya) metin yapıştırma testi."""
-        # 1. Mock nesnelerini hazırla
         mock_clipboard = MagicMock()
         mock_qgui.clipboard.return_value = mock_clipboard
         
@@ -36,10 +35,8 @@ class TestClipboardInjectText:
         
         mock_log_callback = MagicMock()
         
-        # 2. Fonksiyonu çalıştır
         inject_text("Test metni", log_callback=mock_log_callback)
-        
-        # 3. Doğrulamalar (Assertions)
+
         # Panoya ulaşılmış mı?
         mock_qgui.clipboard.assert_called_once()
         
