@@ -18,3 +18,16 @@ venv/
 # Editör Ayarları
 .vscode/
 .idea/
+
+# Claude Code ve iç geliştirme araçları
+.claude/
+.agents/
+enchanted-waddling-trinket.md
+skills-lock.json
+
+# Uygulama log ve ayar klasörleri
+*.log
+.katib_app/
+
+# Boş/eski klasörler
+dikte/
