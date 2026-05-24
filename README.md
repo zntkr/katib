@@ -1,3 +1,5 @@
+[English](README.md) · [Türkçe](README.tr.md) · [Deutsch](README.de.md) · [Español](README.es.md) · [Français](README.fr.md) · [Português](README.pt.md) · [Русский](README.ru.md) · [日本語](README.ja.md) · [中文](README.zh.md) · [한국어](README.ko.md) · [العربية](README.ar.md)
+
 # Katib
 
 **Offline voice dictation for Windows. Hold a key, speak, release — text appears at your cursor.**
