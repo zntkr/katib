@@ -6,11 +6,9 @@ No cloud. No subscription. Nothing leaves your machine.
 
 ---
 
-<!-- Drop your demo GIF at docs/demo.gif and uncomment:
 <p align="center">
   <img src="docs/demo.gif" alt="Hold F9, speak, release — text appears" width="680">
 </p>
--->
 
 ---
 
@@ -90,7 +88,7 @@ Katib is designed to be air-gap friendly:
 
 - No outbound connections at runtime
 - No usage statistics, error reporting, or update checks
-- Settings and logs stored locally in `%APPDATA%\Katib`
+- Settings and logs stored locally in `%LOCALAPPDATA%\Katib`
 - The only network activity is the optional one-time model download
 
 ---
