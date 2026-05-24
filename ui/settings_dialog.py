@@ -15,7 +15,7 @@ from core.settings import (
     DEFAULT_DOWNLOAD_PARENT, COMPUTE_TYPE_OPTIONS_CPU,
     SETTINGS_SCHEMA
 )
-from ui.theme import G_1, G_2, G_3, FONT_SIZE_SM, SETTINGS_WIDTH, SETTINGS_HEIGHT, theme_manager
+from ui.theme import G_1, G_2, G_4, G_6, FONT_SIZE_SM, SETTINGS_WIDTH, SETTINGS_HEIGHT, theme_manager
 from ui.components import NoScrollComboBox, DynamicIconButton
 from ui.icons import ICN_DOWNLOAD, ICN_TICK
 from core.i18n import t, available_languages
@@ -111,7 +111,6 @@ class SettingsDialog(QDialog):
         return row
 
     def _build_ui(self):
-        from ui.theme import G_4
         p = theme_manager.palette
 
         outer = QVBoxLayout(self)
@@ -129,7 +128,6 @@ class SettingsDialog(QDialog):
         cols.addLayout(left, 1)
 
         left.addWidget(self._section_title("settings.group_general"))
-        left.addSpacing(G_1)
 
         self.btn_hotkey = QPushButton()
         self.btn_hotkey.setProperty("isIconBtn", True)
@@ -160,10 +158,9 @@ class SettingsDialog(QDialog):
         left.addWidget(QLabel(t("settings.theme_label")))
         left.addWidget(self._theme_combo)
 
-        left.addSpacing(G_3)
+        left.addSpacing(G_4)
 
         left.addWidget(self._section_title("settings.group_system"))
-        left.addSpacing(G_1)
 
         btn_help = QPushButton(t("settings.user_guide"))
         btn_help.clicked.connect(self._open_help)
@@ -177,8 +174,6 @@ class SettingsDialog(QDialog):
         btn_reset = QPushButton(t("settings.reset_settings"))
         btn_reset.clicked.connect(self._reset_advanced)
         left.addWidget(btn_reset)
-
-        left.addStretch()
 
         # ── Divider ───────────────────────────────────────────────
         divider = QFrame()
@@ -195,7 +190,6 @@ class SettingsDialog(QDialog):
         cols.addLayout(right, 1)
 
         right.addWidget(self._section_title("settings.group_model"))
-        right.addSpacing(G_1)
 
         self.model_select_combo = NoScrollComboBox()
         self.model_select_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -235,8 +229,8 @@ class SettingsDialog(QDialog):
 
         right.addSpacing(G_2)
         right.addWidget(self._section_title("settings.group_processing"))
-        right.addSpacing(G_1)
 
+        _first_processing = True
         for sdef in SETTINGS_SCHEMA:
             if sdef.ui_group != "Processing":
                 continue
@@ -273,7 +267,7 @@ class SettingsDialog(QDialog):
                 hlay.setSpacing(G_1)
                 if sdef.key == "initial_prompt":
                     le = QTextEdit()
-                    le.setFixedHeight(G_3 * 3)
+                    le.setFixedHeight(G_6)
                     le.setAcceptRichText(False)
                 else:
                     le = QLineEdit()
@@ -328,12 +322,13 @@ class SettingsDialog(QDialog):
                     real_widget.setToolTip(t(sdef.tooltip))
                 self._dynamic_widgets[sdef.key] = real_widget
                 if full_width:
+                    if not _first_processing:
+                        right.addSpacing(G_1)
+                    _first_processing = False
                     right.addWidget(QLabel(t(sdef.ui_label)))
                     right.addWidget(widget)
                 else:
                     right.addLayout(self._make_row(t(sdef.ui_label), widget))
-
-        right.addStretch()
 
     def focus_model(self) -> None:
         QTimer.singleShot(50, self.model_select_combo.setFocus)
