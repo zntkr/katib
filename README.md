@@ -7,7 +7,7 @@ No cloud. No subscription. Nothing leaves your machine.
 ---
 
 <p align="center">
-  <img src="docs/demo.gif" alt="Hold F9, speak, release — text appears" width="680">
+  <img src="docs/demo.gif" alt="Hold F9, speak, release — text appears" width="800">
 </p>
 
 ---
