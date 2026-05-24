@@ -6,6 +6,17 @@ datas = [('translations', 'translations')]
 binaries = []
 hiddenimports = []
 
+# numpy.libs DLL'lerini _internal root'a da ekle — Windows'un klasik LoadLibrary
+# yolu alt dizinleri görmez; AddDllDirectory frozen context'te güvenilir değil.
+try:
+    import numpy as _np
+    _np_libs = pathlib.Path(_np.__file__).parent.parent / 'numpy.libs'
+    if _np_libs.is_dir():
+        for _dll in _np_libs.glob('*.dll'):
+            binaries += [(str(_dll), '.')]
+except ImportError:
+    pass
+
 # STT kütüphanesinin DLL ve Data dosyalarını güvenlice topluyoruz
 tmp_ret = collect_all('ctranslate2')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
@@ -29,14 +40,58 @@ except ImportError:
             break
 hiddenimports += ['sounddevice', '_sounddevice']
 
-# --- CPU-ONLY MİMARİSİ: GPU (CUDA) DLL'lerini Kökten Engelleme ---
-# PyInstaller'ın 1.5 GB'lık gereksiz NVIDIA dosyalarını kopyalamasını baştan yasaklıyoruz.
-cuda_keywords = ['cublas', 'cudnn', 'curand', 'cusparse', 'nvrtc', 'cudart']
+# --- CPU-ONLY MİMARİSİ: GPU (CUDA/NVIDIA) DLL'lerini Kökten Engelleme ---
+_gpu_keywords = [
+    'cublas', 'cudnn', 'curand', 'cusparse', 'nvrtc', 'cudart',
+    'cufft', 'cufile', 'cusolve', 'cusolver', 'nccl', 'nvjpeg',
+    'nvidia_', 'nvinfer', 'nvonnx', 'nvpars',
+]
+
+# --- Gereksiz Binary'leri Kaldır ---
+# opengl32sw: software OpenGL rasterizer — Katib 3D/OpenGL kullanmıyor
+# Qt6Quick / Qt6Pdf / Qt6Qml: exclude listesinde ama DLL olarak sızdı
+# NOT: libx265 / libSvtAv1Enc av.libs'ten SİLİNMEZ — avcodec'in statik
+# bağımlılığı, kaldırılırsa av/_core.pyd yüklenemiyor.
+_exclude_binaries = [
+    'opengl32sw',
+    'qt6quick', 'qt6pdf', 'qt6qml', 'qt6qmlmodels', 'qt6qmlworkerscript',
+]
+
 filtered_binaries = []
 for b_dest, b_src in binaries:
-    if not any(k in str(b_src).lower() for k in cuda_keywords):
-        filtered_binaries.append((b_dest, b_src))
+    name_lower = str(b_src).lower()
+    if any(k in name_lower for k in _gpu_keywords):
+        continue
+    if any(k in name_lower for k in _exclude_binaries):
+        continue
+    filtered_binaries.append((b_dest, b_src))
 binaries = filtered_binaries
+
+# --- datas içinden de GPU DLL'lerini Kaldır (cudnn64 gibi datas üzerinden gelenler) ---
+datas = [
+    (d_src, d_dest) for d_src, d_dest in datas
+    if not any(k in str(d_src).lower() for k in _gpu_keywords)
+]
+
+# --- Qt Gereksiz İmage Format Plugin'lerini Kaldır ---
+# Katib yalnızca SVG, ICO ve PNG kullanır.
+_keep_imgfmt = {'qsvg', 'qico', 'qpng', 'qjpeg'}
+filtered_datas = []
+for d_src, d_dest in datas:
+    src_lower = str(d_src).lower().replace('\\', '/')
+    if 'imageformats' in src_lower:
+        plugin_name = pathlib.Path(d_src).stem.lower()
+        if plugin_name not in _keep_imgfmt:
+            continue
+    filtered_datas.append((d_src, d_dest))
+datas = filtered_datas
+
+# --- Qt .qm Çeviri Dosyalarını Kaldır ---
+# Qt'nin kendi UI çevirileri — Katib bunları kullanmıyor.
+datas = [
+    (d_src, d_dest) for d_src, d_dest in datas
+    if not (str(d_src).lower().endswith('.qm') and 'qt' in str(d_src).lower())
+]
 
 block_cipher = None
 
@@ -48,7 +103,7 @@ a = Analysis(
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=['hooks/rthook_dll_paths.py'],
     excludes=[
         # Kullanılmayan Devasa PySide6 Bileşenleri
         'PySide6.QtWebEngineCore', 'PySide6.QtWebEngineWidgets', 'PySide6.QtWebEngineQuick',
@@ -90,12 +145,34 @@ a = Analysis(
         'chromadb',
         'sentence_transformers',
         'sympy', 'networkx', 'paramiko', 'kubernetes', 'neo4j', 'libcst',
+
+        # Kullanılmayan Python Stdlib Modülleri
+        'unittest', 'doctest', 'pydoc',
+        'xmlrpc', 'xmlrpc.client', 'xmlrpc.server',
+        'curses', 'antigravity', 'this',
+        'lib2to3', 'idlelib', 'turtledemo', 'turtle',
+        'ensurepip', 'venv', 'distutils',
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
     noarchive=False,
 )
+
+# --- Analysis sonrası filtreleme ---
+_post_exclude = [
+    'opengl32sw',
+    'qt6quick', 'qt6pdf', 'qt6qml',
+    'qt6qmlmodels', 'qt6qmlworkerscript',
+] + _gpu_keywords
+
+def _should_exclude(name):
+    n = name.lower().replace('\\', '/').replace('-', '_')
+    return any(k in n for k in _post_exclude)
+
+a.binaries = TOC([b for b in a.binaries if not _should_exclude(b[0])])
+a.datas    = TOC([d for d in a.datas    if not _should_exclude(d[0])])
+
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
 exe = EXE(

@@ -9,6 +9,15 @@ __pycache__/
 # PyInstaller paketleme çıktıları
 build/
 dist/
+*.spec.bak
+filtered_entries.txt
+build_diag*.log
+installer/
+
+# Build araçları ve script'leri
+analyze_build.py
+Katib.iss
+hooks/
 
 
 # Sanal Ortamlar (Virtual Environments)
@@ -25,8 +34,12 @@ venv/
 enchanted-waddling-trinket.md
 skills-lock.json
 
-# Uygulama log ve ayar klasörleri
+# Test çıktıları
+.coverage
+htmlcov/
 *.log
+
+# Uygulama ayar klasörü
 .katib_app/
 
 # Boş/eski klasörler
