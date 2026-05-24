@@ -7,7 +7,7 @@ from PySide6.QtGui import QColor, QPainter, QPaintEvent, QKeyEvent, QFont
 
 from core.settings import APP_NAME
 from core.i18n import t
-from ui.theme import G_1, G_2, PANEL_WIDTH, FONT_SIZE_SM, theme_manager
+from ui.theme import G_1, G_2, DIALOG_WIDTH, FONT_SIZE_SM, theme_manager
 from ui.components import SettingGroup, FadeScrollArea
 from ui.utils_win import apply_dark_mode_to_window
 
@@ -114,7 +114,7 @@ class HelpWindow(QWidget):
         super().__init__(parent, flags)
         self.settings = settings
         self.setWindowTitle(f"{APP_NAME} — {t('help.title')}")
-        self.setFixedWidth(PANEL_WIDTH)
+        self.setFixedWidth(DIALOG_WIDTH)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self._build_ui()
         self.setMaximumHeight(640)

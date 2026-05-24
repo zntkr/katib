@@ -76,13 +76,6 @@ class TestSettingsDialog:
         assert logs[0][0] == "WRN"
         assert "Log folder has not been created yet." in logs[0][2]
 
-    def test_init_with_startup_exception(self, qapp, mock_settings):
-        from ui.settings_dialog import SettingsDialog
-        with patch("core.startup.get_startup_enabled", side_effect=Exception("No winreg")):
-            d = SettingsDialog(mock_settings)
-            assert d._chk_startup.isChecked() is False
-            d.close()
-
     def test_paint_event(self, dialog):
         from PySide6.QtGui import QPaintEvent
         from PySide6.QtCore import QRect
@@ -170,14 +163,6 @@ class TestSettingsDialog:
             dialog._browse_model_dir()
             assert dialog.settings.get("model_dir") == "/valid/path"
 
-    def test_on_startup_toggled_error(self, dialog):
-        with patch("core.startup.set_startup_enabled", side_effect=Exception("Error")):
-            dialog._on_startup_toggled(True)
-
-    def test_refresh_values_startup_error(self, dialog):
-        with patch("core.startup.get_startup_enabled", side_effect=Exception("Error")):
-            dialog._refresh_values()
-
     def test_keypress_event_escape(self, dialog):
         event = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Escape, Qt.KeyboardModifier.NoModifier)
         dialog.show()
@@ -200,3 +185,18 @@ class TestSettingsDialog:
 
     def test_refresh_values_success(self, dialog):
         dialog._refresh_values()
+
+    def test_theme_changed_signal_emitted_on_combo_change(self, dialog):
+        received = []
+        dialog.theme_changed.connect(received.append)
+        # "dark" seçeneğini bul ve seç
+        combo = dialog._theme_combo
+        dark_idx = combo.findData("dark")
+        combo.setCurrentIndex(dark_idx)
+        assert received == ["dark"]
+
+    def test_theme_changed_saves_to_settings(self, dialog):
+        combo = dialog._theme_combo
+        light_idx = combo.findData("light")
+        combo.setCurrentIndex(light_idx)
+        assert dialog.settings.get("theme") == "light"

@@ -169,7 +169,7 @@ def main():
                STATE_PROCESSING, STATE_LISTENING, STATE_READY):
         if _t(_k) == _k:
             global_logger.warning("i18n: STATUS key missing in catalog: '%s'", _k)
-    theme_manager.apply_theme(app)
+    theme_manager.apply_theme(app, settings_manager.get("theme", "system"))
     global_logger.info("Theme and settings loaded.")
 
     # Qt environment is ready — import UI module now.
@@ -293,6 +293,18 @@ def main():
         downloader_worker.download_finished.connect(tray.dashboard.on_download_complete)
 
         tray.dashboard.language_change_requested.connect(tray.apply_language)
+
+        def _on_theme_changed(theme: str) -> None:
+            theme_manager.apply_theme(app, theme)
+            tray.dashboard.refresh_theme()
+            if tray.dashboard._settings_dialog is not None:
+                tray.dashboard._settings_dialog.refresh_theme()
+
+        tray.dashboard.theme_changed.connect(_on_theme_changed)
+        app.styleHints().colorSchemeChanged.connect(
+            lambda: settings_manager.get("theme", "system") == "system"
+            and theme_manager.apply_theme(app, "system")
+        )
 
         # ---------------------------------------------------- start workers
         global_logger.info("Starting worker threads...")

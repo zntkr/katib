@@ -390,23 +390,6 @@ class TestSettingsDialogInteractions:
         settings_dialog.hide()
 
 
-    # ── startup toggle ───────────────────────────────────────────────────────
-
-    def test_startup_toggle_calls_set_startup_enabled(self, settings_dialog):
-        with patch("core.startup.set_startup_enabled") as mock_fn:
-            settings_dialog._on_startup_toggled(True)
-            mock_fn.assert_called_once_with(True)
-
-    def test_startup_toggle_exception_emits_log(self, settings_dialog):
-        logs = []
-        settings_dialog.log_entry.connect(lambda l, c, m: logs.append(l))
-        with patch("ui.settings_dialog.SettingsDialog._on_startup_toggled",
-                   side_effect=Exception("registry error")):
-            pass
-        with patch("core.startup.set_startup_enabled", side_effect=Exception("registry error")):
-            settings_dialog._on_startup_toggled(True)
-        assert any(l == "ERR" for l in logs)
-
     # ── log folder ───────────────────────────────────────────────────────────
 
     def test_open_log_folder_when_missing_emits_warning(self, settings_dialog):
@@ -588,10 +571,6 @@ class TestSettingsDialogInteractions:
         settings_dialog._refresh_values()
         assert settings_dialog.btn_hotkey.text() == "F5"
 
-
-    def test_refresh_values_startup_error_is_swallowed(self, settings_dialog):
-        with patch("core.startup.get_startup_enabled", side_effect=Exception("no registry")):
-            settings_dialog._refresh_values()  # should not raise
 
     # ── set_download_state ───────────────────────────────────────────────────
 

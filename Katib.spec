@@ -1,17 +1,33 @@
 # -*- mode: python ; coding: utf-8 -*-
+import pathlib
 from PyInstaller.utils.hooks import collect_all
 
 datas = [('translations', 'translations')]
 binaries = []
 hiddenimports = []
 
-# STT ve Ses kütüphanelerinin DLL ve Data dosyalarını güvenlice topluyoruz
+# STT kütüphanesinin DLL ve Data dosyalarını güvenlice topluyoruz
 tmp_ret = collect_all('ctranslate2')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('sounddevice')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('faster_whisper')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+
+# sounddevice: tek .py dosyası + _sounddevice_data paketi (PortAudio DLL)
+# collect_all bunu atlıyor — kurulum dizinini dinamik olarak buluyoruz.
+try:
+    import sounddevice as _sd
+    _sd_site = pathlib.Path(_sd.__file__).parent
+    _sd_data_dir = _sd_site / '_sounddevice_data'
+    if _sd_data_dir.exists():
+        datas += [(str(_sd_data_dir), '_sounddevice_data')]
+except ImportError:
+    import sys, site
+    for _sp in site.getsitepackages() + [site.getusersitepackages()]:
+        _sd_data_dir = pathlib.Path(_sp) / '_sounddevice_data'
+        if _sd_data_dir.exists():
+            datas += [(str(_sd_data_dir), '_sounddevice_data')]
+            break
+hiddenimports += ['sounddevice', '_sounddevice']
 
 # --- CPU-ONLY MİMARİSİ: GPU (CUDA) DLL'lerini Kökten Engelleme ---
 # PyInstaller'ın 1.5 GB'lık gereksiz NVIDIA dosyalarını kopyalamasını baştan yasaklıyoruz.
@@ -43,7 +59,8 @@ a = Analysis(
         'PySide6.QtHelp', 'PySide6.QtNetworkAuth', 'PySide6.QtBluetooth',
         'PySide6.QtLocation', 'PySide6.QtPositioning', 'PySide6.QtRemoteObjects',
         'PySide6.QtSensors', 'PySide6.QtSerialPort', 'PySide6.QtTextToSpeech',
-        'PySide6.QtMultimedia', 'PySide6.QtMultimediaWidgets',
+        'PySide6.QtMultimediaWidgets',
+        # PySide6.QtMultimedia kasıtlı olarak dahil: QMediaDevices (mikrofon listesi) için gerekli
         'PySide6.QtOpenGL', 'PySide6.QtOpenGLWidgets',
         'PySide6.QtPrintSupport', 'PySide6.QtConcurrent',
         'PySide6.Qt3DAnimation', 'PySide6.Qt3DExtras', 'PySide6.Qt3DInput',
@@ -87,10 +104,12 @@ exe = EXE(
     [],
     exclude_binaries=True,
     name='Katib',
+    icon='katib.ico',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
+    runtime_tmpdir=None,
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,

@@ -43,12 +43,7 @@ class TestWidgetWidthSM:
     def test_no_hardcoded_width_80_in_settings_dialog(self):
         src = (ROOT / "ui" / "settings_dialog.py").read_text(encoding="utf-8")
         assert "setFixedWidth(80)" not in src, \
-            "ui/settings_dialog.py: use WIDGET_WIDTH_SM constant instead of the 80 literal"
-
-    def test_widget_width_sm_imported_in_settings_dialog(self):
-        src = (ROOT / "ui" / "settings_dialog.py").read_text(encoding="utf-8")
-        assert "WIDGET_WIDTH_SM" in src, \
-            "ui/settings_dialog.py: WIDGET_WIDTH_SM must be imported from ui.theme"
+            "ui/settings_dialog.py: do not hardcode 80 — use WIDGET_WIDTH_SM or the grid system"
 
 
 class TestLevelPaletteMapping:
@@ -85,10 +80,10 @@ class TestLevelPaletteMapping:
                 assert mock_colorize.call_args[0][1] == expected_color, \
                     f"set_status(level={level!r}) did not produce the expected icon color ({expected_color})"
 
-    def test_make_log_html_line_produces_lvl_class_for_all_levels(self, qapp, mock_settings):
+    def test_make_log_html_line_produces_inline_styles_for_all_levels(self, qapp, mock_settings):
         from ui.dashboard import DashboardWindow as Dashboard, _LEVEL_PALETTE_KEY
         d = Dashboard(mock_settings, icon_idle=_dummy_icon())
         for level in _LEVEL_PALETTE_KEY:
             html = d._make_log_html_line(level, "TST", "message", "00:00:00")
-            assert "lvl-" in html, \
-                f"_make_log_html_line(level={level!r}) did not produce a lvl-* CSS class"
+            assert "style=" in html and "color:" in html, \
+                f"_make_log_html_line(level={level!r}) did not produce inline color styles"

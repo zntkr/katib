@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QApplication, QWidget, QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QComboBox, QSpinBox, QDoubleSpinBox,
-    QCheckBox, QFrame, QFileDialog, QMessageBox, QLineEdit,
+    QFrame, QFileDialog, QMessageBox, QLineEdit, QTextEdit,
     QSizePolicy
 )
 from PySide6.QtCore import Qt, Signal, QTimer
@@ -15,8 +15,8 @@ from core.settings import (
     DEFAULT_DOWNLOAD_PARENT, COMPUTE_TYPE_OPTIONS_CPU,
     SETTINGS_SCHEMA
 )
-from ui.theme import G_1, G_2, PANEL_WIDTH, FONT_SIZE_SM, WIDGET_WIDTH_SM, theme_manager
-from ui.components import SettingGroup, NoScrollComboBox, DynamicIconButton, FadeScrollArea
+from ui.theme import G_1, G_2, G_3, FONT_SIZE_SM, SETTINGS_WIDTH, SETTINGS_HEIGHT, theme_manager
+from ui.components import NoScrollComboBox, DynamicIconButton
 from ui.icons import ICN_DOWNLOAD, ICN_TICK
 from core.i18n import t, available_languages
 
@@ -48,6 +48,7 @@ class SettingsDialog(QDialog):
     log_entry                = Signal(str, str, str)
     capture_mode_changed     = Signal(bool)  # True=capture started, False=finished
     language_change_requested = Signal(str)
+    theme_changed             = Signal(str)
 
     def __init__(self, settings, parent: QWidget | None = None):
         flags = (
@@ -60,22 +61,13 @@ class SettingsDialog(QDialog):
         )
         super().__init__(parent, flags)
         self.settings = settings
-        # The dialog container itself must be focusable: no child widget
-        # highlights on open, but Tab navigation still works correctly.
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setWindowTitle(f"{APP_NAME} - {t('settings.title')}")
-        self.setFixedWidth(PANEL_WIDTH)
-
+        self.setFixedSize(SETTINGS_WIDTH, SETTINGS_HEIGHT)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-
         self._capturing_hotkey = False
-        
-        # Holds references to dynamically-generated UI widgets keyed by setting name.
         self._dynamic_widgets = {}
-
         self._build_ui()
-        self.setMaximumHeight(704)
-        self.adjustSize()
 
     def paintEvent(self, event: QPaintEvent) -> None:
         from ui.theme import theme_manager
@@ -100,218 +92,251 @@ class SettingsDialog(QDialog):
         # but Tab navigation starts from btn_hotkey.
         QTimer.singleShot(0, self.btn_hotkey.setFocus)
 
+    def _section_title(self, key: str) -> QLabel:
+        p = theme_manager.palette
+        lbl = QLabel(t(key).upper())
+        lbl.setStyleSheet(
+            f"color: {p['CLR_YELLOW']}; font-weight: bold; "
+            f"font-size: {FONT_SIZE_SM}pt; letter-spacing: 1px;"
+        )
+        return lbl
+
+    def _make_row(self, label_text: str, widget: QWidget) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.setSpacing(G_1)
+        lbl = QLabel(label_text)
+        lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        row.addWidget(lbl)
+        row.addWidget(widget)
+        return row
+
     def _build_ui(self):
-        self.main_layout = QVBoxLayout(self)
-        self.main_layout.setContentsMargins(G_1, G_1, 0, G_1)
-        self.main_layout.setSpacing(G_1)
+        from ui.theme import G_4
+        p = theme_manager.palette
 
-        self.scroll_area = FadeScrollArea(inset_left=G_1, inset_right=G_2)
-        self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setFrameShape(QFrame.Shape.NoFrame)
-        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(G_2, G_2, G_2, G_2)
+        outer.setSpacing(0)
 
-        self.scroll_area.setObjectName("settingsScrollArea")
-        self.scroll_area.setStyleSheet("QScrollArea#settingsScrollArea { background-color: transparent; }")
+        cols = QHBoxLayout()
+        cols.setSpacing(0)
+        outer.addLayout(cols)
 
-        self.container = QWidget()
-        self.container.setObjectName("settingsContainer")
-        self.container.setStyleSheet("QWidget#settingsContainer { background-color: transparent; }")
-        self.container_layout = QVBoxLayout(self.container)
-        self.container_layout.setContentsMargins(0, 0, G_1, G_2)
-        self.container_layout.setSpacing(G_2)
+        # ── Left column: General + System ────────────────────────
+        left = QVBoxLayout()
+        left.setSpacing(G_1)
+        left.setContentsMargins(0, 0, G_2, 0)
+        cols.addLayout(left, 1)
 
-        # --- GROUP: GENERAL ---
-        genel_grp = SettingGroup(t("settings.group_general"))
+        left.addWidget(self._section_title("settings.group_general"))
+        left.addSpacing(G_1)
+
         self.btn_hotkey = QPushButton()
         self.btn_hotkey.setProperty("isIconBtn", True)
         self.btn_hotkey.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_hotkey.clicked.connect(self._start_hotkey_capture)
-        from ui.theme import G_4
         self.btn_hotkey.setFixedHeight(G_4)
         self.btn_hotkey.setMinimumWidth(G_4)
         self.btn_hotkey.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
-        genel_grp.add_widget_row(t("settings.hotkey_label"), self.btn_hotkey, widget_width=None)
-
-        self._chk_startup = QCheckBox()
-        self._chk_startup.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._chk_startup.toggled.connect(self._on_startup_toggled)
-
-        chk_lay = QHBoxLayout()
-        chk_lay.setContentsMargins(0, 0, 0, 0)
-        chk_lay.setSpacing(G_1)
-        chk_lbl = QLabel(t("settings.startup_label"))
-        chk_lbl.setCursor(Qt.CursorShape.PointingHandCursor)
-        chk_lbl.mousePressEvent = lambda e: self._chk_startup.toggle()
-        chk_lbl.setWordWrap(True)
-        chk_lbl.setMinimumWidth(10)
-        chk_lbl.setStyleSheet(f"color: {theme_manager.palette['CLR_TEXT_MUTED']};")
-        chk_lay.addWidget(chk_lbl, stretch=1)
-        chk_lay.addStretch()
-        chk_lay.addWidget(self._chk_startup)
-        genel_grp.group_layout.addLayout(chk_lay)
+        left.addLayout(self._make_row(t("settings.hotkey_label"), self.btn_hotkey))
 
         self._lang_combo = NoScrollComboBox()
+        self._lang_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         for name, code in available_languages():
             self._lang_combo.addItem(name, userData=code)
         self._lang_combo.currentIndexChanged.connect(self._on_app_language_changed)
-        genel_grp.add_widget_row(t("settings.app_language_label"), self._lang_combo, full_width=True)
-        self.container_layout.addWidget(genel_grp)
+        left.addWidget(QLabel(t("settings.app_language_label")))
+        left.addWidget(self._lang_combo)
 
-        # --- GROUP: MODEL ---
-        self._model_grp = SettingGroup(t("settings.group_model"))
-        model_grp = self._model_grp
+        self._theme_combo = NoScrollComboBox()
+        self._theme_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        for label, value in [
+            (t("settings.theme_system"), "system"),
+            (t("settings.theme_dark"),   "dark"),
+            (t("settings.theme_light"),  "light"),
+        ]:
+            self._theme_combo.addItem(label, userData=value)
+        self._theme_combo.currentIndexChanged.connect(self._on_theme_changed)
+        left.addWidget(QLabel(t("settings.theme_label")))
+        left.addWidget(self._theme_combo)
+
+        left.addSpacing(G_3)
+
+        left.addWidget(self._section_title("settings.group_system"))
+        left.addSpacing(G_1)
+
+        btn_help = QPushButton(t("settings.user_guide"))
+        btn_help.clicked.connect(self._open_help)
+        left.addWidget(btn_help)
+
+        btn_logs = QPushButton(t("settings.open_log_folder"))
+        btn_logs.clicked.connect(self._open_log_folder)
+        left.addWidget(btn_logs)
+
+        left.addSpacing(G_2)
+        btn_reset = QPushButton(t("settings.reset_settings"))
+        btn_reset.clicked.connect(self._reset_advanced)
+        left.addWidget(btn_reset)
+
+        left.addStretch()
+
+        # ── Divider ───────────────────────────────────────────────
+        divider = QFrame()
+        divider.setFixedWidth(1)
+        divider.setStyleSheet(
+            f"background-color: {p['CLR_BORDER_LIGHT']}; border: none;"
+        )
+        cols.addWidget(divider)
+
+        # ── Right column: Model + Processing ─────────────────────
+        right = QVBoxLayout()
+        right.setSpacing(G_1)
+        right.setContentsMargins(G_2, 0, 0, 0)
+        cols.addLayout(right, 1)
+
+        right.addWidget(self._section_title("settings.group_model"))
+        right.addSpacing(G_1)
+
         self.model_select_combo = NoScrollComboBox()
+        self.model_select_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._model_combo_base_labels: dict[str, str] = {}
         for key, info in WHISPER_MODELS.items():
             label = f"{key.capitalize()} ({info['size']}) — {info['desc']}"
             self._model_combo_base_labels[info['repo_id']] = label
             self.model_select_combo.addItem(label, userData=info['repo_id'])
-        
-        # Action item — italic font only, no decoration or indent.
+        browse_idx = self.model_select_combo.count()
         self.model_select_combo.addItem(t("settings.browse"), userData="browse_custom")
-        browse_idx = self.model_select_combo.count() - 1
         action_font = QFont()
         action_font.setItalic(True)
         self.model_select_combo.setItemData(browse_idx, action_font, Qt.ItemDataRole.FontRole)
-        
         self.model_select_combo.currentIndexChanged.connect(self._on_combo_index_changed)
-        
-        p = theme_manager.palette
-        self.btn_download = DynamicIconButton(ICN_DOWNLOAD, p["CLR_YELLOW"], idle_color=p["CLR_YELLOW"], hover_color=p["CLR_YELLOW"])
+
+        self.btn_download = DynamicIconButton(
+            ICN_DOWNLOAD, p["CLR_YELLOW"],
+            idle_color=p["CLR_YELLOW"], hover_color=p["CLR_YELLOW"]
+        )
         self.btn_download.setToolTip(t("settings.download"))
         self.btn_download.clicked.connect(self._on_download_clicked)
-        dl_widget = QWidget()
-        dl_lay = QHBoxLayout(dl_widget)
-        dl_lay.setContentsMargins(0, 0, 0, 0)
-        dl_lay.setSpacing(G_1)
-        dl_lay.addWidget(self.model_select_combo, 1)
-        dl_lay.addWidget(self.btn_download)
-        model_grp.add_widget_row(t("settings.ai_model_label"), dl_widget, full_width=True)
-        
+
+        right.addWidget(QLabel(t("settings.ai_model_label")))
+        model_row = QHBoxLayout()
+        model_row.setSpacing(G_1)
+        model_row.addWidget(self.model_select_combo, 1)
+        model_row.addWidget(self.btn_download)
+        right.addLayout(model_row)
+
         self.lbl_model_path = QLabel(t("settings.path_not_selected"))
-        self.lbl_model_path.setStyleSheet(f"color: {theme_manager.palette['CLR_TEXT_MUTED']}; font-size: {FONT_SIZE_SM}pt; padding-left: 4px;")
+        self.lbl_model_path.setStyleSheet(
+            f"color: {p['CLR_TEXT_MUTED']}; font-size: {FONT_SIZE_SM}pt; padding-left: 4px;"
+        )
         self.lbl_model_path.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.lbl_model_path.setMinimumWidth(10)
-        model_grp.group_layout.addWidget(self.lbl_model_path)
-        self.container_layout.addWidget(model_grp)
+        right.addWidget(self.lbl_model_path)
 
-        # --- GROUP: PROCESSING ---
+        right.addSpacing(G_2)
+        right.addWidget(self._section_title("settings.group_processing"))
+        right.addSpacing(G_1)
 
-        adv_grp = SettingGroup(t("settings.group_processing"))
-
-        # Data-driven UI: widgets are generated automatically from the settings schema.
         for sdef in SETTINGS_SCHEMA:
             if sdef.ui_group != "Processing":
                 continue
-                
+
             widget = None
             real_input_widget = None
             full_width = sdef.ui_kwargs.get("full_width", False)
-            
+
             if sdef.ui_widget == "combobox":
                 widget = NoScrollComboBox()
-                for label, val in sdef.ui_kwargs.get("options", []):
-                    widget.addItem(label, userData=val)
-                widget.currentIndexChanged.connect(lambda idx, key=sdef.key, w=widget: self._on_dynamic_changed(key, w.currentData()))
-                
+                widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+                for lbl, val in sdef.ui_kwargs.get("options", []):
+                    widget.addItem(lbl, userData=val)
+                widget.currentIndexChanged.connect(
+                    lambda _idx, key=sdef.key, w=widget: self._on_dynamic_changed(key, w.currentData())
+                )
+
             elif sdef.ui_widget == "spinbox":
                 widget = QSpinBox()
                 widget.setRange(sdef.ui_kwargs.get("min", 0), sdef.ui_kwargs.get("max", 100))
                 widget.valueChanged.connect(lambda v, key=sdef.key: self._on_dynamic_changed(key, v))
-                
+
             elif sdef.ui_widget == "doublespinbox":
                 widget = QDoubleSpinBox()
                 widget.setRange(sdef.ui_kwargs.get("min", 0.0), sdef.ui_kwargs.get("max", 1.0))
                 widget.setSingleStep(sdef.ui_kwargs.get("step", 0.1))
                 widget.setDecimals(sdef.ui_kwargs.get("decimals", 2))
                 widget.valueChanged.connect(lambda v, key=sdef.key: self._on_dynamic_changed(key, v))
-                
+
             elif sdef.ui_widget == "lineedit":
                 container = QWidget()
                 hlay = QHBoxLayout(container)
                 hlay.setContentsMargins(0, 0, 0, 0)
                 hlay.setSpacing(G_1)
-                
-                le = QLineEdit()
-                le.setMinimumWidth(50)
-                le.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-                
-                btn_save = DynamicIconButton(ICN_TICK, theme_manager.palette["CLR_YELLOW"])
+                if sdef.key == "initial_prompt":
+                    le = QTextEdit()
+                    le.setFixedHeight(G_3 * 3)
+                    le.setAcceptRichText(False)
+                else:
+                    le = QLineEdit()
+                    le.setMinimumWidth(50)
+                    le.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+                btn_save = DynamicIconButton(ICN_TICK, p["CLR_YELLOW"])
                 btn_save.setEnabled(False)
 
                 def _make_save_handler(k, input_w, btn):
-                    def on_text_changed(text):
-                        is_changed = text != self.settings.get(k, "")
+                    def _get_text():
+                        return input_w.toPlainText() if isinstance(input_w, QTextEdit) else input_w.text()
+                    def on_text_changed():
+                        is_changed = _get_text() != self.settings.get(k, "")
                         btn.setEnabled(is_changed)
                         btn.set_active(is_changed)
-
                     def on_save():
                         if not btn.isEnabled(): return
-                        self._on_dynamic_changed(k, input_w.text())
+                        val = _get_text()
+                        self._on_dynamic_changed(k, val)
                         if k == "initial_prompt":
                             lang = self.settings.get("language", "auto")
                             if lang != "auto":
                                 prompts = self.settings.get("initial_prompts") or {}
-                                prompts[lang] = input_w.text()
+                                prompts[lang] = val
                                 self.settings.set("initial_prompts", prompts)
                         btn.setEnabled(False)
                         btn.set_active(False)
                     return on_text_changed, on_save
-                    
+
                 text_handler, save_handler = _make_save_handler(sdef.key, le, btn_save)
-                le.textChanged.connect(text_handler)
+                if isinstance(le, QTextEdit):
+                    le.textChanged.connect(text_handler)
+                else:
+                    le.textChanged.connect(lambda _text, h=text_handler: h())
+                    le.returnPressed.connect(save_handler)
                 btn_save.clicked.connect(save_handler)
-                le.returnPressed.connect(save_handler)  # pressing Enter also saves
-                
                 hlay.addWidget(le)
                 hlay.addWidget(btn_save)
-                
                 widget = container
                 real_input_widget = le
-                
+
             elif sdef.ui_widget == "custom":
-                # Widgets with custom business logic are still defined manually.
                 if sdef.key == "compute_type":
                     self.compute_combo = NoScrollComboBox()
+                    self.compute_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
                     self.compute_combo.currentIndexChanged.connect(self._on_compute_type_changed)
                     widget = self.compute_combo
-            
+
             if widget:
                 real_widget = real_input_widget if real_input_widget is not None else widget
                 if sdef.tooltip:
                     real_widget.setToolTip(t(sdef.tooltip))
-                w = WIDGET_WIDTH_SM if not full_width else 136
-                adv_grp.add_widget_row(t(sdef.ui_label), widget, full_width=full_width, widget_width=w)
                 self._dynamic_widgets[sdef.key] = real_widget
+                if full_width:
+                    right.addWidget(QLabel(t(sdef.ui_label)))
+                    right.addWidget(widget)
+                else:
+                    right.addLayout(self._make_row(t(sdef.ui_label), widget))
 
-        self.container_layout.addWidget(adv_grp)
+        right.addStretch()
 
-        # --- GROUP: SYSTEM ---
-        system_grp = SettingGroup(t("settings.group_system"))
-        btn_help = QPushButton(t("settings.user_guide"))
-        btn_help.clicked.connect(self._open_help)
-        system_grp.group_layout.addWidget(btn_help)
-
-        btn_logs = QPushButton(t("settings.open_log_folder"))
-        btn_logs.clicked.connect(self._open_log_folder)
-        system_grp.group_layout.addWidget(btn_logs)
-
-        btn_reset = QPushButton(t("settings.reset_settings"))
-        btn_reset.clicked.connect(self._reset_advanced)
-        system_grp.group_layout.addWidget(btn_reset)
-        self.container_layout.addWidget(system_grp)
-
-        self.container_layout.addStretch()  # push all items to the top
-        self.scroll_area.setWidget(self.container)
-        self.main_layout.addWidget(self.scroll_area)
-
-
-    def scroll_to_model(self) -> None:
-        def _do():
-            self.scroll_area.ensureWidgetVisible(self._model_grp)
-            self.model_select_combo.setFocus()
-        QTimer.singleShot(50, _do)
+    def focus_model(self) -> None:
+        QTimer.singleShot(50, self.model_select_combo.setFocus)
 
     def _on_dynamic_changed(self, key: str, value):
         self.settings.set(key, value)
@@ -320,7 +345,7 @@ class SettingsDialog(QDialog):
 
     def _load_prompt_for_language(self, lang: str) -> None:
         le = self._dynamic_widgets.get("initial_prompt")
-        if not isinstance(le, QLineEdit):
+        if not isinstance(le, (QLineEdit, QTextEdit)):
             return
         if lang == "auto":
             prompt = ""
@@ -328,7 +353,10 @@ class SettingsDialog(QDialog):
             saved = (self.settings.get("initial_prompts") or {}).get(lang)
             prompt = saved if saved is not None else self._DEFAULT_PROMPTS.get(lang, "")
         le.blockSignals(True)
-        le.setText(prompt)
+        if isinstance(le, QTextEdit):
+            le.setPlainText(prompt)
+        else:
+            le.setText(prompt)
         le.blockSignals(False)
         self.settings.set("initial_prompt", prompt)
         parent_w = le.parentWidget()
@@ -344,14 +372,11 @@ class SettingsDialog(QDialog):
             self.settings.set("app_language", code)
             self.language_change_requested.emit(code)
 
-    def _on_startup_toggled(self, checked: bool) -> None:
-        try:
-            from core.startup import set_startup_enabled
-            set_startup_enabled(checked)
-            status = t("settings.startup_enabled") if checked else t("settings.startup_disabled")
-            self.log_entry.emit("...", "APP", f"Launch on startup: {status}")
-        except Exception as e:
-            self.log_entry.emit("ERR", "APP", f"Startup setting could not be changed: {e}")
+    def _on_theme_changed(self, _idx: int) -> None:
+        value = self._theme_combo.currentData()
+        if value:
+            self.settings.set("theme", value)
+            self.theme_changed.emit(value)
 
     def _center_on_screen(self):
         screen_geo = QApplication.primaryScreen().availableGeometry()
@@ -431,7 +456,7 @@ class SettingsDialog(QDialog):
     def _update_model_path_label(self, path: str) -> None:
         from PySide6.QtGui import QFontMetrics
         fm = QFontMetrics(self.lbl_model_path.font())
-        elided = fm.elidedText(path, Qt.TextElideMode.ElideMiddle, 260)
+        elided = fm.elidedText(path, Qt.TextElideMode.ElideMiddle, SETTINGS_WIDTH // 2 - G_2 * 3)
         self.lbl_model_path.setText(f"Path: {elided}")
         self.lbl_model_path.setToolTip(path)
 
@@ -563,6 +588,14 @@ class SettingsDialog(QDialog):
         self._refresh_values()
         self.log_entry.emit("OK", "APP", "Settings reset.")
 
+    def refresh_theme(self) -> None:
+        from ui.theme import theme_manager
+        p = theme_manager.palette
+        self.btn_download.recolor(p["CLR_YELLOW"], idle_color=p["CLR_YELLOW"], hover_color=p["CLR_YELLOW"])
+        for btn in self.findChildren(DynamicIconButton):
+            if btn is not self.btn_download:
+                btn.recolor(p["CLR_YELLOW"])
+
     def _refresh_values(self):
         self.btn_hotkey.setText(self.settings.get("hotkey", "F9").upper())
         lang = self.settings.get("app_language", "en") or "en"
@@ -590,9 +623,15 @@ class SettingsDialog(QDialog):
                 if idx >= 0: widget.setCurrentIndex(idx)
             elif isinstance(widget, QSpinBox) or isinstance(widget, QDoubleSpinBox):
                 if val is not None: widget.setValue(val)
+            elif isinstance(widget, QTextEdit):
+                if val is not None: widget.setPlainText(str(val))
+                parent_w = widget.parentWidget()
+                if parent_w is not None:
+                    btn = parent_w.findChild(QPushButton)
+                    if btn:
+                        btn.setEnabled(False)
             elif isinstance(widget, QLineEdit):
                 if val is not None: widget.setText(str(val))
-                # Reset the Save button to its initial (disabled) state.
                 parent_w = widget.parentWidget()
                 if parent_w is not None:
                     btn = parent_w.findChild(QPushButton)
@@ -601,14 +640,6 @@ class SettingsDialog(QDialog):
             widget.blockSignals(False)
             
         self._load_prompt_for_language(self.settings.get("language", "auto"))
-
-        try:
-            from core.startup import get_startup_enabled
-            self._chk_startup.blockSignals(True)
-            self._chk_startup.setChecked(get_startup_enabled())
-            self._chk_startup.blockSignals(False)
-        except Exception:
-            pass
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         if self._capturing_hotkey:

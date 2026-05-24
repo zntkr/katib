@@ -117,22 +117,21 @@ class DynamicIconButton(QPushButton):
 
         from ui.theme import theme_manager
         p = theme_manager.palette
-        self.idle_color = idle_color if idle_color else p["CLR_IDLE"]  # default muted beige
-        self.hover_color = hover_color if hover_color else p["CLR_TEXT"]  # bright cream on hover
-        self.action_color = action_color          # identity colour when pressed/active
-        self.disabled_color = disabled_color if disabled_color else p["CLR_BG"]  # sunken dark when disabled
+        self.idle_color = idle_color if idle_color else p["CLR_IDLE"]
+        self.hover_color = hover_color if hover_color else p["CLR_TEXT"]
+        self.action_color = action_color
+        self.disabled_color = disabled_color if disabled_color else p["CLR_TEXT_FAINT"]
         
         is_raw_svg = svg_path_or_str.strip().startswith("<svg")
         if is_raw_svg or os.path.exists(svg_path_or_str):
-            self.icon_idle = colorize_svg_icon(svg_path_or_str, self.idle_color)
-            self.icon_hover = colorize_svg_icon(svg_path_or_str, self.hover_color)
-            self.icon_action = colorize_svg_icon(svg_path_or_str, self.action_color)
-            self.icon_disabled = colorize_svg_icon(svg_path_or_str, self.disabled_color)
+            self._svg_source = svg_path_or_str
+            self._rebuild_icons()
             self.setIcon(self.icon_idle)
             from PySide6.QtCore import QSize
             self.setIconSize(QSize(16, 16))
             self._has_svg = True
         else:
+            self._svg_source = None
             self._has_svg = False
             from PySide6.QtGui import QFont
             from ui.theme import FONT_SIZE_LG
@@ -143,6 +142,26 @@ class DynamicIconButton(QPushButton):
             self.setText(fallback_text)
             
         self.is_active = False
+
+    def _rebuild_icons(self):
+        if not self._svg_source:
+            return
+        self.icon_idle     = colorize_svg_icon(self._svg_source, self.idle_color)
+        self.icon_hover    = colorize_svg_icon(self._svg_source, self.hover_color)
+        self.icon_action   = colorize_svg_icon(self._svg_source, self.action_color)
+        self.icon_disabled = colorize_svg_icon(self._svg_source, self.disabled_color)
+
+    def recolor(self, action_color: str, idle_color: str | None = None, hover_color: str | None = None, disabled_color: str | None = None):
+        if not self._has_svg:
+            return
+        from ui.theme import theme_manager
+        p = theme_manager.palette
+        self.action_color   = action_color
+        self.idle_color     = idle_color     if idle_color     is not None else p["CLR_IDLE"]
+        self.hover_color    = hover_color    if hover_color    is not None else p["CLR_TEXT"]
+        self.disabled_color = disabled_color if disabled_color is not None else p["CLR_TEXT_FAINT"]
+        self._rebuild_icons()
+        self._update_icon()
 
     def set_active(self, active: bool):
         self.is_active = active

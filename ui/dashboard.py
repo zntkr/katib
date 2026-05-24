@@ -26,13 +26,6 @@ _LEVEL_PALETTE_KEY: dict[str, str] = {
     "INFO": "CLR_INFO",
     "↓":    "CLR_INFO",
 }
-_PALETTE_KEY_TO_CSS: dict[str, str] = {
-    "CLR_OK":   "lvl-ok",
-    "CLR_ERR":  "lvl-err",
-    "CLR_WARN": "lvl-wrn",
-    "CLR_IDLE": "lvl-idle",
-    "CLR_INFO": "lvl-info",
-}
 from ui.utils_win import apply_dark_mode_to_window
 
 from typing import TYPE_CHECKING
@@ -52,6 +45,7 @@ class DashboardWindow(QWidget):
     refresh_devices_requested = Signal()
     download_model_requested  = Signal(str, str)
     language_change_requested = Signal(str)
+    theme_changed             = Signal(str)
 
     def __init__(self, settings, icon_idle: QIcon, parent: QWidget | None = None):
         flags = (
@@ -383,33 +377,21 @@ class DashboardWindow(QWidget):
         lv = _DISPLAY.get(level.strip(), level.strip())[:4].ljust(4).replace(" ", "&nbsp;")
         cp = component.strip()[:3].ljust(3).replace(" ", "&nbsp;")
         safe_msg = html.escape(message)
-        lvl_clean = level.strip()
-        palette_key = _LEVEL_PALETTE_KEY.get(lvl_clean)
-        lvl_class = _PALETTE_KEY_TO_CSS.get(palette_key, "lvl-def") if palette_key else "lvl-def"
+        p = theme_manager.palette
+        palette_key = _LEVEL_PALETTE_KEY.get(level.strip())
+        lvl_color = p.get(palette_key, p["CLR_TEXT"]) if palette_key else p["CLR_TEXT"]
+        c_ts  = p["CLR_TEXT_FAINT"]
+        c_cp  = p["CLR_TEXT_MUTED"]
+        c_msg = p["CLR_TEXT_CONTENT"]
         return (
-            f"<span class='ts'>[{ts}]</span>&nbsp;&nbsp;"
-            f"<span class='{lvl_class}'>{lv}</span>&nbsp;&nbsp;"
-            f"<span class='cp'>{cp}</span>&nbsp;&nbsp;"
-            f"<span class='msg'>{safe_msg}</span>"
+            f"<span style='color:{c_ts}'>[{ts}]</span>&nbsp;&nbsp;"
+            f"<span style='color:{lvl_color};font-weight:bold'>{lv}</span>&nbsp;&nbsp;"
+            f"<span style='color:{c_cp}'>{cp}</span>&nbsp;&nbsp;"
+            f"<span style='color:{c_msg}'>{safe_msg}</span>"
         )
 
-    def _update_log_stylesheet(self, *args):
-        p = theme_manager.palette
-        css = f"""
-        body {{ background-color: {p['CLR_BG_DEEP']}; margin: 0; padding: 0; }}
-        .ts {{ color: {p['CLR_TEXT_FAINT']}; }}
-        .lvl-ok {{ color: {p['CLR_OK']}; font-weight: bold; }}
-        .lvl-err {{ color: {p['CLR_ERR']}; font-weight: bold; }}
-        .lvl-wrn {{ color: {p['CLR_WARN']}; font-weight: bold; }}
-        .lvl-idle {{ color: {p['CLR_IDLE']}; font-weight: bold; }}
-        .lvl-info {{ color: {p['CLR_INFO']}; font-weight: bold; }}
-        .lvl-def {{ color: {p['CLR_TEXT']}; font-weight: bold; }}
-        .cp {{ color: {p['CLR_TEXT_MUTED']}; }}
-        .msg {{ color: {p['CLR_TEXT_CONTENT']}; }}
-        """
-        doc = self.log_box.document()
-        doc.setDefaultStyleSheet(css)
-        doc.clear()
+    def _update_log_stylesheet(self, *_args):
+        self.log_box.document().clear()
         for level, component, message, i18n_key, ts in self._log_entries:
             display = t(i18n_key) if i18n_key else message
             self.log_box.append(self._make_log_html_line(level, component, display, ts))
@@ -477,7 +459,7 @@ class DashboardWindow(QWidget):
         if self._status_clickable:
             self._open_settings_dialog()
             if self._settings_dialog:
-                self._settings_dialog.scroll_to_model()
+                self._settings_dialog.focus_model()
 
     def show_model_missing_guidance(self) -> None:
         self.append_log_entry("INFO", "STT", "", "dashboard.model_missing_guidance")
@@ -489,7 +471,7 @@ class DashboardWindow(QWidget):
         def _auto_open():
             self._open_settings_dialog()
             if self._settings_dialog:
-                self._settings_dialog.scroll_to_model()
+                self._settings_dialog.focus_model()
         QTimer.singleShot(50, _auto_open)
 
     def clear_model_missing_guidance(self) -> None:
@@ -571,6 +553,7 @@ class DashboardWindow(QWidget):
             self._settings_dialog.log_entry.connect(self.append_log_entry)
             self._settings_dialog.finished.connect(self._update_settings_btn_style)
             self._settings_dialog.language_change_requested.connect(self.language_change_requested)
+            self._settings_dialog.theme_changed.connect(self.theme_changed)
 
         # Sidecar alignment — same formula as _position_bottom_right:
         # availableGeometry + DWM visual bounds for bottom-edge alignment.
@@ -580,6 +563,14 @@ class DashboardWindow(QWidget):
         self._settings_dialog.activateWindow()
         self._update_settings_btn_style()
         QTimer.singleShot(10, self._position_settings_beside_dashboard)
+
+    def refresh_theme(self) -> None:
+        from ui.theme import theme_manager
+        p = theme_manager.palette
+        self.btn_copy_transcript.recolor(p["CLR_OK"])
+        self.btn_toggle_log.recolor(p["CLR_YELLOW"], idle_color=p["CLR_FG3"])
+        self.btn_settings.recolor(p["CLR_YELLOW"], idle_color=p["CLR_FG3"])
+        self._update_log_stylesheet()
 
     def _refresh_language_tooltips(self) -> None:
         self.setWindowTitle(APP_NAME)

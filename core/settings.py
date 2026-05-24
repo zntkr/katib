@@ -67,6 +67,7 @@ class SettingDef:
 SETTINGS_SCHEMA = [
     SettingDef("hotkey", str, "F9", "General", "settings.hotkey_label", "custom"),
     SettingDef("app_language", str, "", "General", "settings.app_language_label", "custom"),
+    SettingDef("theme", str, "system", "General", "settings.theme_label", "custom"),
     SettingDef("model_dir", str, "", "Model", "Model Path", "custom"),
     SettingDef("device_index", int, None, "Audio", "Microphone", "custom"),
     SettingDef("selected_model_repo", str, "", "Model", "Selected Model", "custom"),

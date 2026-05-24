@@ -2,6 +2,7 @@ from pathlib import Path
 import tempfile
 from PySide6.QtGui import QPalette, QColor
 from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import Qt
 
 # ── 8-pt Grid System ─────────────────────────────────────────────
 G_1, G_2, G_3, G_4, G_5, G_6 = 8, 16, 24, 32, 40, 48
@@ -13,7 +14,10 @@ FONT_SIZE_LG = 10  # pt — toolbar icons
 FONT_SIZE_OSD = 14 # px — OSD overlay
 
 # ── Panel Dimensions ────────────────────────────────────────────
-PANEL_WIDTH = 320      # px — shared width for Dashboard, OSD, and SettingsDialog
+PANEL_WIDTH = 320      # px — Dashboard and OSD
+DIALOG_WIDTH = 384     # px — HelpWindow
+SETTINGS_WIDTH  = 600  # px — SettingsDialog fixed width
+SETTINGS_HEIGHT = 400  # px — SettingsDialog fixed height
 WIDGET_WIDTH_SM = 80   # px — small button/combobox width in settings_dialog
 COMBO_HEIGHT = G_4     # px — mic combo outer height (flush with buttons)
 LOG_BOX_HEIGHT = 144   # px — dashboard log widget height
@@ -63,15 +67,67 @@ DARK_PALETTE = {
 }
 
 
+# ── Palettes (Gruvbox Light) ─────────────────────────────────────
+LIGHT_PALETTE = {
+    # Functional states — Gruvbox Row 2 (bright) light, koyu temanın tam karşılığı
+    "CLR_OK":        "#79740e",  # bright green light  ↔ #b8bb26 dark
+    "CLR_ERR":       "#9d0006",  # bright red light    ↔ #fb4934 dark
+    "CLR_WARN":      "#af3a03",  # bright orange light ↔ #fe8019 dark
+    "CLR_WARN_DIM":  "#d65d0e",  # dark orange (aynı)
+    "CLR_INFO":      "#076678",  # bright blue light   ↔ #83a598 dark
+    "CLR_IDLE":      "#928374",  # gray (aynı)
+    "CLR_FG2":       "#504945",  # fg2 light           ↔ #d5c4a1 dark
+    "CLR_FG3":       "#665c54",  # fg3 light           ↔ #bdae93 dark
+    "CLR_LEVEL_LOW": "#79740e",  # bright green light  ↔ #b8bb26 dark
+    "CLR_LEVEL_MID": "#b57614",  # bright yellow light ↔ #fabd2f dark
+    "CLR_YELLOW":    "#d79921",  # yellow row-1 (her iki modda aynı)
+    # Backgrounds — scroll tutacağı (CLR_BG_ELEVATED) track'ten (CLR_BG_DEEP) koyu olmalı
+    "CLR_BG":          "#fbf1c7",  # bg0   — main shell/ground
+    "CLR_BG_DEEP":     "#f9f5d7",  # bg0_h — scroll track, log bg (çok açık)
+    "CLR_BG_SURFACE":  "#f2e5bc",  # bg0_s — secondary layers
+    "CLR_BG_ELEVATED": "#ebdbb2",  # bg1   — scroll handle, buttons (track'ten koyu = görünür)
+    "CLR_BG_HOVER":    "#d5c4a1",  # bg2   — hover
+    "CLR_BG_ACTIVE":   "#bdae93",  # bg3   — pressed/active
+    # Text (dark on light)
+    "CLR_TEXT":         "#3c3836",  # fg1
+    "CLR_TEXT_LABEL":   "#504945",  # fg2
+    "CLR_TEXT_CONTENT": "#3c3836",  # fg1
+    "CLR_TEXT_STATUS":  "#7c6f64",  # fg4
+    "CLR_TEXT_MUTED":   "#928374",  # gray
+    "CLR_TEXT_FAINT":   "#a89984",  # bg4
+    "CLR_TEXT_CODE":    "#b57614",  # yellow
+    # Borders
+    "CLR_BORDER":       "#f2e5bc",  # bg0_s light ↔ #32302f dark
+    "CLR_BORDER_LIGHT": "#ebdbb2",  # bg1 light   ↔ #3c3836 dark
+    "CLR_HOVER_BORDER": "#d79921",  # yellow row-1 (dark ile aynı)
+    "CLR_FOCUS_BORDER": "#b57614",  # bright yellow light ↔ #fabd2f dark
+    # Interaction
+    "CLR_HOVER_BG":   "#d5c4a1",  # bg2 light ↔ #504945 dark
+    "CLR_PRESSED_BG": "#f9f5d7",  # bg0_h light ↔ #1d2021 dark
+    # Special backgrounds
+    "CLR_TIP_BG":  "#f2e5bc",  # bg0_s
+    "CLR_WARN_BG": "#f2e5bc",  # bg0_s
+    "CLR_CODE_BG": "#ebdbb2",  # bg1
+}
+
+
 # ── Theme Manager ────────────────────────────────────────────────
 class ThemeManager:
     def __init__(self):
         self.is_dark = True
         self.palette = DARK_PALETTE
 
-    def apply_theme(self, app: QApplication):
-        self.is_dark = True
-        self.palette = DARK_PALETTE
+    def _resolve_is_dark(self, theme: str) -> bool:
+        if theme == "light":
+            return False
+        if theme == "dark":
+            return True
+        scheme = QApplication.styleHints().colorScheme()
+        return scheme != Qt.ColorScheme.Light
+
+    def apply_theme(self, app: QApplication, theme: str = "system"):
+        self.is_dark = self._resolve_is_dark(theme)
+        self.palette = DARK_PALETTE if self.is_dark else LIGHT_PALETTE
 
         pal = app.palette()
         pal.setColor(QPalette.ColorRole.Window,     QColor(self.palette["CLR_BG"]))
@@ -84,10 +140,12 @@ class ThemeManager:
     def _generate_stylesheet(self) -> str:
         p = self.palette
 
+        suffix = "dark" if self.is_dark else "light"
+
         def _get_cached_svg(name: str, svg_str: str) -> str:
             cache_dir = Path(tempfile.gettempdir()) / "katib_theme_cache"
             cache_dir.mkdir(parents=True, exist_ok=True)
-            file_path = cache_dir / f"{name}.svg"
+            file_path = cache_dir / f"{name}_{suffix}.svg"
             if not file_path.exists() or file_path.read_text(encoding="utf-8") != svg_str:
                 file_path.write_text(svg_str, encoding="utf-8")
             return f"url('{file_path.as_posix()}')"
