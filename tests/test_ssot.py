@@ -1,6 +1,6 @@
 """
-SSOT/DRY refactoring testleri.
-Issue #4: FONT_SIZE_SM, Issue #5: WIDGET_WIDTH_SM, Issue #6: log level eşleme.
+SSOT/DRY refactoring tests.
+Issue #4: FONT_SIZE_SM, Issue #5: WIDGET_WIDTH_SM, Issue #6: log level mapping.
 """
 import pathlib
 from PySide6.QtGui import QIcon, QPixmap
@@ -16,7 +16,7 @@ def _dummy_icon() -> QIcon:
 
 
 class TestFontSizeSM:
-    """Issue #4: 8pt string literal → FONT_SIZE_SM sabiti."""
+    """Issue #4: 8pt string literal → FONT_SIZE_SM constant."""
 
     def test_font_size_sm_constant_exists(self):
         from ui.theme import FONT_SIZE_SM
@@ -25,16 +25,16 @@ class TestFontSizeSM:
     def test_no_hardcoded_8pt_in_theme_stylesheet(self):
         src = (ROOT / "ui" / "theme.py").read_text(encoding="utf-8")
         assert "font-size: 8pt" not in src, \
-            "ui/theme.py: FONT_SIZE_SM sabitini kullan, 8pt literal yazma"
+            "ui/theme.py: use FONT_SIZE_SM constant instead of the 8pt literal"
 
     def test_no_hardcoded_8pt_in_settings_dialog(self):
         src = (ROOT / "ui" / "settings_dialog.py").read_text(encoding="utf-8")
         assert "font-size: 8pt" not in src, \
-            "ui/settings_dialog.py: FONT_SIZE_SM sabitini kullan, 8pt literal yazma"
+            "ui/settings_dialog.py: use FONT_SIZE_SM constant instead of the 8pt literal"
 
 
 class TestWidgetWidthSM:
-    """Issue #5: setFixedWidth(80) → WIDGET_WIDTH_SM sabiti."""
+    """Issue #5: setFixedWidth(80) → WIDGET_WIDTH_SM constant."""
 
     def test_widget_width_sm_constant_exists(self):
         from ui.theme import WIDGET_WIDTH_SM
@@ -43,21 +43,21 @@ class TestWidgetWidthSM:
     def test_no_hardcoded_width_80_in_settings_dialog(self):
         src = (ROOT / "ui" / "settings_dialog.py").read_text(encoding="utf-8")
         assert "setFixedWidth(80)" not in src, \
-            "ui/settings_dialog.py: WIDGET_WIDTH_SM sabitini kullan, 80 literal yazma"
+            "ui/settings_dialog.py: use WIDGET_WIDTH_SM constant instead of the 80 literal"
 
     def test_widget_width_sm_imported_in_settings_dialog(self):
         src = (ROOT / "ui" / "settings_dialog.py").read_text(encoding="utf-8")
         assert "WIDGET_WIDTH_SM" in src, \
-            "ui/settings_dialog.py: ui.theme'den WIDGET_WIDTH_SM import edilmeli"
+            "ui/settings_dialog.py: WIDGET_WIDTH_SM must be imported from ui.theme"
 
 
 class TestLevelPaletteMapping:
-    """Issue #6: Log seviyesi → renk/CSS eşlemesi tek kaynaktan türetilmeli."""
+    """Issue #6: Log level → color/CSS mapping must be derived from a single source."""
 
     def test_level_palette_key_constant_exists(self):
         import ui.dashboard as mod
         assert hasattr(mod, "_LEVEL_PALETTE_KEY"), \
-            "ui/dashboard.py: _LEVEL_PALETTE_KEY modül düzeyinde sabit olmalı"
+            "ui/dashboard.py: _LEVEL_PALETTE_KEY must be a module-level constant"
 
     def test_level_palette_key_covers_all_levels(self):
         from ui.dashboard import _LEVEL_PALETTE_KEY
@@ -69,7 +69,7 @@ class TestLevelPaletteMapping:
         from ui.theme import DARK_PALETTE
         for level, palette_key in _LEVEL_PALETTE_KEY.items():
             assert palette_key in DARK_PALETTE, \
-                f"_LEVEL_PALETTE_KEY[{level!r}] = {palette_key!r} palet içinde yok"
+                f"_LEVEL_PALETTE_KEY[{level!r}] = {palette_key!r} is not present in the palette"
 
     def test_set_status_colors_match_level_palette_key(self, qapp, mock_settings):
         from ui.dashboard import DashboardWindow as Dashboard, _LEVEL_PALETTE_KEY
@@ -83,12 +83,12 @@ class TestLevelPaletteMapping:
                 d.set_status("test", level)
                 expected_color = p[palette_key]
                 assert mock_colorize.call_args[0][1] == expected_color, \
-                    f"set_status(level={level!r}) beklenen ikon rengini ({expected_color}) üretmedi"
+                    f"set_status(level={level!r}) did not produce the expected icon color ({expected_color})"
 
     def test_make_log_html_line_produces_lvl_class_for_all_levels(self, qapp, mock_settings):
         from ui.dashboard import DashboardWindow as Dashboard, _LEVEL_PALETTE_KEY
         d = Dashboard(mock_settings, icon_idle=_dummy_icon())
         for level in _LEVEL_PALETTE_KEY:
-            html = d._make_log_html_line(level, "TST", "mesaj", "00:00:00")
+            html = d._make_log_html_line(level, "TST", "message", "00:00:00")
             assert "lvl-" in html, \
-                f"_make_log_html_line(level={level!r}) lvl-* CSS sınıfı üretmedi"
+                f"_make_log_html_line(level={level!r}) did not produce a lvl-* CSS class"

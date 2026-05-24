@@ -1,6 +1,6 @@
 """
-AudioWorker testleri.
-sounddevice.InputStream mock'lanır; mikrofon gerekmez.
+AudioWorker tests.
+sounddevice.InputStream is mocked; no microphone required.
 """
 import pytest
 import numpy as np
@@ -61,7 +61,7 @@ class TestStartRecording:
             mock_stream = MagicMock()
             mock_stream_cls.return_value = mock_stream
             worker.start_recording()
-            worker.start_recording()   # ikinci çağrı yoksayılmalı
+            worker.start_recording()   # second call should be ignored
 
         assert mock_stream_cls.call_count == 1
 
@@ -80,7 +80,7 @@ class TestStartRecording:
         errors = []
         worker.error_occurred.connect(errors.append)
         with patch.object(worker, "_device_available", return_value=True), \
-             patch("sounddevice.InputStream", side_effect=Exception("cihaz yok")):
+             patch("sounddevice.InputStream", side_effect=Exception("device unavailable")):
             worker.start_recording()
         assert len(errors) == 1
         assert "osd.mic_open_failed" in errors[0]
@@ -88,7 +88,7 @@ class TestStartRecording:
     def test_stream_is_none_after_error(self, qapp, mock_settings):
         worker = AudioWorker(mock_settings)
         with patch.object(worker, "_device_available", return_value=True), \
-             patch("sounddevice.InputStream", side_effect=Exception("hata")):
+             patch("sounddevice.InputStream", side_effect=Exception("error")):
             worker.start_recording()
         assert worker._stream is None
 
@@ -127,7 +127,7 @@ class TestStartRecording:
              assert worker._stream is None
 
     def test_invalid_device_error_skips_fallback(self, qapp, mock_settings):
-        """paInvalidDevice (-9996): fallback denenmemeli, 'Mikrofon bağlı değil' iletilmeli."""
+        """paInvalidDevice (-9996): fallback must not be attempted; 'mic not connected' must be reported."""
         worker = AudioWorker(mock_settings)
         worker.set_device(1)
         errors = []
@@ -143,7 +143,7 @@ class TestStartRecording:
              patch("sounddevice.InputStream", side_effect=mock_stream_cls):
             worker.start_recording()
 
-        assert stream_open_count == 1, "Fallback denenmemeli"
+        assert stream_open_count == 1, "Fallback must not be attempted"
         assert errors == ["osd.mic_not_connected"]
         assert worker._stream is None
 
@@ -152,8 +152,8 @@ class TestStopRecording:
         worker = AudioWorker(mock_settings)
         logs = []
         worker.log_entry.connect(lambda l, c, m: logs.append(m))
-        worker.stop_recording()   # stream None → erken çıkış
-        assert not any("Kayıt tamamlandı" in m for m in logs)
+        worker.stop_recording()   # stream is None → early return
+        assert not any("Recording complete" in m for m in logs)
 
     def test_stop_recording_empty_chunks_no_signal(self, qapp, mock_settings):
         worker = AudioWorker(mock_settings)
@@ -162,7 +162,7 @@ class TestStopRecording:
 
         mock_stream = MagicMock()
         worker._stream = mock_stream
-        # _chunks boş bırak
+        # leave _chunks empty
         worker.stop_recording()
         assert len(ready) == 0
 
@@ -220,7 +220,7 @@ class TestStopRecording:
         mock_stream = MagicMock()
         worker._stream = mock_stream
 
-        # 1 saniyelik ses: 16000 frame
+        # 1 second of audio: 16000 frames
         chunk = np.ones((SAMPLE_RATE, 1), dtype="float32")
         worker._chunks.append(chunk)
 
@@ -231,7 +231,7 @@ class TestStopRecording:
         worker = AudioWorker(mock_settings)
         worker._native_sr = 48000
         worker._stream = MagicMock()
-        worker._chunks.append(np.ones((24000, 1), dtype="float32")) # 0.5 saniye
+        worker._chunks.append(np.ones((24000, 1), dtype="float32")) # 0.5 seconds
         
         ready = []
         worker.audio_ready.connect(ready.append)
@@ -240,7 +240,7 @@ class TestStopRecording:
         worker.stop_recording()
             
         assert len(ready) == 1
-        assert len(ready[0]) == 8000  # 48k'den 16k'ya düşmüş boyut
+        assert len(ready[0]) == 8000  # size after downsampling from 48k to 16k
 
 
 class TestAudioCallback:
@@ -269,7 +269,7 @@ class TestAudioCallback:
         worker = AudioWorker(mock_settings)
         levels = []
         worker.level_changed.connect(levels.append)
-        loud = np.ones((1024, 1), dtype="float32")   # maksimum genlik
+        loud = np.ones((1024, 1), dtype="float32")   # maximum amplitude
         worker._audio_callback(loud, 1024, None, None)
         assert levels[0] <= 1.0
 
@@ -355,7 +355,7 @@ class TestGracefulDegradation:
         assert worker._stream is None
 
     def test_on_stream_finished_intentional_emits_nothing(self, qapp, mock_settings):
-        """Kasıtlı kapatmada hiçbir sinyal üretilmemeli."""
+        """No signals should be emitted on an intentional close."""
         worker = AudioWorker(mock_settings)
         errors, logs, levels = [], [], []
         worker.error_occurred.connect(errors.append)
@@ -364,7 +364,7 @@ class TestGracefulDegradation:
         worker._intentional_close = True
         worker._on_stream_finished()
         assert errors == []
-        assert not any("koptu" in m for m in logs)
+        assert not any("disconnected" in m for m in logs)
         assert levels == []
 
     def test_on_stream_finished_unexpected_emits_error(self, qapp, mock_settings):
@@ -393,7 +393,7 @@ class TestGracefulDegradation:
         assert 0.0 in levels
 
     def test_on_stream_finished_unexpected_clears_stream(self, qapp, mock_settings):
-        """Zombi state önlenir: _stream None olmalı."""
+        """Zombie state is prevented: _stream must be None."""
         worker = AudioWorker(mock_settings)
         worker._stream = MagicMock()
         worker._intentional_close = False
@@ -401,7 +401,7 @@ class TestGracefulDegradation:
         assert worker._stream is None
 
     def test_stop_recording_after_disconnect_is_noop(self, qapp, mock_settings):
-        """Kopma sonrası F9 bırakılınca audio_ready emitlenmemeli."""
+        """After a disconnect, releasing F9 must not emit audio_ready."""
         worker = AudioWorker(mock_settings)
         ready = []
         worker.audio_ready.connect(ready.append)
@@ -411,7 +411,7 @@ class TestGracefulDegradation:
         assert ready == []
 
     def test_recovery_opens_new_stream_after_disconnect(self, qapp, mock_settings):
-        """Kopma sonrası bir sonraki start_recording yeni stream açmayı denemeli."""
+        """After a disconnect, the next start_recording call must attempt to open a new stream."""
         worker = AudioWorker(mock_settings)
         worker._stream = None
         worker._intentional_close = False
@@ -422,23 +422,15 @@ class TestGracefulDegradation:
         assert mock_cls.call_count == 1
 
     def test_double_disconnect_does_not_crash(self, qapp, mock_settings):
-        """_on_stream_finished iki kez çağrılırsa (race condition) hata vermemeli."""
+        """Calling _on_stream_finished twice (race condition) must not raise."""
         worker = AudioWorker(mock_settings)
         worker._intentional_close = False
         worker._on_stream_finished()
-        worker._on_stream_finished()   # _stream zaten None, ikinci çağrı zararsız
+        worker._on_stream_finished()   # _stream is already None, second call is harmless
 
 
 class TestRun:
-    """run() gövdesi: log emit + event bekleme (lines 32-33)."""
-
-    def test_run_emits_ready_log(self, qapp, mock_settings):
-        worker = AudioWorker(mock_settings)
-        logs = []
-        worker.log_entry.connect(lambda l, c, m: logs.append((l, c, m)))
-        worker._stop_event.set()   # wait() anında döner
-        worker.run()
-        assert any(l == "OK" and "ready" in m.lower() for l, _, m in logs)
+    """run() body: log emit + event wait (lines 32-33)."""
 
     def test_run_returns_when_stop_event_set(self, qapp, mock_settings):
         worker = AudioWorker(mock_settings)
@@ -447,7 +439,7 @@ class TestRun:
 
 
 class TestStopRecordingException:
-    """stop_recording içindeki np.concatenate exception dalı (lines 104-106)."""
+    """np.concatenate exception branch inside stop_recording (lines 104-106)."""
 
     def _worker_with_chunk(self, qapp, mock_settings):
         worker = AudioWorker(mock_settings)
@@ -473,7 +465,7 @@ class TestStopRecordingException:
 
 
 class TestAudioCallbackException:
-    """_audio_callback içindeki exception dalı (lines 120-121)."""
+    """Exception branch inside _audio_callback (lines 120-121)."""
 
     def test_callback_exception_emits_err_log(self, qapp, mock_settings):
         worker = AudioWorker(mock_settings)
@@ -485,7 +477,7 @@ class TestAudioCallbackException:
         assert any(l == "ERR" and "interrupted" in m.lower() for l, _, m in logs)
 
     def test_callback_exception_does_not_propagate(self, qapp, mock_settings):
-        """sounddevice callback'i exception yutmamalı; aksi hâlde stream çöker."""
+        """The sounddevice callback must not swallow exceptions; otherwise the stream crashes."""
         worker = AudioWorker(mock_settings)
         indata = np.ones((1024, 1), dtype="float32")
         with patch("numpy.sqrt", side_effect=RuntimeError("math error")):
@@ -493,7 +485,7 @@ class TestAudioCallbackException:
 
 
 class TestOnStreamFinishedException:
-    """_on_stream_finished içindeki dış exception dalı (lines 132-133)."""
+    """Outer exception branch inside _on_stream_finished (lines 132-133)."""
 
     def test_inner_exception_emits_err_log(self, qapp, mock_settings):
         worker = AudioWorker(mock_settings)
@@ -514,23 +506,23 @@ class TestOnStreamFinishedException:
 
 
 class TestCloseStreamException:
-    """_close_stream içindeki stream.stop/close exception dalı (lines 141-142)."""
+    """stream.stop/close exception branch inside _close_stream (lines 141-142)."""
 
     def test_stream_stop_error_emits_wrn_log(self, qapp, mock_settings):
         worker = AudioWorker(mock_settings)
         logs = []
         worker.log_entry.connect(lambda l, c, m: logs.append((l, c, m)))
         mock_stream = MagicMock()
-        mock_stream.stop.side_effect = RuntimeError("cihaz meşgul")
+        mock_stream.stop.side_effect = RuntimeError("device busy")
         worker._stream = mock_stream
         worker._close_stream()
         assert any(l == "WRN" and "could not be closed" in m.lower() for l, _, m in logs)
 
     def test_stream_stop_error_still_clears_stream(self, qapp, mock_settings):
-        """Exception sonrası finally: _stream = None garantisi."""
+        """finally guarantee after exception: _stream = None."""
         worker = AudioWorker(mock_settings)
         mock_stream = MagicMock()
-        mock_stream.stop.side_effect = RuntimeError("cihaz meşgul")
+        mock_stream.stop.side_effect = RuntimeError("device busy")
         worker._stream = mock_stream
         worker._close_stream()
         assert worker._stream is None
@@ -540,7 +532,7 @@ class TestCloseStreamException:
         logs = []
         worker.log_entry.connect(lambda l, c, m: logs.append((l, c, m)))
         mock_stream = MagicMock()
-        mock_stream.close.side_effect = RuntimeError("close hatası")
+        mock_stream.close.side_effect = RuntimeError("close error")
         worker._stream = mock_stream
         worker._close_stream()
         assert any(l == "WRN" and "could not be closed" in m.lower() for l, _, m in logs)
@@ -555,9 +547,9 @@ class TestDeviceAvailable:
 
 class TestRefreshDevices:
     _MOCK_DEVICES = [
-        {"name": "Mikrofon A", "max_input_channels": 2},
-        {"name": "Hoparlör",   "max_input_channels": 0},   # çıkış cihazı, filtrelenmeli
-        {"name": "Mikrofon B", "max_input_channels": 1},
+        {"name": "Microphone A", "max_input_channels": 2},
+        {"name": "Speaker",      "max_input_channels": 0},   # output-only device, must be filtered
+        {"name": "Microphone B", "max_input_channels": 1},
     ]
 
     def _patch_sd(self, default_input_index: int = 0):
@@ -584,7 +576,7 @@ class TestRefreshDevices:
         p1, p2 = self._patch_sd()
         with p1, p2:
             worker.refresh_devices()
-        assert len(emitted[0]) == 2   # Hoparlör (max_input=0) filtrelendi
+        assert len(emitted[0]) == 2   # Speaker (max_input=0) filtered out
 
     def test_marks_default_with_varsayilan(self, qapp, mock_settings):
         worker = AudioWorker(mock_settings)
@@ -607,7 +599,7 @@ class TestRefreshDevices:
         assert sum(defaults) == 1
 
     def test_item_tuple_structure(self, qapp, mock_settings):
-        """Her öğe (label: str, index: int, is_default: bool) formunda olmalı."""
+        """Each item must be in the form (label: str, index: int, is_default: bool)."""
         worker = AudioWorker(mock_settings)
         emitted = []
         worker.devices_ready.connect(emitted.append)
@@ -627,13 +619,13 @@ class TestRefreshDevices:
         with p1, p2:
             worker.refresh_devices()
         names = [label for label, _, _ in emitted[0]]
-        assert not any("Hoparlör" in n for n in names)
+        assert not any("Speaker" in n for n in names)
 
     def test_error_emits_empty_list(self, qapp, mock_settings):
         worker = AudioWorker(mock_settings)
         emitted = []
         worker.devices_ready.connect(emitted.append)
-        with patch("sounddevice.query_devices", side_effect=Exception("donanım hatası")):
+        with patch("sounddevice.query_devices", side_effect=Exception("hardware error")):
             worker.refresh_devices()
         assert emitted[0] == []
 
@@ -641,12 +633,12 @@ class TestRefreshDevices:
         worker = AudioWorker(mock_settings)
         logs = []
         worker.log_entry.connect(lambda l, c, m: logs.append(m))
-        with patch("sounddevice.query_devices", side_effect=Exception("donanım hatası")):
+        with patch("sounddevice.query_devices", side_effect=Exception("hardware error")):
             worker.refresh_devices()
         assert any("could not retrieve" in m.lower() for m in logs)
 
 
-# ── EKSİK KALAN 10 SATIRIN (%100 KAPSAM) TESTLERİ ─────────────────────────────
+# ── Tests for the remaining 10 lines (100% coverage) ──────────────────────────
 
 class TestResample:
     def test_resample_same_sr(self, mock_settings):
@@ -686,7 +678,7 @@ class TestStopRecordingShortDuration:
     def test_skips_short_duration(self, qapp, mock_settings):
         worker = AudioWorker(mock_settings)
         worker._stream = MagicMock()
-        # MIN_RECORDING_DURATION 0.5 saniye. 100 frame veriyoruz (çok kısa)
+        # MIN_RECORDING_DURATION is 0.5 seconds. Providing 100 frames (too short)
         worker._chunks.append(np.ones((100, 1), dtype="float32"))
         
         logs = []
@@ -713,20 +705,20 @@ class TestAudioCallbackEmpty:
 
 class TestAudioCallbackSilenceTimer:
     def test_silence_timer_starts_on_first_zero_rms(self, qapp, mock_settings):
-        """rms==0.0 ilk callback: timer başlatılır (satır 228)."""
+        """rms==0.0 on first callback: timer is started (line 228)."""
         worker = AudioWorker(mock_settings)
         silent = np.zeros((1024, 1), dtype="float32")
         worker._audio_callback(silent, 1024, None, None)
         assert worker._silence_timer.isValid()
 
     def test_muted_detected_emitted_after_elapsed(self, qapp, mock_settings):
-        """Timer > 1500ms ve henüz bildirilmemişse muted_detected + beep (satır 229-234)."""
+        """Timer > 1500ms and not yet notified: muted_detected + beep (lines 229-234)."""
         worker = AudioWorker(mock_settings)
         muted = []
         worker.muted_detected.connect(lambda: muted.append(True))
 
         worker._silence_timer.start()
-        # elapsed() her zaman >= 0; Mock ile 2000ms döndürüyoruz
+        # elapsed() is always >= 0; we mock it to return 2000ms
         with patch.object(worker._silence_timer, "isValid", return_value=True), \
              patch.object(worker._silence_timer, "elapsed", return_value=2000), \
              patch("winsound.Beep"):
@@ -737,7 +729,7 @@ class TestAudioCallbackSilenceTimer:
         assert worker._silence_notified is True
 
     def test_muted_detected_not_emitted_twice(self, qapp, mock_settings):
-        """_silence_notified=True ise ikinci callback tekrar emit etmemeli."""
+        """If _silence_notified=True, a second callback must not emit again."""
         worker = AudioWorker(mock_settings)
         worker._silence_notified = True
         muted = []

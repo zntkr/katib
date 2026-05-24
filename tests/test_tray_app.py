@@ -1,7 +1,7 @@
 """
-Qt UI bileşen testleri.
-_qt_key_to_keyboard, DashboardWindow, log limiti vb.
-QApplication fixture (conftest.py) gerektirir.
+Qt UI component tests.
+_qt_key_to_keyboard, DashboardWindow, log limit, etc.
+Requires the QApplication fixture (conftest.py).
 """
 import pytest
 from unittest.mock import patch, MagicMock
@@ -18,7 +18,7 @@ def _make_icon():
 
 
 class TestQtKeyToKeyboard:
-    """qt_key_to_keyboard() saf dönüşüm fonksiyonu testleri."""
+    """Tests for the qt_key_to_keyboard() pure conversion function."""
 
     @pytest.fixture(autouse=True)
     def _import(self, qapp):
@@ -80,7 +80,7 @@ class TestQtKeyToKeyboard:
         assert self.fn(9999) is None
 
 
-# ── ortak fixture ─────────────────────────────────────────────────────────────
+# ── shared fixture ────────────────────────────────────────────────────────────
 
 @pytest.fixture
 def dashboard(qapp, mock_settings):
@@ -94,33 +94,33 @@ def dashboard(qapp, mock_settings):
 
 class TestDashboardLog:
     def test_append_log_adds_entry(self, dashboard):
-        dashboard.append_log_entry("...", "APP","test mesajı")
-        assert "test mesajı" in dashboard.log_box.toPlainText()
+        dashboard.append_log_entry("...", "APP","test message")
+        assert "test message" in dashboard.log_box.toPlainText()
 
     def test_append_log_adds_timestamp(self, dashboard):
-        dashboard.append_log_entry("...", "APP","zaman damgası testi")
+        dashboard.append_log_entry("...", "APP","timestamp test")
         content = dashboard.log_box.toPlainText()
         assert "[" in content and "]" in content
 
     def test_append_log_100_line_limit(self, dashboard):
         for i in range(150):
-            dashboard.append_log_entry("...", "APP",f"satır {i}")
+            dashboard.append_log_entry("...", "APP",f"line {i}")
         assert dashboard.log_box.document().blockCount() <= 101
 
     def test_append_multiple_logs(self, dashboard):
-        dashboard.append_log_entry("...", "APP","birinci")
-        dashboard.append_log_entry("...", "APP","ikinci")
+        dashboard.append_log_entry("...", "APP","first")
+        dashboard.append_log_entry("...", "APP","second")
         content = dashboard.log_box.toPlainText()
-        assert "birinci" in content
-        assert "ikinci" in content
+        assert "first" in content
+        assert "second" in content
 
     def test_log_colors_update_after_theme_change(self, dashboard):
         from ui.theme import theme_manager, DARK_PALETTE
         ALT_PALETTE = {**DARK_PALETTE, "CLR_OK": "#aabbcc"}
         theme_manager.palette = DARK_PALETTE
         dashboard._update_log_stylesheet()
-        dashboard.append_log_entry("OK", "APP", "mesaj")
-        # Alternatif palete geç, log yeniden render edilmeli
+        dashboard.append_log_entry("OK", "APP", "message")
+        # Switch to the alternate palette; the log should be re-rendered
         theme_manager.palette = ALT_PALETTE
         dashboard._update_log_stylesheet()
         log_html = dashboard.log_box.toHtml()
@@ -128,13 +128,13 @@ class TestDashboardLog:
         assert DARK_PALETTE["CLR_OK"] not in log_html
 
     def test_log_entries_survive_theme_change(self, dashboard):
-        dashboard.append_log_entry("OK", "APP", "kayıt sonrası mesaj")
+        dashboard.append_log_entry("OK", "APP", "message after log")
         dashboard._update_log_stylesheet()
-        assert "kayıt sonrası mesaj" in dashboard.log_box.toPlainText()
+        assert "message after log" in dashboard.log_box.toPlainText()
 
     def test_log_entries_list_capped_at_100(self, dashboard):
         for i in range(150):
-            dashboard.append_log_entry("...", "APP", f"satır {i}")
+            dashboard.append_log_entry("...", "APP", f"line {i}")
         assert len(dashboard._log_entries) <= 100
 
 
@@ -147,7 +147,7 @@ class TestDashboardStatus:
 
     def test_set_status_color(self, dashboard):
         from ui.theme import theme_manager
-        dashboard.set_status("Hata", "ERR")
+        dashboard.set_status("Error", "ERR")
         assert theme_manager.palette["CLR_TEXT_STATUS"] in dashboard.status_label.text()
 
     def test_default_status_is_waiting(self, dashboard):
@@ -197,28 +197,28 @@ class TestDashboardLevel:
 
 class TestPopulateDevices:
     def test_populate_fills_combo(self, dashboard):
-        dashboard.populate_devices([("Mikrofon A", 0, False), ("★ Mikrofon B", 2, True)])
+        dashboard.populate_devices([("Microphone A", 0, False), ("★ Microphone B", 2, True)])
         assert dashboard.mic_combo.count() == 2
 
     def test_populate_stores_device_index(self, dashboard):
-        dashboard.populate_devices([("★ Mikrofon A", 3, True)])
+        dashboard.populate_devices([("★ Microphone A", 3, True)])
         assert dashboard.mic_combo.itemData(0) == 3
 
     def test_populate_selects_default(self, dashboard):
         dashboard.settings.set("mic_index", None)
-        dashboard.populate_devices([("Mikrofon A", 0, False), ("★ Mikrofon B", 2, True)])
+        dashboard.populate_devices([("Microphone A", 0, False), ("★ Microphone B", 2, True)])
         assert dashboard.mic_combo.currentData() == 2
 
     def test_populate_empty_list_clears_combo(self, dashboard):
-        dashboard.populate_devices([("Eski", 0, False)])
+        dashboard.populate_devices([("Old", 0, False)])
         dashboard.populate_devices([])
         assert dashboard.mic_combo.count() == 0
 
     def test_populate_clears_previous_items(self, dashboard):
-        dashboard.populate_devices([("Eski", 0, False)])
-        dashboard.populate_devices([("Yeni A", 1, True), ("Yeni B", 2, False)])
+        dashboard.populate_devices([("Old", 0, False)])
+        dashboard.populate_devices([("New A", 1, True), ("New B", 2, False)])
         assert dashboard.mic_combo.count() == 2
-        assert dashboard.mic_combo.itemText(0) == "Yeni A"
+        assert dashboard.mic_combo.itemText(0) == "New A"
 
     def test_refresh_button_emits_signal(self, dashboard):
         received = []
@@ -227,14 +227,14 @@ class TestPopulateDevices:
         assert len(received) == 1
 
     def test_populate_emits_device_changed_for_selected(self, dashboard):
-        """Combo dolduğunda seçili cihaz device_changed ile iletilmeli."""
+        """When the combo is populated, the selected device should be signalled via device_changed."""
         changed = []
         dashboard.device_changed.connect(changed.append)
-        dashboard.populate_devices([("★ Mikrofon", 42, True)])
+        dashboard.populate_devices([("★ Microphone", 42, True)])
         assert changed == [42]
 
     def test_populate_no_items_does_not_emit_device_changed(self, dashboard):
-        """Boş liste gelince device_changed çıkmamalı."""
+        """When an empty list is received, device_changed should not be emitted."""
         changed = []
         dashboard.device_changed.connect(changed.append)
         dashboard.populate_devices([])
@@ -277,7 +277,7 @@ class TestTrayApp:
             tray._on_tray_activated(QSystemTrayIcon.ActivationReason.DoubleClick)
             mock_show.assert_called_once()
             tray._on_tray_activated(QSystemTrayIcon.ActivationReason.Trigger)
-            mock_show.assert_called_once()  # Sadece çift tıklamada tetiklenmeli
+            mock_show.assert_called_once()  # Should only trigger on double-click
         tray.tray.hide()
         tray.dashboard.close()
 
@@ -299,7 +299,7 @@ class TestTrayApp:
         tray.dashboard.close()
 
     def test_on_hotkey_pressed_model_not_ready_blocks_recording(self, qapp, mock_settings):
-        """Model hazır değilse kayıt başlamamalı."""
+        """Recording should not start if the model is not ready."""
         from ui.tray_app import TrayApp
         tray = TrayApp(mock_settings)
         tray.audio_worker = MagicMock()
@@ -311,7 +311,7 @@ class TestTrayApp:
         tray.dashboard.close()
 
     def test_on_hotkey_pressed_model_not_ready_shows_osd_error(self, qapp, mock_settings):
-        """Model hazır değilse OSD hata durumuna geçmeli."""
+        """If the model is not ready, the OSD should switch to an error state."""
         from ui.tray_app import TrayApp
         tray = TrayApp(mock_settings)
         tray.transcription_worker = MagicMock()
@@ -323,7 +323,7 @@ class TestTrayApp:
         tray.dashboard.close()
 
     def test_on_hotkey_pressed_model_not_ready_does_not_set_recording_state(self, qapp, mock_settings):
-        """Model hazır değilse dashboard 'Dinliyor' göstermemeli."""
+        """If the model is not ready, the dashboard should not show the 'Listening' state."""
         from ui.tray_app import TrayApp
         tray = TrayApp(mock_settings)
         tray.transcription_worker = MagicMock()
@@ -368,12 +368,12 @@ class TestDashboardKeyPress:
 class TestDashboardLoadingIndicator:
     def test_set_loading_indicator_true_shows_spinner(self, dashboard):
         dashboard.set_loading_indicator(True)
-        assert dashboard.level_bar.maximum() == 0  # Sonsuz (Indeterminate) mod
+        assert dashboard.level_bar.maximum() == 0  # Indeterminate mode
 
     def test_set_loading_indicator_false_hides_spinner(self, dashboard):
         dashboard.set_loading_indicator(True)
         dashboard.set_loading_indicator(False)
-        assert dashboard.level_bar.maximum() == 100 # Normal mod
+        assert dashboard.level_bar.maximum() == 100 # Normal mode
 
 
 

@@ -12,13 +12,13 @@ from core.settings import SettingsManager
 @pytest.fixture
 def mock_settings(tmp_path):
     """
-    Tüm testlerde kullanılacak, diske yazmayan bellek içi SettingsManager.
-    Ayrıca get_settings_path'i tmp_path'e yönlendirerek güvenliği garantiye alır.
+    In-memory SettingsManager that does not write to disk, used across all tests.
+    Also redirects get_settings_path to tmp_path to guarantee isolation.
     """
     path = tmp_path / "settings.json"
     with patch("core.settings.get_settings_path", return_value=path):
         sm = SettingsManager(in_memory=True)
-        # Sık kullanılan varsayılan ayarları dolduralım (eski testlerin beklediği durumlar)
+        # Populate frequently used default settings (expected by legacy tests)
         sm.set("hotkey", "f9")
         sm.set("language", "auto")
         sm.set("compute_type", "int8")
@@ -39,48 +39,48 @@ def qapp():
 
 @pytest.fixture(autouse=True)
 def _init_i18n():
-    """Tüm testler için varsayılan dili İngilizce olarak ayarlar."""
+    """Sets the default language to English for all tests."""
     from core.i18n import set_language
     set_language("en")
 
 
 @pytest.fixture(autouse=True)
 def _stub_qt_os_hooks():
-    """QMediaDevices Windows IMMDeviceEnumerator hook'unu devre dışı bırakır.
-    Aksi takdirde test bitiminde COM thread process'i bloke eder."""
+    """Disables the QMediaDevices Windows IMMDeviceEnumerator hook.
+    Otherwise the COM thread blocks the process at test teardown."""
     with patch("PySide6.QtMultimedia.QMediaDevices", MagicMock):
         yield
 
 
 @pytest.fixture(autouse=True)
 def _flush_qt_deletelater(qapp):
-    """Her testten sonra deleteLater() kuyruğunu boşaltır.
-    Birikmiş QWidget nesneleri çoklu test dosyalarında hang'e yol açar."""
+    """Flushes the deleteLater() queue after each test.
+    Accumulated QWidget objects can cause hangs across multiple test files."""
     yield
     from PySide6.QtWidgets import QApplication
     QApplication.processEvents()
 
 @pytest.fixture(autouse=True)
 def _cleanup_qthreads():
-    """Her testten sonra bellekte asılı kalan QThread/Worker nesnelerini bulup güvenlice kapatır.
-    Segmentation Fault ve Test Hang (donma) risklerini tamamen ortadan kaldırır."""
+    """Finds and safely shuts down any QThread/Worker objects lingering in memory after each test.
+    Completely eliminates the risk of Segmentation Faults and test hangs."""
     yield
     from PySide6.QtCore import QThread
-    
-    # Bellekteki (Garbage Collector) tüm objeleri tara
+
+    # Scan all objects tracked by the garbage collector
     for obj in gc.get_objects():
         try:
             if isinstance(obj, QThread) and obj.isRunning():
-                logging.warning(f"TEARDOWN UYARISI: Açık unutulan QThread yakalandı ve kapatılıyor -> {obj}")
-                
-                # Eğer Worker kendi özel stop metoduna sahipse (örn. AudioWorker) onu kullan
+                logging.warning(f"TEARDOWN WARNING: Leaked running QThread detected and closing -> {obj}")
+
+                # If the Worker has its own stop method (e.g. AudioWorker), use it
                 if hasattr(obj, "stop"):
                     stop_method = getattr(obj, "stop")
                     if callable(stop_method):
                         stop_method()
-                    
+
                 obj.quit()
-                obj.wait(1000) # 1 saniye bekle, kilitlenirse zorla bırak
+                obj.wait(1000) # wait 1 second; force-release if deadlocked
         except (ReferenceError, RuntimeError):
-            # C++ objesi zaten silinmişse hatayı yoksay
+            # Ignore errors if the C++ object has already been deleted
             pass

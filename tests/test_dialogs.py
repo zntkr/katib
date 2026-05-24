@@ -1,5 +1,5 @@
 """
-HelpWindow ve SettingsDialog testleri.
+HelpWindow and SettingsDialog tests.
 """
 import pytest
 from unittest.mock import patch
@@ -53,24 +53,24 @@ class TestSettingsDialog:
         expected_dir = os.path.join(os.environ.get(
             "LOCALAPPDATA", os.path.expanduser("~")), "Katib", "Logs")
 
-        # Klasör var simülasyonu yap ve os.startfile çağrısını yakala
+        # Simulate folder exists and capture os.startfile call
         with patch("os.path.exists", return_value=True), \
              patch("os.startfile", create=True) as mock_startfile:
             dialog._open_log_folder()
 
-        # Windows gezgini doğru yolla çağrılmış mı?
+        # Was Windows Explorer called with the correct path?
         mock_startfile.assert_called_once_with(expected_dir)
 
     def test_open_log_folder_missing_emits_warning(self, dialog):
         logs = []
         dialog.log_entry.connect(lambda l, c, m: logs.append((l, c, m)))
 
-        # Klasör yok simülasyonu yap
+        # Simulate folder not found
         with patch("os.path.exists", return_value=False), \
              patch("os.startfile", create=True) as mock_startfile:
             dialog._open_log_folder()
 
-        # Gezgin açılmamalı ve arayüze log düşmeli
+        # Explorer must not be opened and a log must appear in the UI
         mock_startfile.assert_not_called()
         assert len(logs) == 1
         assert logs[0][0] == "WRN"
@@ -171,11 +171,11 @@ class TestSettingsDialog:
             assert dialog.settings.get("model_dir") == "/valid/path"
 
     def test_on_startup_toggled_error(self, dialog):
-        with patch("core.startup.set_startup_enabled", side_effect=Exception("Hata")):
+        with patch("core.startup.set_startup_enabled", side_effect=Exception("Error")):
             dialog._on_startup_toggled(True)
 
     def test_refresh_values_startup_error(self, dialog):
-        with patch("core.startup.get_startup_enabled", side_effect=Exception("Hata")):
+        with patch("core.startup.get_startup_enabled", side_effect=Exception("Error")):
             dialog._refresh_values()
 
     def test_keypress_event_escape(self, dialog):

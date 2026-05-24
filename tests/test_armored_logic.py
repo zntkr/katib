@@ -17,52 +17,52 @@ class MockSettings:
         return self.data.get(key, default)
 
 def test_audio_worker_mute_timing_accuracy():
-    """Mute sinyalinin 1.5 sn'den önce fırlatılmadığını, sonrasında fırlatıldığını doğrular."""
+    """Verifies that the mute signal is not emitted before 1.5 s but is emitted after."""
     settings = MockSettings()
     worker = AudioWorker(settings)
     spy = QSignalSpy(worker.muted_detected)
     silent_data = np.zeros(1024, dtype=np.float32)
-    
+
     with patch("winsound.Beep"):
-        # İlk çağrı: Timer başlar
+        # First call: timer starts
         worker._audio_callback(silent_data, 1024, None, 0)
-        
+
         with patch.object(worker._silence_timer, "elapsed", return_value=1000):
             worker._audio_callback(silent_data, 1024, None, 0)
-        assert spy.count() == 0, "Mute sinyali 1.5 sn dolmadan fırlatıldı!"
+        assert spy.count() == 0, "Mute signal emitted before 1.5 s elapsed!"
 
         with patch.object(worker._silence_timer, "elapsed", return_value=1600):
             worker._audio_callback(silent_data, 1024, None, 0)
-        assert spy.count() >= 1, "Mute sinyali 1.5 sn geçmesine rağmen fırlatılmadı!"
+        assert spy.count() >= 1, "Mute signal not emitted even after 1.5 s!"
 
 def test_audio_worker_whisper_tolerance():
-    """Çok düşük sinyal (fısıltı/gürültü) varken alarm verilmediğini doğrular."""
+    """Verifies that no alarm is raised when signal is very low (whisper/noise)."""
     settings = MockSettings()
     worker = AudioWorker(settings)
     spy = QSignalSpy(worker.muted_detected)
-    
-    # Mutlak sıfır değil, ama çok düşük bir gürültü (1e-5)
+
+    # Not absolute zero, but very low noise (1e-5)
     noise_data = np.ones(1024, dtype=np.float32) * 0.00001
-    
-    # Gürültü timer'ı hiç başlatmamalı, döngüye gerek yok
+
+    # Noise must not start the timer; no loop needed
     worker._audio_callback(noise_data, 1024, None, 0)
     worker._audio_callback(noise_data, 1024, None, 0)
-    
-    assert spy.count() == 0, "Düşük sinyal (fısıltı) varken Mute alarmı verildi!"
+
+    assert spy.count() == 0, "Mute alarm raised while low signal (whisper) was present!"
 
 def test_audio_worker_recovery_from_silence():
-    """Ses gelmeye başladığında sessizlik uyarısının sıfırlandığını doğrular."""
+    """Verifies that the silence warning is reset when audio resumes."""
     settings = MockSettings()
     worker = AudioWorker(settings)
-    
-    # Önce sessizlik
+
+    # First: silence
     silent_data = np.zeros(1024, dtype=np.float32)
     worker._audio_callback(silent_data, 1024, None, 0)
     assert worker._silence_timer.isValid() is True
-    
-    # Sonra ses (Yüksek RMS)
+
+    # Then: audio (high RMS)
     loud_data = np.ones(1024, dtype=np.float32) * 0.5
     worker._audio_callback(loud_data, 1024, None, 0)
-    
+
     assert worker._silence_notified is False
     assert worker._silence_timer.isValid() is False

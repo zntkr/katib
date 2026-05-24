@@ -35,28 +35,28 @@ class TestNoScrollComboBox:
 
 class TestSettingGroup:
     def test_title_label_is_uppercased(self, qapp):
-        """title_label metni her zaman büyük harfe çevrilmeli."""
+        """title_label text must always be converted to upper case."""
         group = SettingGroup("ses ayarlari")
         assert group.title_label.text() == "SES AYARLARI"
 
     def test_add_widget_row_inline(self, qapp):
-        """full_width=False: widget QHBoxLayout içine yerleştirilmeli."""
+        """full_width=False: widget must be placed inside a QHBoxLayout."""
         group = SettingGroup("test")
         widget = QLabel("w")
-        group.add_widget_row("Etiket", widget, full_width=False)
-        # group_layout içindeki son eleman bir QHBoxLayout olmalı
+        group.add_widget_row("Label", widget, full_width=False)
+        # The last item in group_layout must be a QHBoxLayout
         count = group.group_layout.count()
         last_item = group.group_layout.itemAt(count - 1)
         assert last_item is not None
         assert isinstance(last_item.layout(), QHBoxLayout)
 
     def test_add_widget_row_full_width(self, qapp):
-        """full_width=True: label ve widget doğrudan group_layout'a eklenmeli."""
+        """full_width=True: label and widget must be added directly to group_layout."""
         group = SettingGroup("test")
         widget = QLabel("w")
         before = group.group_layout.count()
-        group.add_widget_row("Etiket", widget, full_width=True)
-        # İki widget (label + widget) eklendiğinden count 2 artmalı
+        group.add_widget_row("Label", widget, full_width=True)
+        # count must increase by 2 because two widgets (label + widget) are added
         assert group.group_layout.count() == before + 2
 
 

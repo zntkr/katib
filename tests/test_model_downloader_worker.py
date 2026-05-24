@@ -1,7 +1,7 @@
 """
-ModelDownloaderWorker testleri.
-huggingface_hub.snapshot_download mock'lanır; internet bağlantısı gerekmez.
-Atomik rename ve rollback davranışları gerçek geçici dizinlerle test edilir.
+ModelDownloaderWorker tests.
+huggingface_hub.snapshot_download is mocked; no internet connection required.
+Atomic rename and rollback behaviour is tested with real temporary directories.
 """
 from pathlib import Path
 from unittest.mock import patch
@@ -20,21 +20,21 @@ sys.modules['huggingface_hub'] = MagicMock()
 
 
 def _fake_download(repo_id, local_dir, **_):
-    """snapshot_download yerine: temp klasörü oluşturur, sahte model dosyası bırakır."""
+    """Replacement for snapshot_download: creates the temp folder and leaves a fake model file."""
     Path(local_dir).mkdir(parents=True, exist_ok=True)
     (Path(local_dir) / "config.json").write_text("{}")
 
 
 @pytest.fixture(autouse=True)
 def mock_disk_space():
-    """Diğer testlerin yetersiz disk alanından dolayı başarısız olmaması için 10 GB boş alan taklidi yapar."""
+    """Simulates 10 GB of free disk space so other tests do not fail due to insufficient space."""
     mock_usage = MagicMock()
     mock_usage.free = 10 * 1024**3  # 10 GB
     with patch("workers.model_downloader_worker.shutil.disk_usage", return_value=mock_usage):
         yield
 
 
-# ──────────────────────────────────────────── başlangıç durumu ──────────────
+# ──────────────────────────────────────────── initial state ──────────────────
 
 class TestInitialState:
     def test_target_parent_is_default(self, qapp, mock_settings):
@@ -54,8 +54,8 @@ class TestInitialState:
 class TestStop:
     def test_stop_does_nothing(self, qapp, mock_settings):
         worker = ModelDownloaderWorker(mock_settings)
-        # Herhangi bir hata veya çöküş fırlatmamalıdır
-        worker.stop()  
+        # Must not raise any error or crash
+        worker.stop()
 
 
 # ──────────────────────────────────────────── start_download ────────────────
@@ -95,10 +95,10 @@ class TestStartDownload:
         mock_start.assert_not_called()
 
 
-# ──────────────────────────────────────────── başarılı indirme ──────────────
+# ──────────────────────────────────────────── successful download ────────────
 
 class TestRunSuccess:
-    """snapshot_download mock'lanır; run() doğrudan çağrılır (thread başlatılmaz)."""
+    """snapshot_download is mocked; run() is called directly (no thread is started)."""
 
     def _run(self, tmp_path, mock_settings):
         worker = ModelDownloaderWorker(mock_settings)
@@ -117,7 +117,7 @@ class TestRunSuccess:
 
         return worker, signals
 
-    # --- sinyal sırası ---
+    # --- signal order ---
     def test_download_state_sequence_true_then_false(self, qapp, tmp_path, mock_settings):
         _, s = self._run(tmp_path, mock_settings)
         assert s["state"] == [True, False]
@@ -140,7 +140,7 @@ class TestRunSuccess:
         _, s = self._run(tmp_path, mock_settings)
         assert s["errors"] == []
 
-    # --- download_finished ---
+    # --- download_finished signal ---
     def test_download_finished_emitted_once(self, qapp, tmp_path, mock_settings):
         _, s = self._run(tmp_path, mock_settings)
         assert len(s["finished"]) == 1
@@ -149,7 +149,7 @@ class TestRunSuccess:
         _, s = self._run(tmp_path, mock_settings)
         assert s["finished"][0] == str(tmp_path / FINAL_MODEL_DIR_NAME)
 
-    # --- dosya sistemi ---
+    # --- filesystem ---
     def test_final_dir_exists(self, qapp, tmp_path, mock_settings):
         self._run(tmp_path, mock_settings)
         assert (tmp_path / FINAL_MODEL_DIR_NAME).is_dir()
@@ -171,7 +171,7 @@ class TestRunSuccess:
             worker.run()
         assert deep.is_dir()
 
-    # --- snapshot_download çağrı parametreleri ---
+    # --- snapshot_download call parameters ---
     def test_snapshot_download_receives_temp_dir_path(self, qapp, tmp_path, mock_settings):
         captured = []
         def capturing(repo_id, local_dir, **_):
@@ -201,12 +201,12 @@ class TestRunSuccess:
         assert captured[0] == MODEL_REPO_ID
 
 
-# ───────────────────────────────────── rollback (hata durumu) ───────────────
+# ───────────────────────────────────── rollback (error case) ────────────────
 
 class TestRunFailure:
     def _run_with_error(self, tmp_path, mock_settings, exc=None):
         if exc is None:
-            exc = Exception("bağlantı kesildi")
+            exc = Exception("connection dropped")
         worker = ModelDownloaderWorker(mock_settings)
         worker._target_parent = tmp_path
         worker._repo_id = MODEL_REPO_ID
@@ -223,7 +223,7 @@ class TestRunFailure:
 
         return signals
 
-    # --- sinyal doğruluğu ---
+    # --- signal correctness ---
     def test_emits_error_occurred(self, qapp, tmp_path, mock_settings):
         s = self._run_with_error(tmp_path, mock_settings)
         assert len(s["errors"]) == 1
@@ -250,12 +250,12 @@ class TestRunFailure:
         assert error_statuses
         assert error_statuses[0][1] == "ERR"
 
-    # --- rollback: temp dizin oluşturulmuşsa silinmeli ---
+    # --- rollback: temp directory must be deleted if it was created ---
     def test_rollback_deletes_temp_dir(self, qapp, tmp_path, mock_settings):
         def partial_download(repo_id, local_dir, **_):
             Path(local_dir).mkdir(parents=True, exist_ok=True)
-            (Path(local_dir) / "partial.bin").write_text("yarım")
-            raise Exception("koptu")
+            (Path(local_dir) / "partial.bin").write_text("partial")
+            raise Exception("dropped")
 
         worker = ModelDownloaderWorker(mock_settings)
         worker._target_parent = tmp_path
@@ -268,7 +268,7 @@ class TestRunFailure:
     def test_rollback_logs_cleanup_message(self, qapp, tmp_path, mock_settings):
         def partial_download(repo_id, local_dir, **_):
             Path(local_dir).mkdir(parents=True, exist_ok=True)
-            raise Exception("koptu")
+            raise Exception("dropped")
 
         worker = ModelDownloaderWorker(mock_settings)
         worker._target_parent = tmp_path
@@ -282,31 +282,31 @@ class TestRunFailure:
         assert any("Rollback" in m or "rollback" in m.lower() for m in logs)
 
     def test_rollback_when_temp_missing_does_not_crash(self, qapp, tmp_path, mock_settings):
-        """snapshot_download temp dir oluşturmadan çöküyorsa rollback güvenli olmalı."""
+        """Rollback must be safe when snapshot_download crashes before creating the temp dir."""
         worker = ModelDownloaderWorker(mock_settings)
         worker._target_parent = tmp_path
         worker._repo_id = MODEL_REPO_ID
-        with patch("huggingface_hub.snapshot_download", side_effect=Exception("erken hata")):
-            worker.run()   # temp_dir yok — shutil.rmtree çağrılmamalı, istisna olmamalı
+        with patch("huggingface_hub.snapshot_download", side_effect=Exception("early error")):
+            worker.run()   # temp_dir does not exist — shutil.rmtree must not be called, no exception
 
     def test_final_dir_not_created_after_failure(self, qapp, tmp_path, mock_settings):
         self._run_with_error(tmp_path, mock_settings)
         assert not (tmp_path / FINAL_MODEL_DIR_NAME).exists()
 
-    # --- çeşitli exception türleri ---
+    # --- various exception types ---
     def test_connection_error_handled(self, qapp, tmp_path, mock_settings):
         s = self._run_with_error(tmp_path, mock_settings, exc=ConnectionError("no network"))
         assert len(s["errors"]) == 1
 
     def test_os_error_handled(self, qapp, tmp_path, mock_settings):
-        s = self._run_with_error(tmp_path, mock_settings, exc=OSError("disk dolu"))
+        s = self._run_with_error(tmp_path, mock_settings, exc=OSError("disk full"))
         assert len(s["errors"]) == 1
 
     def test_rollback_rmtree_failure_does_not_crash(self, qapp, tmp_path, mock_settings):
-        """Rollback sırasında shutil.rmtree çökerse uygulama çökmemeli."""
+        """The app must not crash when shutil.rmtree fails during rollback."""
         def partial_download(repo_id, local_dir, **_):
             Path(local_dir).mkdir(parents=True, exist_ok=True)
-            raise Exception("koptu")
+            raise Exception("dropped")
 
         worker = ModelDownloaderWorker(mock_settings)
         worker._target_parent = tmp_path
@@ -316,16 +316,16 @@ class TestRunFailure:
 
         with patch("huggingface_hub.snapshot_download", side_effect=partial_download):
             with patch("workers.model_downloader_worker.shutil.rmtree",
-                       side_effect=PermissionError("kilitli")):
+                       side_effect=PermissionError("locked")):
                 worker.run()
 
         assert len(errors) == 1
 
     def test_rollback_rmtree_failure_emits_warning_log(self, qapp, tmp_path, mock_settings):
-        """rmtree başarısız olursa sessizce yutulmamalı; WRN log düşmeli."""
+        """A failed rmtree must not be swallowed silently; a WRN log must be emitted."""
         def partial_download(repo_id, local_dir, **_):
             Path(local_dir).mkdir(parents=True, exist_ok=True)
-            raise Exception("koptu")
+            raise Exception("dropped")
 
         worker = ModelDownloaderWorker(mock_settings)
         worker._target_parent = tmp_path
@@ -335,17 +335,17 @@ class TestRunFailure:
 
         with patch("huggingface_hub.snapshot_download", side_effect=partial_download):
             with patch("workers.model_downloader_worker.shutil.rmtree",
-                       side_effect=PermissionError("kilitli")):
+                       side_effect=PermissionError("locked")):
                 worker.run()
 
         assert any(lvl == "WRN" and "Temporary files could not be deleted" in m for lvl, m in logs)
 
 
-# ──────────────────────────────── mevcut model değiştirme (replace) ─────────
+# ──────────────────────────────── replacing an existing model ───────────────
 
 class TestRunExistingFinalDir:
     def test_existing_model_replaced_with_new(self, qapp, tmp_path, mock_settings):
-        """Final dizin varsa, yeni model atomik olarak onun yerini almalı."""
+        """If the final directory already exists, the new model must atomically replace it."""
         final_dir = tmp_path / FINAL_MODEL_DIR_NAME
         final_dir.mkdir()
         (final_dir / "old_config.json").write_text("{}")
@@ -356,8 +356,8 @@ class TestRunExistingFinalDir:
         with patch("huggingface_hub.snapshot_download", side_effect=_fake_download):
             worker.run()
 
-        assert (final_dir / "config.json").exists()         # yeni dosya
-        assert not (final_dir / "old_config.json").exists() # eski dosya gitti
+        assert (final_dir / "config.json").exists()         # new file
+        assert not (final_dir / "old_config.json").exists() # old file is gone
 
     def test_old_backup_cleaned_up_after_replace(self, qapp, tmp_path, mock_settings):
         final_dir = tmp_path / FINAL_MODEL_DIR_NAME
@@ -372,7 +372,7 @@ class TestRunExistingFinalDir:
         assert not (tmp_path / f".old_{FINAL_MODEL_DIR_NAME}").exists()
 
     def test_preexisting_stale_backup_cleared(self, qapp, tmp_path, mock_settings):
-        """Önceki çalışmadan kalan backup dizini varsa önce silinmeli."""
+        """If a backup directory left over from a previous run exists, it must be deleted first."""
         final_dir = tmp_path / FINAL_MODEL_DIR_NAME
         final_dir.mkdir()
         stale = tmp_path / f".old_{FINAL_MODEL_DIR_NAME}"
@@ -418,14 +418,14 @@ class TestRunExistingFinalDir:
         assert errors == []
 
 
-# ──────────────────────────────── mevcut temp dizini temizleme ───────────────
+# ──────────────────────────────── cleaning up an existing temp directory ─────
 
 class TestPreexistingTempDir:
     def test_stale_temp_removed_before_download_call(self, qapp, tmp_path, mock_settings):
-        """snapshot_download çağrıldığında eski temp'in dosyaları bulunmamalı."""
+        """When snapshot_download is called, files from the old temp directory must not be present."""
         temp_dir = tmp_path / f".temp_{FINAL_MODEL_DIR_NAME}"
         temp_dir.mkdir()
-        (temp_dir / "stale_file.bin").write_text("eski veri")
+        (temp_dir / "stale_file.bin").write_text("stale data")
 
         captured = {}
         def capturing(repo_id, local_dir, **_):
@@ -471,7 +471,7 @@ class TestPreexistingTempDir:
         assert len(finished) == 1
 
 
-# ──────────────────────────────────────────── sabitler ──────────────────────
+# ──────────────────────────────────────────── constants ─────────────────────
 
 class TestConstants:
     def test_model_repo_id_is_systran_small(self, mock_settings):
@@ -487,16 +487,16 @@ class TestConstants:
         assert DEFAULT_DOWNLOAD_PARENT.is_relative_to(Path.home())
 
 
-# ───────────────────────────────────────── uçuş öncesi disk kontrolü ───────
+# ───────────────────────────────────────── pre-flight disk check ────────────
 
 class TestPreFlightDiskCheck:
     def test_insufficient_space_aborts_early(self, qapp, tmp_path, mock_settings):
         worker = ModelDownloaderWorker(mock_settings)
         worker._target_parent = tmp_path
-        worker._repo_id = "Systran/faster-whisper-small" # 1 GB gerektirir
+        worker._repo_id = "Systran/faster-whisper-small" # requires 1 GB
 
         mock_usage = MagicMock()
-        mock_usage.free = 500 * 1024**2  # Sadece 500 MB boş
+        mock_usage.free = 500 * 1024**2  # only 500 MB free
 
         errors = []
         worker.error_occurred.connect(errors.append)
@@ -505,18 +505,18 @@ class TestPreFlightDiskCheck:
              patch("huggingface_hub.snapshot_download") as mock_download:
             worker.run()
 
-        # İndirme fonksiyonu asla çağrılmamalı ve disk hatası fırlatılmalı
+        # The download function must never be called and a disk error must be emitted
         assert len(errors) == 1
         assert "osd.dl_no_space" in errors[0]
         mock_download.assert_not_called()
 
     @pytest.mark.parametrize("repo_id, free_space, should_pass", [
-        ("Systran/faster-whisper-large-v3", 3 * 1024**3, False),   # 4GB gerekir, 3GB var (HATA)
-        ("Systran/faster-whisper-large-v3", 5 * 1024**3, True),    # 4GB gerekir, 5GB var (BAŞARILI)
-        ("Systran/faster-whisper-medium", 1 * 1024**3, False),     # 2GB gerekir, 1GB var (HATA)
-        ("Systran/faster-whisper-medium", 3 * 1024**3, True),      # 2GB gerekir, 3GB var (BAŞARILI)
-        ("Systran/faster-whisper-tiny", 200 * 1024**2, False),     # 500MB gerekir, 200MB var (HATA)
-        ("Systran/faster-whisper-tiny", 600 * 1024**2, True),      # 500MB gerekir, 600MB var (BAŞARILI)
+        ("Systran/faster-whisper-large-v3", 3 * 1024**3, False),   # requires 4GB, 3GB available (FAIL)
+        ("Systran/faster-whisper-large-v3", 5 * 1024**3, True),    # requires 4GB, 5GB available (PASS)
+        ("Systran/faster-whisper-medium", 1 * 1024**3, False),     # requires 2GB, 1GB available (FAIL)
+        ("Systran/faster-whisper-medium", 3 * 1024**3, True),      # requires 2GB, 3GB available (PASS)
+        ("Systran/faster-whisper-tiny", 200 * 1024**2, False),     # requires 500MB, 200MB available (FAIL)
+        ("Systran/faster-whisper-tiny", 600 * 1024**2, True),      # requires 500MB, 600MB available (PASS)
     ])
     def test_space_requirements_per_model_size(self, qapp, tmp_path, repo_id, free_space, should_pass, mock_settings):
         worker = ModelDownloaderWorker(mock_settings)
@@ -540,7 +540,7 @@ class TestPreFlightDiskCheck:
             assert "osd.dl_no_space" in errors[0]
 
 
-# ───────────────────────────────────────── hata mesajı eşleştirmeleri ──────
+# ───────────────────────────────────────── exception message mappings ───────
 
 class TestExceptionMessageMapping:
     def _run_with_exception(self, tmp_path, mock_settings, exc_message):
@@ -558,7 +558,7 @@ class TestExceptionMessageMapping:
         ("No space left on device", "osd.dl_no_space"),
         ("404 Client Error: Repository Not Found", "osd.dl_model_not_found"),
         ("MaxRetryError: Connection failed", "osd.dl_no_internet"),
-        ("Bilinmeyen rastgele bir hata", "osd.dl_failed"),
+        ("Unknown random error", "osd.dl_failed"),
     ])
     def test_exception_message_translations(self, qapp, tmp_path, exc_text, expected_osd_key, mock_settings):
         msg = self._run_with_exception(tmp_path, mock_settings, exc_text)

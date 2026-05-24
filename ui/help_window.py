@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QFrame, QScrollArea, QSizePolicy,
+    QFrame, QSizePolicy,
 )
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor, QPainter, QPaintEvent, QKeyEvent, QFont
@@ -8,7 +8,7 @@ from PySide6.QtGui import QColor, QPainter, QPaintEvent, QKeyEvent, QFont
 from core.settings import APP_NAME
 from core.i18n import t
 from ui.theme import G_1, G_2, PANEL_WIDTH, FONT_SIZE_SM, theme_manager
-from ui.components import SettingGroup
+from ui.components import SettingGroup, FadeScrollArea
 from ui.utils_win import apply_dark_mode_to_window
 
 
@@ -39,7 +39,7 @@ def _accent_block(lines: list[str]) -> QFrame:
     lay = QVBoxLayout(frame)
     lay.setContentsMargins(G_2, G_1, G_2, G_1)
     lay.setSpacing(4)
-    font = QFont("Consolas", FONT_SIZE_SM)
+    font = QFont("Consolas", int(FONT_SIZE_SM))
     for line in lines:
         lbl = QLabel(line)
         lbl.setFont(font)
@@ -138,7 +138,7 @@ class HelpWindow(QWidget):
         main.setContentsMargins(G_1, G_1, 0, G_1)
         main.setSpacing(G_1)
 
-        scroll = QScrollArea()
+        scroll = FadeScrollArea(inset_left=G_1, inset_right=G_2)
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)

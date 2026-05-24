@@ -4,7 +4,7 @@ from ui.dashboard import DashboardWindow
 
 @pytest.fixture
 def mock_dashboard():
-    """DashboardWindow için izole bir sahte (mock) nesne oluşturur."""
+    """Creates an isolated mock object for DashboardWindow."""
     dashboard = MagicMock(spec=DashboardWindow)
     dashboard.mic_combo = MagicMock()
     dashboard.settings = MagicMock()
@@ -13,7 +13,7 @@ def mock_dashboard():
     return dashboard
 
 def test_device_changed_selects_default(mock_dashboard):
-    """Kullanıcı '(Varsayılan)' etiketli bir cihaz seçtiğinde takibe dönüldüğünü test eder."""
+    """Tests that selecting a device labelled '(Default)' switches back to dynamic tracking."""
     mock_dashboard.mic_combo.itemData.return_value = 1
     mock_dashboard.mic_combo.itemText.return_value = "Logitech Mic (Default)"
 
@@ -27,7 +27,7 @@ def test_device_changed_selects_default(mock_dashboard):
     mock_dashboard.device_changed.emit.assert_called_once_with(1)
 
 def test_device_changed_selects_specific_device(mock_dashboard):
-    """Kullanıcı belirli bir cihaza tıkladığında cihazın mühürlendiğini test eder."""
+    """Tests that clicking a specific device locks it."""
     mock_dashboard.mic_combo.itemData.return_value = 2
     mock_dashboard.mic_combo.itemText.return_value = "Realtek Mic"
 
@@ -41,7 +41,7 @@ def test_device_changed_selects_specific_device(mock_dashboard):
     mock_dashboard.device_changed.emit.assert_called_once_with(2)
 
 def test_device_changed_none_data(mock_dashboard):
-    """Geçersiz bir öğe (None data) seçildiğinde hiçbir işlemin yapılmadığını test eder."""
+    """Tests that no action is taken when an invalid item (None data) is selected."""
     mock_dashboard.mic_combo.itemData.return_value = None
     
     DashboardWindow._on_device_changed(mock_dashboard, 2)

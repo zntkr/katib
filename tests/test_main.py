@@ -1,8 +1,8 @@
 """
-main.py — test edilebilir kısımlar:
+main.py — testable parts:
   - StreamToLogger
-  - setup_logging() (log klasörü, fallback, stdout/stderr bağlantısı, sys.excepthook)
-  - handle_exception (excepthook gövdesi)
+  - setup_logging() (log directory, fallback, stdout/stderr binding, sys.excepthook)
+  - handle_exception (excepthook body)
 """
 import logging
 import sys
@@ -29,7 +29,7 @@ class TestStreamToLogger:
         assert logger.log.call_count == 2
 
     def test_write_empty_line_skipped(self):
-        """Sadece boşluk içeren satırlar loglanmamalı."""
+        """Lines that contain only whitespace must not be logged."""
         stream, logger = self._make()
         stream.write("   \n")
         logger.log.assert_not_called()
@@ -46,7 +46,7 @@ class TestStreamToLogger:
 
     def test_flush_is_noop(self):
         stream, _ = self._make()
-        stream.flush()  # hata vermemeli
+        stream.flush()  # must not raise
 
 
 # ────────────────────────────────────────── setup_logging ───────────────────
@@ -67,11 +67,11 @@ class TestSetupLogging:
         assert (log_base / "Katib" / "Logs").is_dir()
 
     def test_fallback_on_mkdir_error(self, tmp_path):
-        """Klasör oluşturma başarısız olursa fallback basicConfig çalışmalı."""
+        """If directory creation fails, the fallback basicConfig must run."""
         with patch.dict("os.environ", {"LOCALAPPDATA": str(tmp_path)}), \
-             patch("main.Path.mkdir", side_effect=PermissionError("erişim yok")):
+             patch("main.Path.mkdir", side_effect=PermissionError("access denied")):
             from main import setup_logging
-            logger = setup_logging()  # çökmemeli
+            logger = setup_logging()  # must not crash
         assert isinstance(logger, logging.Logger)
 
     def test_localappdata_missing_uses_home(self, tmp_path):
@@ -114,7 +114,7 @@ class TestSetupLogging:
 # ────────────────────────────────── handle_exception (excepthook) ───────────
 
 class TestHandleException:
-    """sys.excepthook olarak kurulan handle_exception'ın davranışları."""
+    """Behaviours of handle_exception installed as sys.excepthook."""
 
     def _get_hook(self, tmp_path):
         with patch.dict("os.environ", {"LOCALAPPDATA": str(tmp_path)}):
@@ -133,12 +133,12 @@ class TestHandleException:
         logger = logging.getLogger("Katib")
         with patch.object(logger, "error") as mock_err:
             try:
-                raise ValueError("test hatası")
+                raise ValueError("test error")
             except ValueError as exc:
                 hook(type(exc), exc, exc.__traceback__)
         mock_err.assert_called_once()
         logged = mock_err.call_args[0][0]
-        assert "test hatası" in logged
+        assert "test error" in logged
 
     def test_exception_log_contains_locals(self, tmp_path):
         hook = self._get_hook(tmp_path)
@@ -150,19 +150,19 @@ class TestHandleException:
             except RuntimeError as exc:
                 hook(type(exc), exc, exc.__traceback__)
         logged = mock_err.call_args[0][0]
-        assert "YEREL" in logged or "sentinel_value" in logged
+        assert "LOCALS" in logged or "sentinel_value" in logged
 
     def test_locals_pformat_error_handled(self, tmp_path):
-        """pprint.pformat exception fırlatırsa handle_exception çökmemeli."""
+        """handle_exception must not crash when pprint.pformat raises."""
         hook = self._get_hook(tmp_path)
-        with patch("main.pprint.pformat", side_effect=Exception("format hatası")):
+        with patch("main.pprint.pformat", side_effect=Exception("format error")):
             try:
                 raise RuntimeError("test")
             except RuntimeError as exc:
-                hook(type(exc), exc, exc.__traceback__)   # çökmemeli
+                hook(type(exc), exc, exc.__traceback__)   # must not crash
 
     def test_locals_truncated_when_too_long(self, tmp_path):
-        """locals_str > 4096 ise içerik kesilmeli (satır 94)."""
+        """Content must be truncated when locals_str > 4096 (line 94)."""
         hook = self._get_hook(tmp_path)
         logger = logging.getLogger("Katib")
         big_str = "x" * 5000

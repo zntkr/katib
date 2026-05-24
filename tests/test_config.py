@@ -1,6 +1,6 @@
 """
-core/settings.py testleri: load_settings, save_settings, get/set_model_dir_setting,
-validate_model_dir — tam kapsam. Qt veya donanım gerektirmez.
+Tests for core/settings.py: load_settings, save_settings, get/set_model_dir_setting,
+validate_model_dir — full coverage. No Qt or hardware required.
 """
 import json
 import logging
@@ -13,8 +13,8 @@ from core.settings import SettingsManager, validate_model_dir, find_fallback_mod
 
 @pytest.fixture
 def settings_file(tmp_path):
-    """get_settings_path() çağrısını tmp_path içine yönlendirir.
-    Gerçek ~/.katib_app/settings.json dosyasına dokunulmaz."""
+    """Redirects get_settings_path() calls into tmp_path.
+    The real ~/.katib_app/settings.json is never touched."""
     path = tmp_path / "settings.json"
     with patch("core.settings.get_settings_path", return_value=path):
         yield path
@@ -62,13 +62,13 @@ class TestSettingsManager:
         sm = SettingsManager()
         sm.set("language", "auto")
         sm.reset_processing_settings()
-        assert sm.get("language") is None  # default'a (auto) döner, get() None üretir
+        assert sm.get("language") is None  # resets to default (auto), get() produces None
 
 
 # ──────────────────────────────────────── validate_model_dir ────────────────
 
 def _make_model_dir(base: Path, use_safetensors: bool = False) -> Path:
-    """base içinde geçerli bir Whisper model dizini oluşturur."""
+    """Creates a valid Whisper model directory inside base."""
     base.mkdir(parents=True, exist_ok=True)
     (base / "config.json").write_text("{}")
     (base / ("model.safetensors" if use_safetensors else "model.bin")).write_bytes(b"")
@@ -97,7 +97,7 @@ class TestValidateModelDirBasic:
 
 
 class TestValidateModelDirDirect:
-    """Doğrudan model dizini: config.json + model.bin/safetensors aynı klasörde."""
+    """Direct model directory: config.json + model.bin/safetensors in the same folder."""
 
     def test_detects_model_bin(self, tmp_path):
         _make_model_dir(tmp_path)
@@ -109,7 +109,7 @@ class TestValidateModelDirDirect:
 
     def test_missing_config_json_falls_through_to_walk(self, tmp_path):
         (tmp_path / "model.bin").write_bytes(b"")
-        # config.json yok → doğrudan kabul yok; os.walk de bulamaz
+        # config.json missing → no direct match; os.walk also cannot find it
         assert validate_model_dir(str(tmp_path)) is None
 
     def test_missing_model_file_falls_through_to_walk(self, tmp_path):
@@ -121,7 +121,7 @@ class TestValidateModelDirDirect:
 
 
 class TestValidateModelDirWalk:
-    """Ana klasör seçildiğinde alt dizinlerde model arama (os.walk)."""
+    """Searching for a model in subdirectories when the parent folder is selected (os.walk)."""
 
     def test_finds_model_at_depth_1(self, tmp_path):
         model_dir = _make_model_dir(tmp_path / "model")
@@ -152,12 +152,12 @@ class TestValidateModelDirWalk:
         assert validate_model_dir(str(tmp_path)) is None
 
     def test_oserror_during_walk_returns_none(self, tmp_path):
-        with patch("os.walk", side_effect=OSError("erişim reddedildi")):
+        with patch("os.walk", side_effect=OSError("access denied")):
             assert validate_model_dir(str(tmp_path)) is None
 
 
 class TestValidateModelDirDepthLimit:
-    """Derinlik limiti: depth > 4 olduğunda dizin taranmayı durdurmalı."""
+    """Depth limit: directory scanning must stop when depth > 4."""
 
     def test_model_at_exact_depth_4_is_found(self, tmp_path):
         model_dir = _make_model_dir(tmp_path / "l1" / "l2" / "l3" / "model")
@@ -168,7 +168,7 @@ class TestValidateModelDirDepthLimit:
         assert validate_model_dir(str(tmp_path)) is None
 
     def test_shallower_model_found_despite_deep_sibling(self, tmp_path):
-        """Derinlik sınırını aşan dal varken, sığ daldaki model bulunmalı."""
+        """A model in a shallow branch must be found even when a sibling branch exceeds the depth limit."""
         _make_model_dir(tmp_path / "l1" / "l2" / "l3" / "l4" / "too_deep")
         model_dir = _make_model_dir(tmp_path / "shallow" / "model")
         assert validate_model_dir(str(tmp_path)) == str(model_dir.resolve())
@@ -215,18 +215,18 @@ class TestFindFallbackModelDir:
         assert find_fallback_model_dir(tmp_path) is None
 
     def test_oserror_during_iteration_returns_none(self, tmp_path):
-        with patch("core.settings.Path.iterdir", side_effect=OSError("erişim reddedildi")):
+        with patch("core.settings.Path.iterdir", side_effect=OSError("access denied")):
             assert find_fallback_model_dir(tmp_path) is None
 
     def test_finds_model_in_subdir_beyond_parent_walk_depth(self, tmp_path):
-        # Depth 5 from tmp_path → validate_model_dir(tmp_path) None döner (limit 4)
-        # Depth 4 from tmp_path/a → validate_model_dir(tmp_path/a) bulur → line 150
+        # Depth 5 from tmp_path → validate_model_dir(tmp_path) returns None (limit 4)
+        # Depth 4 from tmp_path/a → validate_model_dir(tmp_path/a) finds it → line 150
         model = _make_model_dir(tmp_path / "a" / "b" / "c" / "d" / "model")
         result = find_fallback_model_dir(tmp_path)
         assert result == str(model.resolve())
 
 
-# ──────────────────────────── SettingsManager I/O hataları ─────────────────
+# ──────────────────────────── SettingsManager I/O errors ─────────────────
 
 class TestSettingsManagerIOErrors:
 
@@ -234,7 +234,7 @@ class TestSettingsManagerIOErrors:
         path = tmp_path / "settings.json"
         path.write_text('{"hotkey": "f5"}', encoding="utf-8")
         with patch("core.settings.get_settings_path", return_value=path), \
-             patch("builtins.open", side_effect=OSError("erişim reddedildi")):
+             patch("builtins.open", side_effect=OSError("access denied")):
             with caplog.at_level(logging.ERROR, logger="core.settings"):
                 sm = SettingsManager()
         assert sm.get("hotkey") == "F9"
@@ -244,7 +244,7 @@ class TestSettingsManagerIOErrors:
         path = tmp_path / "settings.json"
         with patch("core.settings.get_settings_path", return_value=path):
             sm = SettingsManager()
-            with patch("builtins.open", side_effect=OSError("disk dolu")):
+            with patch("builtins.open", side_effect=OSError("disk full")):
                 with caplog.at_level(logging.ERROR, logger="core.settings"):
                     sm.set("hotkey", "f5")
         assert any(r.levelno == logging.ERROR for r in caplog.records)
@@ -307,7 +307,7 @@ class TestSetMany:
         assert data["language"] == "auto"
 
     def test_single_save_call_for_multiple_keys(self, settings_file):
-        """set_many(), kaç anahtar içerirse içersin save() yalnızca bir kez çağrılır."""
+        """set_many() calls save() exactly once regardless of how many keys it contains."""
         from unittest.mock import patch
         sm = SettingsManager()
         with patch.object(sm, "save") as mock_save:
@@ -315,7 +315,7 @@ class TestSetMany:
         assert mock_save.call_count == 1
 
     def test_empty_mapping_does_not_call_save(self, settings_file):
-        """set_many() boş dict ile çağrılırsa save() hiç tetiklenmez."""
+        """set_many() called with an empty dict must never trigger save()."""
         from unittest.mock import patch
         sm = SettingsManager()
         with patch.object(sm, "save") as mock_save:
@@ -323,7 +323,7 @@ class TestSetMany:
         assert mock_save.call_count == 0
 
     def test_in_memory_set_many_does_not_write_to_disk(self):
-        """in_memory=True modunda set_many() disk yazımı yapmaz."""
+        """set_many() must not write to disk in in_memory=True mode."""
         from unittest.mock import patch
         sm = SettingsManager(in_memory=True)
         with patch("core.settings.get_settings_path") as mock_path:

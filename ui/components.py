@@ -1,8 +1,9 @@
 import os
-from PySide6.QtWidgets import QFrame, QVBoxLayout, QLabel, QHBoxLayout, QWidget, QComboBox, QSizePolicy, QListView, QPushButton
+from PySide6.QtWidgets import QFrame, QVBoxLayout, QLabel, QHBoxLayout, QWidget, QComboBox, QSizePolicy, QListView, QPushButton, QScrollArea
 from PySide6.QtCore import Qt, QEvent
+from PySide6.QtGui import QPainter, QLinearGradient, QColor
 
-from ui.theme import G_1, FONT_SIZE_SM
+from ui.theme import G_1, G_5, FONT_SIZE_SM
 from ui.utils import colorize_svg_icon
 
 class NoScrollComboBox(QComboBox):
@@ -180,3 +181,63 @@ class DynamicIconButton(QPushButton):
     def mouseReleaseEvent(self, event):
         super().mouseReleaseEvent(event)
         self._update_icon()
+
+
+class _FadeOverlay(QWidget):
+    def __init__(self, parent: QScrollArea, fade_height: int):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground)
+        self._fade_height = fade_height
+        self._show_top = False
+        self._show_bottom = False
+
+    def set_fades(self, show_top: bool, show_bottom: bool):
+        if (show_top, show_bottom) != (self._show_top, self._show_bottom):
+            self._show_top = show_top
+            self._show_bottom = show_bottom
+            self.update()
+
+    def paintEvent(self, _event):
+        if not self._show_top and not self._show_bottom:
+            return
+        from ui.theme import theme_manager
+        painter = QPainter(self)
+        w, h = self.width(), self.height()
+        fh = min(self._fade_height, h // 2)
+        c = QColor(theme_manager.palette["CLR_BG_DEEP"])
+        transparent = QColor(c.red(), c.green(), c.blue(), 0)
+
+        if self._show_top:
+            grad = QLinearGradient(0, 0, 0, fh)
+            grad.setColorAt(0.0, c)
+            grad.setColorAt(1.0, transparent)
+            painter.fillRect(0, 0, w, fh, grad)
+
+        if self._show_bottom:
+            grad = QLinearGradient(0, h - fh, 0, h)
+            grad.setColorAt(0.0, transparent)
+            grad.setColorAt(1.0, c)
+            painter.fillRect(0, h - fh, w, fh, grad)
+
+
+class FadeScrollArea(QScrollArea):
+    """QScrollArea with smart fade-out gradients at top and bottom edges."""
+    def __init__(self, inset_left: int = 0, inset_right: int = 0, parent=None):
+        super().__init__(parent)
+        self._inset_left = inset_left
+        self._inset_right = inset_right
+        self._overlay = _FadeOverlay(self, G_5)
+        sb = self.verticalScrollBar()
+        sb.valueChanged.connect(lambda _: self._update_fades())
+        sb.rangeChanged.connect(lambda *_: self._update_fades())
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._overlay.setGeometry(self.rect())
+        self._overlay.raise_()
+        self._update_fades()
+
+    def _update_fades(self):
+        sb = self.verticalScrollBar()
+        self._overlay.set_fades(sb.value() > 0, sb.value() < sb.maximum())

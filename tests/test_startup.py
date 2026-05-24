@@ -7,16 +7,16 @@ from core.startup import _exe_command, set_startup_enabled, get_startup_enabled
 import winreg
 
 class TestExeCommand:
-    """Windows başlangıcında çalıştırılacak komut satırı argümanlarının testleri."""
-    
+    """Tests for the command-line arguments used when launching the app at Windows startup."""
+
     def test_frozen_app(self):
-        """PyInstaller ile derlenmiş (exe) uygulamanın yol formatı doğrulanır."""
+        """Verifies the path format for a PyInstaller-compiled (exe) application."""
         with patch.object(sys, "frozen", True, create=True), \
              patch.object(sys, "executable", "C:\\mock\\path\\Katib.exe"):
             assert _exe_command() == '"C:\\mock\\path\\Katib.exe"'
 
     def test_script_app(self):
-        """Python ile çalıştırılan geliştirme (script) ortamının yol formatı doğrulanır."""
+        """Verifies the path format for the development (script) environment run with Python."""
         with patch.object(sys, "frozen", False, create=True), \
              patch.object(sys, "executable", "C:\\python\\python.exe"), \
              patch.object(sys, "argv", ["C:\\mock\\path\\main.py"]):
@@ -25,14 +25,14 @@ class TestExeCommand:
 
 
 class TestSetStartupEnabled:
-    """Windows Kayıt Defteri'ne (Registry) yazma/silme testleri."""
+    """Tests for writing to and deleting from the Windows Registry."""
 
     @patch("core.startup._exe_command", return_value='"mock_cmd"')
     @patch("winreg.OpenKey")
     @patch("winreg.SetValueEx")
     @patch("winreg.CloseKey")
     def test_enable_startup(self, mock_close, mock_set, mock_open, mock_exe):
-        """Başlangıca ekleme durumunda SetValueEx çağrısı doğrulanır."""
+        """Verifies that SetValueEx is called when adding the app to startup."""
         mock_key = MagicMock()
         mock_open.return_value = mock_key
 
@@ -53,7 +53,7 @@ class TestSetStartupEnabled:
     @patch("winreg.DeleteValue")
     @patch("winreg.CloseKey")
     def test_disable_startup_success(self, mock_close, mock_del, mock_open):
-        """Başlangıçtan kaldırma durumunda DeleteValue çağrısı doğrulanır."""
+        """Verifies that DeleteValue is called when removing the app from startup."""
         mock_key = MagicMock()
         mock_open.return_value = mock_key
 
@@ -66,12 +66,12 @@ class TestSetStartupEnabled:
     @patch("winreg.DeleteValue")
     @patch("winreg.CloseKey")
     def test_disable_startup_ignores_file_not_found(self, mock_close, mock_del, mock_open):
-        """Eğer silinmek istenen key zaten yoksa (FileNotFoundError), uygulamanın çökmediği doğrulanır."""
+        """Verifies the app does not crash if the key being deleted does not exist (FileNotFoundError)."""
         mock_key = MagicMock()
         mock_open.return_value = mock_key
-        mock_del.side_effect = FileNotFoundError("Anahtar bulunamadı")
+        mock_del.side_effect = FileNotFoundError("Key not found")
 
-        # Herhangi bir hata (Exception) fırlatmadan sessizce geçmeli
+        # Should pass silently without raising any exception
         set_startup_enabled(False)
 
         mock_del.assert_called_once_with(mock_key, "Katib")
@@ -79,13 +79,13 @@ class TestSetStartupEnabled:
 
 
 class TestGetStartupEnabled:
-    """Windows Kayıt Defteri'nden okuma (Sorgulama) testleri."""
+    """Tests for reading (querying) the Windows Registry."""
 
     @patch("winreg.OpenKey")
     @patch("winreg.QueryValueEx")
     @patch("winreg.CloseKey")
     def test_returns_true_if_exists(self, mock_close, mock_query, mock_open):
-        """Kayıt defterinde Katib anahtarı varsa True döndürdüğü doğrulanır."""
+        """Verifies that True is returned when the Katib key exists in the registry."""
         mock_key = MagicMock()
         mock_open.return_value = mock_key
         
@@ -104,7 +104,7 @@ class TestGetStartupEnabled:
     @patch("winreg.QueryValueEx")
     @patch("winreg.CloseKey")
     def test_returns_false_if_not_found(self, mock_close, mock_query, mock_open):
-        """Kayıt defterinde anahtar yoksa False döndürdüğü doğrulanır."""
+        """Verifies that False is returned when the key is not found in the registry."""
         mock_key = MagicMock()
         mock_open.return_value = mock_key
         mock_query.side_effect = FileNotFoundError()
@@ -114,7 +114,7 @@ class TestGetStartupEnabled:
 
     @patch("winreg.OpenKey")
     def test_returns_false_on_os_error(self, mock_open):
-        """Antivirüs vb. sebeplerle okuma izni verilmezse çökmeyip False döndürdüğü doğrulanır."""
-        mock_open.side_effect = OSError("Erişim Engellendi (Access Denied)")
+        """Verifies the app returns False without crashing when read access is denied (e.g. by antivirus)."""
+        mock_open.side_effect = OSError("Access Denied")
 
         assert get_startup_enabled() is False

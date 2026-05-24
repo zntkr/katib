@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QApplication, QWidget, QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QComboBox, QSpinBox, QDoubleSpinBox,
-    QCheckBox, QFrame, QFileDialog, QMessageBox, QLineEdit, QScrollArea,
+    QCheckBox, QFrame, QFileDialog, QMessageBox, QLineEdit,
     QSizePolicy
 )
 from PySide6.QtCore import Qt, Signal, QTimer
@@ -15,8 +15,8 @@ from core.settings import (
     DEFAULT_DOWNLOAD_PARENT, COMPUTE_TYPE_OPTIONS_CPU,
     SETTINGS_SCHEMA
 )
-from ui.theme import G_1, G_2, PANEL_WIDTH, FONT_SIZE_SM, theme_manager
-from ui.components import SettingGroup, NoScrollComboBox, DynamicIconButton
+from ui.theme import G_1, G_2, PANEL_WIDTH, FONT_SIZE_SM, WIDGET_WIDTH_SM, theme_manager
+from ui.components import SettingGroup, NoScrollComboBox, DynamicIconButton, FadeScrollArea
 from ui.icons import ICN_DOWNLOAD, ICN_TICK
 from core.i18n import t, available_languages
 
@@ -105,7 +105,7 @@ class SettingsDialog(QDialog):
         self.main_layout.setContentsMargins(G_1, G_1, 0, G_1)
         self.main_layout.setSpacing(G_1)
 
-        self.scroll_area = QScrollArea()
+        self.scroll_area = FadeScrollArea(inset_left=G_1, inset_right=G_2)
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setFrameShape(QFrame.Shape.NoFrame)
         self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -281,7 +281,7 @@ class SettingsDialog(QDialog):
                 real_widget = real_input_widget if real_input_widget is not None else widget
                 if sdef.tooltip:
                     real_widget.setToolTip(t(sdef.tooltip))
-                w = 80 if not full_width else 136
+                w = WIDGET_WIDTH_SM if not full_width else 136
                 adv_grp.add_widget_row(t(sdef.ui_label), widget, full_width=full_width, widget_width=w)
                 self._dynamic_widgets[sdef.key] = real_widget
 

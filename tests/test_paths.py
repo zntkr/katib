@@ -1,6 +1,6 @@
 """
-get_settings_path() path çözücü için testler.
-Qt veya donanım gerektirmez.
+Tests for the get_settings_path() path resolver.
+Does not require Qt or hardware.
 """
 import os
 import sys

@@ -1,5 +1,5 @@
 """
-ui/osd.py için kapsamlı testler.
+Comprehensive tests for ui/osd.py.
 """
 import pytest
 from unittest.mock import patch, MagicMock
@@ -130,7 +130,7 @@ class TestSetStateError:
         assert len(osd.text_label.text()) == 60
 
     def test_message_within_60_chars_not_truncated(self, osd):
-        msg = "mikrofon bağlantısı koptu, lütfen kontrol edin"
+        msg = "microphone connection lost, please check the connection"
         with patch.object(osd, "show_osd"):
             osd.setStateError(msg)
         assert osd.text_label.text() == msg.upper()

@@ -1,6 +1,6 @@
 """
-HotkeyWorker state machine ve sinyal testleri.
-keyboard.is_pressed mock'lanır; donanım gerekmez.
+HotkeyWorker state machine and signal tests.
+keyboard.is_pressed is mocked; no hardware required.
 """
 import time
 import pytest
@@ -63,8 +63,8 @@ class TestSetKey:
 
 class TestKeyRepeatPrevention:
     """
-    OS key-repeat koruması: tuşa basılı tutulurken
-    hotkey_pressed yalnızca BİR KEZ emit edilmeli.
+    OS key-repeat protection: hotkey_pressed must be emitted exactly ONCE
+    while the key is held down.
     """
 
     def test_press_emits_once(self, qapp, mock_settings):
@@ -72,18 +72,18 @@ class TestKeyRepeatPrevention:
         received = []
         worker.hotkey_pressed.connect(lambda: received.append(1))
 
-        # Simüle: tuş basılı (True, True, True) — repeat
+        # Simulate: key held (True, True, True) — repeat
         with patch("keyboard.is_pressed") as mock_pressed:
             mock_pressed.return_value = True
 
-            # İlk çağrı: False → True, sinyal emit edilmeli
+            # First call: False → True, signal must be emitted
             worker._is_key_down = False
             currently = mock_pressed(worker._key)
             if currently and not worker._is_key_down:
                 worker._is_key_down = True
                 worker.hotkey_pressed.emit()
 
-            # İkinci çağrı: True → True, sinyal emit edilmemeli
+            # Second call: True → True, signal must NOT be emitted
             currently = mock_pressed(worker._key)
             if currently and not worker._is_key_down:
                 worker._is_key_down = True
@@ -101,13 +101,13 @@ class TestKeyRepeatPrevention:
         with patch("keyboard.is_pressed") as mock_pressed:
             mock_pressed.return_value = False
 
-            # İlk çağrı: True → False, sinyal emit edilmeli
+            # First call: True → False, signal must be emitted
             currently = mock_pressed(worker._key)
             if not currently and worker._is_key_down:
                 worker._is_key_down = False
                 worker.hotkey_released.emit()
 
-            # İkinci çağrı: False → False, sinyal emit edilmemeli
+            # Second call: False → False, signal must NOT be emitted
             currently = mock_pressed(worker._key)
             if not currently and worker._is_key_down:
                 worker._is_key_down = False
@@ -122,7 +122,7 @@ class TestKeyRepeatPrevention:
         worker.hotkey_pressed.connect(lambda: pressed_count.append(1))
         worker.hotkey_released.connect(lambda: released_count.append(1))
 
-        states = [True, True, True, False, False, True, False]  # bas-tut-bırak-bas-bırak
+        states = [True, True, True, False, False, True, False]  # press-hold-release-press-release
         for state in states:
             if state and not worker._is_key_down:
                 worker._is_key_down = True
@@ -139,7 +139,7 @@ class TestStopMechanism:
     def test_stop_sets_running_false(self, mock_settings):
         worker = HotkeyWorker(mock_settings, key="F9")
         worker._running = True
-        # stop() wait() çağırır; thread başlatılmadıysa wait() anında döner
+        # stop() calls wait(); if the thread was never started, wait() returns immediately
         worker._running = False
         assert worker._running is False
 
@@ -149,7 +149,7 @@ class TestStopMechanism:
 
 
 class TestStop:
-    """stop() metodunu doğrudan çağıran testler (lines 49-51)."""
+    """Tests that directly call stop() (lines 49-51)."""
 
     def test_stop_sets_running_false(self, qapp, mock_settings):
         worker = HotkeyWorker(mock_settings)
@@ -158,7 +158,7 @@ class TestStop:
         assert worker._running is False
 
     def test_stop_does_not_block(self, qapp, mock_settings):
-        """stop() wait() çağırmamalı — kapanış os._exit(0) ile yapılır."""
+        """stop() must not call wait() — shutdown is done via os._exit(0)."""
         worker = HotkeyWorker(mock_settings)
         with patch.object(worker, "wait") as mock_wait:
             worker.stop()
@@ -170,7 +170,7 @@ class TestStop:
         assert worker._running is False
 
     def test_stop_does_not_terminate(self, qapp, mock_settings):
-        """stop() terminate() çağırmamalı — GIL riski, os._exit(0) zaten keser."""
+        """stop() must not call terminate() — GIL risk; os._exit(0) already cuts it."""
         worker = HotkeyWorker(mock_settings)
         with patch.object(worker, "terminate") as mock_terminate:
             worker.stop()
@@ -187,7 +187,7 @@ class TestRunKeyboardError:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                raise Exception("klavye hatası")
+                raise Exception("keyboard error")
             worker._running = False
             return False
 
@@ -217,7 +217,7 @@ class TestRunKeyboardError:
         assert any(c == "KEY" for _, c, _ in logs)
 
     def test_keyboard_error_loop_continues(self, qapp, mock_settings):
-        """Error sonrası loop devam etmeli; ikinci iterasyon temiz çalışmalı."""
+        """Loop must continue after an error; the second iteration must run cleanly."""
         worker = HotkeyWorker(mock_settings, key="f9")
         call_count = 0
 
@@ -225,7 +225,7 @@ class TestRunKeyboardError:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                raise Exception("test hatası")
+                raise Exception("test error")
             worker._running = False
             return False
 
@@ -236,7 +236,7 @@ class TestRunKeyboardError:
         assert call_count == 2
 
     def test_keyboard_error_sleep_called_with_1s(self, qapp, mock_settings):
-        """Error handler 1 saniyelik bekleme yapmalı."""
+        """The error handler must wait for 1 second."""
         worker = HotkeyWorker(mock_settings, key="f9")
         sleep_calls = []
         call_count = 0
@@ -245,7 +245,7 @@ class TestRunKeyboardError:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                raise Exception("test hatası")
+                raise Exception("test error")
             worker._running = False
             return False
 
@@ -257,7 +257,7 @@ class TestRunKeyboardError:
 
 
 class TestRunSignalEmission:
-    """run() içindeki sinyal emit dalları (lines 32-33, 36-37)."""
+    """Signal emit branches inside run() (lines 32-33, 36-37)."""
 
     def test_run_emits_hotkey_pressed(self, qapp, mock_settings):
         worker = HotkeyWorker(mock_settings, key="f9")
@@ -270,7 +270,7 @@ class TestRunSignalEmission:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                return True  # False → True geçişi: press emit
+                return True  # False → True transition: emit press
             worker._running = False
             return True
 
@@ -292,7 +292,7 @@ class TestRunSignalEmission:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                return False  # True → False geçişi: release emit
+                return False  # True → False transition: emit release
             worker._running = False
             return False
 
@@ -304,12 +304,12 @@ class TestRunSignalEmission:
 
 
 class TestRunOuterCrash:
-    """Outer try: while döngüsünden kaçan felaket exception (lines 41-43)."""
+    """Outer try: catastrophic exception escaping the while loop (lines 41-43)."""
 
     def _run_with_outer_crash(self, worker):
         def sleep_side_effect(seconds):
             if abs(seconds - 0.05) < 0.001:
-                raise RuntimeError("simüle çökme")
+                raise RuntimeError("simulated crash")
 
         with patch("keyboard.is_pressed", return_value=False), \
              patch("workers.hotkey_worker.time.sleep", side_effect=sleep_side_effect):
@@ -330,7 +330,7 @@ class TestRunOuterCrash:
         assert any("osd.hotkey_failed" in e for e in errors)
 
     def test_outer_crash_run_does_not_raise(self, qapp, mock_settings):
-        """run() exception'ı dışarı sızdırmamalı — QThread mekanizması bozulur."""
+        """run() must not leak exceptions — the QThread mechanism would break."""
         worker = HotkeyWorker(mock_settings, key="f9")
         self._run_with_outer_crash(worker)  # must not raise
 
@@ -343,7 +343,7 @@ class TestRunOuterCrash:
 
 
 class TestPauseResume:
-    """pause() ve resume() mekanizmasının UI kısayol atama esnasında dinlemeyi kesme testleri."""
+    """Tests for the pause() and resume() mechanism that stops listening during UI hotkey assignment."""
 
     def test_pause_sets_flags(self, mock_settings):
         worker = HotkeyWorker(mock_settings)
@@ -363,7 +363,7 @@ class TestPauseResume:
         assert worker._is_key_down is False
 
     def test_resume_sets_flags_when_key_pressed(self, mock_settings):
-        """resume anında tuş hala fiziksel basılıysa, sahte tetiklenmeyi engellemek için state True yapılır."""
+        """If the key is still physically held at resume time, state is set to True to prevent a spurious trigger."""
         worker = HotkeyWorker(mock_settings, key="f9")
         worker._paused = True
         worker._is_key_down = False
@@ -379,14 +379,14 @@ class TestPauseResume:
         worker.hotkey_pressed.connect(lambda: pressed.append(1))
 
         def is_pressed_side_effect(key):
-            worker._running = False  # Sonsuz döngüyü tek iterasyonda kır
-            return True  # Fiziksel olarak tuşa basılıyor simülasyonu
+            worker._running = False  # Break the infinite loop after one iteration
+            return True  # Simulate the key being physically held down
 
         with patch("keyboard.is_pressed", side_effect=is_pressed_side_effect), \
              patch("workers.hotkey_worker.time.sleep"):
             worker.run()
 
-        # Duraklatılmış (paused) olduğu için tuş basılı olsa bile sinyal yollanmamalı
+        # Signal must not be sent even though the key is pressed, because the worker is paused
         assert len(pressed) == 0
-        # Güvenlik ağı: run döngüsü içindeki pause check _is_key_down'ı sıfırlamalı
+        # Safety net: the pause check inside the run loop must reset _is_key_down
         assert worker._is_key_down is False
