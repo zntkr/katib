@@ -22,6 +22,8 @@ tmp_ret = collect_all('ctranslate2')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('faster_whisper')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('onnxruntime')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 # sounddevice: tek .py dosyası + _sounddevice_data paketi (PortAudio DLL)
 # collect_all bunu atlıyor — kurulum dizinini dinamik olarak buluyoruz.
@@ -128,7 +130,7 @@ a = Analysis(
         # Büyük ve Kullanılmayan Paketler (~490 MB tasarruf)
         'torch', 'torchvision', 'torchaudio',
         'transformers',
-        'onnxruntime', 'onnxruntime.capi',
+        # onnxruntime kasıtlı olarak dahil: faster_whisper VAD filtresi için gerekli
         'pandas', 'pandas.core',
         'sklearn', 'sklearn.utils',
         'grpc', 'grpc._cython',

@@ -193,8 +193,8 @@ class TranscriptionWorker(BaseWorker):
             self.log_entry.emit("OK", "STT", f"Transcript: {final_text!r}")
             self.text_ready.emit(final_text)
 
-        except Exception:
-            self.log_entry.emit("ERR", "STT", "Transcription error")
+        except Exception as e:
+            self.log_entry.emit("ERR", "STT", f"Transcription error: {e}")
             self.error_occurred.emit("osd.stt_error")
         finally:
             self.transcription_finished.emit()
