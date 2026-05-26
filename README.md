@@ -2,7 +2,7 @@
 
 # Katib
 
-**Offline voice dictation for Windows. Hold a key, speak, release — text appears at your cursor.**
+**Offline voice dictation for Windows and Linux. Hold a key, speak, release — text appears at your cursor.**
 
 No cloud. No subscription. Nothing leaves your machine.
 
@@ -16,7 +16,7 @@ No cloud. No subscription. Nothing leaves your machine.
 
 ## How it works
 
-1. Click any text field — browser, Word, IDE, chat, anywhere on Windows
+1. Click any text field — browser, Word, IDE, chat, anywhere
 2. Hold your hotkey (default **F9**), speak, release
 3. Your words are transcribed locally by [Whisper](https://github.com/openai/whisper) and typed at the cursor
 
@@ -27,7 +27,7 @@ No internet required after the one-time model download.
 ## Features
 
 - **100% offline** — Whisper runs entirely on your CPU, no API keys, no accounts
-- **Works everywhere** — any focusable text field in any Windows application
+- **Works everywhere** — any focusable text field in any application
 - **Push-to-talk** — hold to record, release to transcribe; no accidental triggers
 - **Five model sizes** — 150 MB to 3 GB; trade speed for accuracy on your hardware
 - **18 transcription languages** — Arabic, Chinese, English, French, German, Greek, Hindi, Indonesian, Italian, Japanese, Korean, Persian, Portuguese, Russian, Spanish, Turkish, Urdu, and auto-detect
@@ -39,13 +39,13 @@ No internet required after the one-time model download.
 
 ## Installation
 
-### Option A — Pre-built binary (recommended)
+### Windows — Pre-built binary (recommended)
 
 Download the latest release from the [Releases](../../releases) page, unzip, run `Katib.exe`.
 
 > **Windows SmartScreen** may show a warning because the binary is unsigned. Click **More info → Run anyway**.
 
-### Option B — From source
+### Windows & Linux — From source
 
 Requires Python 3.10+
 
@@ -55,6 +55,17 @@ cd katib
 pip install -r requirements.txt
 python main.py
 ```
+
+---
+
+## Platform support
+
+| Platform | Status | Notes |
+|----------|--------|-------|
+| Windows 10/11 | ✅ Full support | Pre-built binary available |
+| Linux (X11) | ✅ Supported | Run from source; global hotkey requires an X11 session |
+| Linux (Wayland) | ⚠️ Partial | UI and transcription work; global hotkey is unavailable due to Wayland security restrictions — log in with "Ubuntu on Xorg" to enable it |
+| macOS | ❌ Not supported | — |
 
 ---
 
@@ -90,7 +101,7 @@ Katib is designed to be air-gap friendly:
 
 - No outbound connections at runtime
 - No usage statistics, error reporting, or update checks
-- Settings and logs stored locally in `%LOCALAPPDATA%\Katib`
+- Settings and logs stored locally — `%LOCALAPPDATA%\Katib` on Windows, `~/.local/share/Katib` on Linux
 - The only network activity is the optional one-time model download
 
 ---
