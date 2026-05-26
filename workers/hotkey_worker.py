@@ -1,3 +1,4 @@
+import sys
 import time
 from PySide6.QtCore import Signal
 from workers.base_worker import BaseWorker
@@ -15,10 +16,26 @@ class HotkeyWorker(BaseWorker):
         self._running     = False
         self._paused      = False
 
+    def _is_pressed(self, key: str) -> bool:
+        if sys.platform == "win32":
+            import keyboard
+            return keyboard.is_pressed(key)
+        else:
+            from pynput import keyboard as pynput_kb
+            # pynput doesn't expose a synchronous is_pressed; we rely on the
+            # listener state tracked in run() via on_press/on_release instead.
+            return self._is_key_down_pynput
+
     # ------------------------------------------------------------------ QThread
     def run(self):
-        import keyboard
         self._running = True
+        if sys.platform == "win32":
+            self._run_windows()
+        else:
+            self._run_linux()
+
+    def _run_windows(self):
+        import keyboard
         try:
             while self._running:
                 try:
@@ -30,42 +47,71 @@ class HotkeyWorker(BaseWorker):
                     continue
 
                 if self._paused:
-                    self._is_key_down = False  # clear state while paused
+                    self._is_key_down = False
                     time.sleep(0.05)
                     continue
 
                 if currently_down and not self._is_key_down:
                     self._is_key_down = True
                     self.hotkey_pressed.emit()
-
                 elif not currently_down and self._is_key_down:
                     self._is_key_down = False
                     self.hotkey_released.emit()
 
-                time.sleep(0.05)  # 50 ms polling — CPU-friendly
+                time.sleep(0.05)
+        except Exception:
+            self.log_entry.emit("ERR", "KEY", "Hotkey crashed")
+            self.error_occurred.emit("osd.hotkey_failed")
 
+    def _run_linux(self):
+        from pynput import keyboard as pynput_kb
+
+        self._is_key_down_pynput = False
+
+        def _canonical_key(key):
+            try:
+                return key.char.lower() if hasattr(key, "char") and key.char else str(key).lower()
+            except Exception:
+                return str(key).lower()
+
+        def on_press(key) -> None:
+            k = _canonical_key(key)
+            if k == self._key and not self._paused and not self._is_key_down:
+                self._is_key_down = True
+                self._is_key_down_pynput = True
+                self.hotkey_pressed.emit()
+
+        def on_release(key) -> None:
+            k = _canonical_key(key)
+            if k == self._key and not self._paused and self._is_key_down:
+                self._is_key_down = False
+                self._is_key_down_pynput = False
+                self.hotkey_released.emit()
+
+        try:
+            listener = pynput_kb.Listener(on_press=on_press, on_release=on_release)
+            listener.start()
+            while self._running:
+                time.sleep(0.1)
+            listener.stop()
         except Exception:
             self.log_entry.emit("ERR", "KEY", "Hotkey crashed")
             self.error_occurred.emit("osd.hotkey_failed")
 
     def set_key(self, key: str):
         self._key         = key.lower()
-        self._is_key_down = False  # clear any half-finished state
+        self._is_key_down = False
 
     def pause(self) -> None:
-        """Temporarily disables the hotkey, e.g. during hotkey-capture mode."""
         self._paused = True
         self._is_key_down = False
 
     def resume(self) -> None:
-        """Re-enables hotkey listening.
-
-        If the key is still physically held, _is_key_down is set to True so
-        the worker enters 'already held' mode. The next hotkey_pressed fires
-        only after the key is released and pressed again — no magic timer needed.
-        """
-        import keyboard
-        self._is_key_down = keyboard.is_pressed(self._key)
+        if sys.platform == "win32":
+            import keyboard
+            self._is_key_down = keyboard.is_pressed(self._key)
+        else:
+            self._is_key_down = False
         self._paused = False
 
     def stop(self) -> None:

@@ -39,8 +39,12 @@ class StreamToLogger(io.TextIOBase):
         pass
 
 def setup_logging():
-    local_app_data = os.environ.get("LOCALAPPDATA")
-    base_dir = Path(local_app_data) if local_app_data else Path.home()
+    if sys.platform == "win32":
+        local_app_data = os.environ.get("LOCALAPPDATA")
+        base_dir = Path(local_app_data) if local_app_data else Path.home()
+    else:
+        xdg_data = os.environ.get("XDG_DATA_HOME")
+        base_dir = Path(xdg_data) if xdg_data else Path.home() / ".local" / "share"
     log_dir = base_dir / APP_NAME / "Logs"
     log_file = log_dir / "katib.log"
 

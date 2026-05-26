@@ -3,5 +3,6 @@ faster-whisper
 numpy
 sounddevice
 keyboard
+pynput
 pyperclip
 huggingface_hub

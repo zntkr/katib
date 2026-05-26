@@ -388,9 +388,14 @@ class SettingsDialog(QDialog):
 
     def _open_log_folder(self) -> None:
         import os
+        import sys
         log_dir = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), APP_NAME, "Logs")
         if os.path.exists(log_dir):
-            os.startfile(log_dir)
+            if sys.platform == "win32":
+                os.startfile(log_dir)
+            else:
+                import subprocess
+                subprocess.Popen(["xdg-open", log_dir])
         else:
             self.log_entry.emit("WRN", "APP", t("settings.log_folder_missing"))
 

@@ -4,7 +4,7 @@ def inject_text(text: str, log_callback=None) -> None:
     Backs up current clipboard contents (image, file, etc.), pastes the text,
     then restores the old clipboard asynchronously.
     """
-    import keyboard
+    import sys
     from PySide6.QtGui import QGuiApplication
     from PySide6.QtCore import QTimer, QCoreApplication, QMimeData
 
@@ -24,7 +24,15 @@ def inject_text(text: str, log_callback=None) -> None:
 
         QCoreApplication.processEvents()
 
-        keyboard.send("ctrl+v")
+        if sys.platform == "win32":
+            import keyboard
+            keyboard.send("ctrl+v")
+        else:
+            from pynput.keyboard import Controller, Key
+            _kb = Controller()
+            with _kb.pressed(Key.ctrl):
+                _kb.press("v")
+                _kb.release("v")
 
         if old_mime_data:
             def _restore():

@@ -1,9 +1,10 @@
 import threading
 from typing import TYPE_CHECKING
 
+import sys
+
 import numpy as np
 import sounddevice as sd
-import winsound
 from PySide6.QtCore import Signal, QElapsedTimer
 
 from workers.base_worker import BaseWorker
@@ -98,7 +99,10 @@ class AudioWorker(BaseWorker):
             all_devices = sd.query_devices()
             default_in  = sd.default.device[0]
             hostapis    = sd.query_hostapis()
-            wasapi_idx  = next((i for i, h in enumerate(hostapis) if "WASAPI" in h["name"]), None)
+            if sys.platform == "win32":
+                wasapi_idx = next((i for i, h in enumerate(hostapis) if "WASAPI" in h["name"]), None)
+            else:
+                wasapi_idx = None
             items = []
             for i, dev in enumerate(all_devices):
                 if dev["max_input_channels"] > 0:
@@ -254,11 +258,17 @@ class AudioWorker(BaseWorker):
                         self._silence_notified = True
                         self.muted_detected.emit()
                         # Short beep on a separate thread so the audio callback is not blocked.
+                        def _beep():
+                            if sys.platform == "win32":
+                                import winsound
+                                winsound.Beep(440, 100)
+                                winsound.Beep(440, 100)
+                            else:
+                                import subprocess
+                                subprocess.run(["paplay", "/usr/share/sounds/freedesktop/stereo/bell.oga"],
+                                               capture_output=True)
                         import threading
-                        threading.Thread(
-                            target=lambda: (winsound.Beep(440, 100), winsound.Beep(440, 100)),
-                            daemon=True
-                        ).start()
+                        threading.Thread(target=_beep, daemon=True).start()
                 else:
                     self._silence_timer.invalidate()
                     self._silence_notified = False
