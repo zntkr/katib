@@ -480,7 +480,13 @@ class DashboardWindow(QWidget):
         self.status_icon_label.unsetCursor()
 
     def closeEvent(self, event) -> None:
-        """Stops active QTimers on teardown to prevent memory leaks."""
+        import sys
+        from PySide6.QtWidgets import QSystemTrayIcon
+        if sys.platform != "win32" and not QSystemTrayIcon.isSystemTrayAvailable():
+            # No tray icon — minimise instead of quitting so the user can still reach the app.
+            event.ignore()
+            self.showMinimized()
+            return
         for timer in self.findChildren(QTimer):
             if timer.isActive():
                 timer.stop()

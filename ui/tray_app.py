@@ -35,7 +35,10 @@ class TrayApp(QObject):
         self._icon_rec  = colorize_svg_icon(ICN_MIC, p["CLR_ERR"], size=64)
 
         self.dashboard = DashboardWindow(settings=self.settings, icon_idle=self._icon_idle)
-        self._build_tray()
+        if QSystemTrayIcon.isSystemTrayAvailable():
+            self._build_tray()
+        else:
+            self._build_no_tray_quit_button()
 
     _RTL_LANGS = {"ar", "fa", "ur"}
 
@@ -52,7 +55,8 @@ class TrayApp(QObject):
         if hasattr(self, 'tray'):
             self.tray.hide()
             self.tray.deleteLater()
-        self._build_tray()
+        if QSystemTrayIcon.isSystemTrayAvailable():
+            self._build_tray()
         self.dashboard._refresh_language_tooltips()
         if self.osd:
             self.osd.refresh_language()
@@ -88,6 +92,17 @@ class TrayApp(QObject):
         self.tray.setContextMenu(menu)
         self.tray.activated.connect(self._on_tray_activated)
         self.tray.show()
+
+    def _build_no_tray_quit_button(self) -> None:
+        """Adds a Quit button directly to the dashboard when no system tray is available."""
+        from PySide6.QtWidgets import QPushButton, QVBoxLayout
+        btn = QPushButton(t("tray.menu.quit"))
+        app = QApplication.instance()
+        if app:
+            btn.clicked.connect(app.quit)
+        layout = self.dashboard.layout()
+        if isinstance(layout, QVBoxLayout):
+            layout.addWidget(btn)
 
     def _on_tray_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
         if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
