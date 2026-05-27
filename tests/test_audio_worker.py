@@ -638,7 +638,7 @@ class TestRefreshDevices:
         assert any("could not retrieve" in m.lower() for m in logs)
 
 
-# ── Tests for the remaining 10 lines (100% coverage) ──────────────────────────
+# Tests for the remaining 10 lines (100% coverage)
 
 class TestResample:
     def test_resample_same_sr(self, mock_settings):

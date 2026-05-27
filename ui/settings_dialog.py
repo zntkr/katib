@@ -121,7 +121,7 @@ class SettingsDialog(QDialog):
         cols.setSpacing(0)
         outer.addLayout(cols)
 
-        # ── Left column: General + System ────────────────────────
+        # Left column: General + System
         left = QVBoxLayout()
         left.setSpacing(G_1)
         left.setContentsMargins(0, 0, G_2, 0)
@@ -175,7 +175,7 @@ class SettingsDialog(QDialog):
         btn_reset.clicked.connect(self._reset_advanced)
         left.addWidget(btn_reset)
 
-        # ── Divider ───────────────────────────────────────────────
+        # Divider
         divider = QFrame()
         divider.setFixedWidth(1)
         divider.setStyleSheet(
@@ -183,7 +183,7 @@ class SettingsDialog(QDialog):
         )
         cols.addWidget(divider)
 
-        # ── Right column: Model + Processing ─────────────────────
+        # Right column: Model + Processing
         right = QVBoxLayout()
         right.setSpacing(G_1)
         right.setContentsMargins(G_2, 0, 0, 0)

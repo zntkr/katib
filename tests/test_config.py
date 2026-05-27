@@ -9,7 +9,7 @@ from unittest.mock import patch
 import pytest
 from core.settings import SettingsManager, validate_model_dir, find_fallback_model_dir, get_settings_path
 
-# ── shared fixture: get_settings_path → tmp_path ────────────────────────────
+# shared fixture: get_settings_path → tmp_path
 
 @pytest.fixture
 def settings_file(tmp_path):
@@ -65,7 +65,7 @@ class TestSettingsManager:
         assert sm.get("language") is None  # resets to default (auto), get() produces None
 
 
-# ──────────────────────────────────────── validate_model_dir ────────────────
+# validate_model_dir
 
 def _make_model_dir(base: Path, use_safetensors: bool = False) -> Path:
     """Creates a valid Whisper model directory inside base."""
@@ -174,7 +174,7 @@ class TestValidateModelDirDepthLimit:
         assert validate_model_dir(str(tmp_path)) == str(model_dir.resolve())
 
 
-# ──────────────────────────────────── get_settings_path ────────────────────
+# get_settings_path
 
 class TestGetSettingsPath:
 
@@ -189,7 +189,7 @@ class TestGetSettingsPath:
         assert result.parent.is_dir()
 
 
-# ──────────────────────────────── find_fallback_model_dir ──────────────────
+# find_fallback_model_dir
 
 class TestFindFallbackModelDir:
 
@@ -226,7 +226,7 @@ class TestFindFallbackModelDir:
         assert result == str(model.resolve())
 
 
-# ──────────────────────────── SettingsManager I/O errors ─────────────────
+# SettingsManager I/O errors
 
 class TestSettingsManagerIOErrors:
 
@@ -250,7 +250,7 @@ class TestSettingsManagerIOErrors:
         assert any(r.levelno == logging.ERROR for r in caplog.records)
 
 
-# ──────────────────────── get_resolved_model_dir fallback ──────────────────
+# get_resolved_model_dir fallback
 
 class TestGetResolvedModelDir:
 
@@ -283,7 +283,7 @@ class TestGetResolvedModelDir:
             assert sm.get_resolved_model_dir() is None
 
 
-# ──────────────────────────────── set_many ─────────────────────────────────
+# set_many
 
 class TestSetMany:
 

@@ -34,7 +34,7 @@ def mock_disk_space():
         yield
 
 
-# ──────────────────────────────────────────── initial state ──────────────────
+# initial state
 
 class TestInitialState:
     def test_target_parent_is_default(self, qapp, mock_settings):
@@ -58,7 +58,7 @@ class TestStop:
         worker.stop()
 
 
-# ──────────────────────────────────────────── start_download ────────────────
+# start_download
 
 class TestStartDownload:
     def test_sets_target_parent(self, qapp, tmp_path, mock_settings):
@@ -95,7 +95,7 @@ class TestStartDownload:
         mock_start.assert_not_called()
 
 
-# ──────────────────────────────────────────── successful download ────────────
+# successful download
 
 class TestRunSuccess:
     """snapshot_download is mocked; run() is called directly (no thread is started)."""
@@ -201,7 +201,7 @@ class TestRunSuccess:
         assert captured[0] == MODEL_REPO_ID
 
 
-# ───────────────────────────────────── rollback (error case) ────────────────
+# rollback (error case)
 
 class TestRunFailure:
     def _run_with_error(self, tmp_path, mock_settings, exc=None):
@@ -341,7 +341,7 @@ class TestRunFailure:
         assert any(lvl == "WRN" and "Temporary files could not be deleted" in m for lvl, m in logs)
 
 
-# ──────────────────────────────── replacing an existing model ───────────────
+# replacing an existing model
 
 class TestRunExistingFinalDir:
     def test_existing_model_replaced_with_new(self, qapp, tmp_path, mock_settings):
@@ -418,7 +418,7 @@ class TestRunExistingFinalDir:
         assert errors == []
 
 
-# ──────────────────────────────── cleaning up an existing temp directory ─────
+# cleaning up an existing temp directory
 
 class TestPreexistingTempDir:
     def test_stale_temp_removed_before_download_call(self, qapp, tmp_path, mock_settings):
@@ -471,7 +471,7 @@ class TestPreexistingTempDir:
         assert len(finished) == 1
 
 
-# ──────────────────────────────────────────── constants ─────────────────────
+# constants
 
 class TestConstants:
     def test_model_repo_id_is_systran_small(self, mock_settings):
@@ -487,7 +487,7 @@ class TestConstants:
         assert DEFAULT_DOWNLOAD_PARENT.is_relative_to(Path.home())
 
 
-# ───────────────────────────────────────── pre-flight disk check ────────────
+# pre-flight disk check
 
 class TestPreFlightDiskCheck:
     def test_insufficient_space_aborts_early(self, qapp, tmp_path, mock_settings):
@@ -540,7 +540,7 @@ class TestPreFlightDiskCheck:
             assert "osd.dl_no_space" in errors[0]
 
 
-# ───────────────────────────────────────── exception message mappings ───────
+# exception message mappings
 
 class TestExceptionMessageMapping:
     def _run_with_exception(self, tmp_path, mock_settings, exc_message):

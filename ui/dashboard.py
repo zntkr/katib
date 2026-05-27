@@ -62,14 +62,14 @@ class DashboardWindow(QWidget):
         self.setWindowTitle(APP_NAME)
         self.setWindowIcon(icon_idle)
 
-        # ── White Flash Prevention ────────────────────────────────────────
+        # White Flash Prevention
         # WA_TranslucentBackground: DWM initialises the buffer as transparent
         # instead of white; Qt paints the dark background on the first paint —
         # the user never sees a white flash.
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         # ─────────────────────────────────────────────────────────────────
 
-        # ── Windows DWM Dark Mode ──────────────────────────────────────────
+        # Windows DWM Dark Mode
         try:
             apply_dark_mode_to_window(int(self.winId()))
         except Exception:
@@ -114,7 +114,7 @@ class DashboardWindow(QWidget):
         
         p = theme_manager.palette
         
-        # ── LOG AREA (Top Layer) ──────────────────────────────────────
+        # LOG AREA (Top Layer)
         self.log_widget = QWidget()
         self.log_widget.setObjectName("log_widget")
         log_layout = QVBoxLayout(self.log_widget)
@@ -135,7 +135,7 @@ class DashboardWindow(QWidget):
         root.addWidget(self.log_widget)
         self.log_widget.hide()
 
-        # ── STATUS & LEVEL ROW (Middle Layer) ─────────────────────────
+        # STATUS & LEVEL ROW (Middle Layer)
         status_row = QHBoxLayout()
         status_row.setSpacing(G_1)
         status_row.setAlignment(Qt.AlignmentFlag.AlignVCenter)
@@ -185,7 +185,7 @@ class DashboardWindow(QWidget):
         
         root.addLayout(status_row)
 
-        # ── COMPACT HUD (Bottom Layer) ────────────────────────────────
+        # COMPACT HUD (Bottom Layer)
         mic_row = QHBoxLayout()
         mic_row.setSpacing(G_1)
         

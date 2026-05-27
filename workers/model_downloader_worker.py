@@ -36,7 +36,7 @@ class ModelDownloaderWorker(BaseWorker):
         target_parent = self._target_parent
         target_parent.mkdir(parents=True, exist_ok=True)
 
-        # ─── PRE-FLIGHT DISK CHECK ───────────────────────────────────────
+        # PRE-FLIGHT DISK CHECK
         # For unknown / external models, assume 4 GB as a safe upper bound.
         required_space_bytes = 4 * 1024**3
         for model_info in WHISPER_MODELS.values():

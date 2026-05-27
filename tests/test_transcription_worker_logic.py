@@ -48,7 +48,7 @@ def _make_worker_with_model(qapp, mock_settings, segments_text: list[str] | None
     return worker
 
 
-# ─────────────────────────────────── check_model_exists ─────────────────────
+# check_model_exists
 
 class TestCheckModelExists:
 
@@ -109,7 +109,7 @@ class TestCheckModelExists:
         assert errors == []
 
 
-# ──────────────────────── add_audio → check_model_exists False ──────────────
+# add_audio → check_model_exists False
 
 class TestAddAudioMissingModel:
 
@@ -135,7 +135,7 @@ class TestAddAudioMissingModel:
         assert statuses == []
 
 
-# ──────────────────────────────────────── stop ─────────────────────────────
+# stop
 
 class TestStop:
 
@@ -153,7 +153,7 @@ class TestStop:
         assert worker._queue.empty()
 
 
-# ──────────────────────────────── add_audio: dolu kuyruk ────────────────────
+# add_audio: full queue
 
 class TestAddAudioFullQueue:
 
@@ -178,7 +178,7 @@ class TestAddAudioFullQueue:
         assert len(errors) == 1
 
 
-# ──────────────────────────────────── reload_model ──────────────────────────
+# reload_model
 
 class TestReloadModel:
 
@@ -210,7 +210,7 @@ class TestReloadModel:
         assert worker._queue.qsize() == QUEUE_MAXSIZE
 
 
-# ──────────────────────────────── _load_model: no valid dir ─────────────────
+# _load_model: no valid dir
 
 class TestLoadModelNoValidDir:
 
@@ -246,7 +246,7 @@ class TestLoadModelNoValidDir:
         mock_cls.assert_not_called()
 
 
-# ──────────────────────────────── _load_model: success ──────────────────────
+# _load_model: success
 
 class TestLoadModelSuccess:
 
@@ -329,7 +329,7 @@ class TestLoadModelSuccess:
         assert worker._model is not None
 
 
-# ──────────────────────────────── _load_model: failure ──────────────────────
+# _load_model: failure
 
 class TestLoadModelFailure:
 
@@ -377,7 +377,7 @@ class TestLoadModelFailure:
         assert any("model corrupted" in m for m in err_msgs)
 
 
-# ──────────────────────────────── _load_model: fallback logging ──────────────
+# _load_model: fallback logging
 
 class TestLoadModelFallbackLogging:
 
@@ -404,7 +404,7 @@ class TestLoadModelFallbackLogging:
         assert not any("invalid" in m for m in wrn_msgs)
 
 
-# ──────────────────────────────── _transcribe: model None ───────────────────
+# _transcribe: model None
 
 class TestTranscribeModelNone:
 
@@ -423,7 +423,7 @@ class TestTranscribeModelNone:
         assert texts == []
 
 
-# ──────────────────────────────── _transcribe: success ──────────────────────
+# _transcribe: success
 
 class TestTranscribeSuccess:
 
@@ -460,7 +460,7 @@ class TestTranscribeSuccess:
         assert s["errors"] == []
 
 
-# ──────────────────────────── _transcribe: empty transcription ───────────────
+# _transcribe: empty transcription
 
 class TestTranscribeEmptyResult:
 
@@ -487,7 +487,7 @@ class TestTranscribeEmptyResult:
         assert any(lvl == "WRN" for lvl, _, _ in s["logs"])
 
 
-# ──────────────────────────── _transcribe: hallucination ────────────────────
+# _transcribe: hallucination
 
 class TestTranscribeHallucination:
 
@@ -510,7 +510,7 @@ class TestTranscribeHallucination:
         assert any(lvl == "WRN" for lvl, _, m in s["logs"])
 
 
-# ──────────────────────────── _transcribe: exception ────────────────────────
+# _transcribe: exception
 
 class TestTranscribeException:
 

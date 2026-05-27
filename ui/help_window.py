@@ -153,7 +153,7 @@ class HelpWindow(QWidget):
         layout.setContentsMargins(0, 0, G_1, G_2)
         layout.setSpacing(G_2)
 
-        # ── How to Use ────────────────────────────────────────────────────
+        # How to Use
         grp_temel = SettingGroup(t("help.how_to_use"))
         steps = [
             t("help.step1"),
@@ -170,7 +170,7 @@ class HelpWindow(QWidget):
         ]))
         layout.addWidget(grp_temel)
 
-        # ── Settings ──────────────────────────────────────────────────────
+        # Settings
         grp_ayar = SettingGroup(t("help.settings_section"))
 
         grp_ayar.group_layout.addWidget(_lbl(t("help.hotkey_title"), bold=True))
@@ -200,7 +200,7 @@ class HelpWindow(QWidget):
         ]))
         layout.addWidget(grp_ayar)
 
-        # ── Troubleshooting ───────────────────────────────────────────────
+        # Troubleshooting
         grp_sorun = SettingGroup(t("help.troubleshooting"))
         sorunlar = [
             (t("help.trouble_title1"), t("help.trouble_desc1")),

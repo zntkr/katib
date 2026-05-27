@@ -80,7 +80,7 @@ class TestQtKeyToKeyboard:
         assert self.fn(9999) is None
 
 
-# ── shared fixture ────────────────────────────────────────────────────────────
+# shared fixture
 
 @pytest.fixture
 def dashboard(qapp, mock_settings):

@@ -59,7 +59,7 @@ class TranscriptionWorker(BaseWorker):
             try:
                 self._transcribe(audio)
             except Exception as e:
-                detail = str(e) or "bilinmeyen hata"
+                detail = str(e) or "unknown error"
                 self.log_entry.emit("ERR", "STT", f"Transcription crashed: {detail}")
                 self.error_occurred.emit("osd.stt_crashed")
             
@@ -107,7 +107,7 @@ class TranscriptionWorker(BaseWorker):
             self.model_loaded.emit()
             self.loading_state_changed.emit(False)
         except Exception as e:
-            detail = str(e) or "bilinmeyen hata"
+            detail = str(e) or "unknown error"
             self.log_entry.emit("ERR", "STT", f"Model failed to load: {detail}")
             self.error_occurred.emit("osd.model_load_failed")
             self.status_changed.emit("status.model_error", "ERR")

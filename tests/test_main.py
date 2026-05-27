@@ -9,7 +9,7 @@ import sys
 from unittest.mock import MagicMock, patch
 
 
-# ────────────────────────────────────────── StreamToLogger ──────────────────
+# StreamToLogger
 
 class TestStreamToLogger:
     def _make(self, level=logging.INFO):
@@ -49,7 +49,7 @@ class TestStreamToLogger:
         stream.flush()  # must not raise
 
 
-# ────────────────────────────────────────── setup_logging ───────────────────
+# setup_logging
 
 class TestSetupLogging:
     def test_returns_logger(self, tmp_path):
@@ -111,7 +111,7 @@ class TestSetupLogging:
         assert sys.excepthook is not sys.__excepthook__
 
 
-# ────────────────────────────────── handle_exception (excepthook) ───────────
+# handle_exception (excepthook)
 
 class TestHandleException:
     """Behaviours of handle_exception installed as sys.excepthook."""

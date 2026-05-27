@@ -28,7 +28,7 @@ venv/
 .vscode/
 .idea/
 
-# Claude Code ve iç geliştirme araçları
+# AI Ajanları ve İç Geliştirme Araçları
 .claude/
 .agents/
 enchanted-waddling-trinket.md
@@ -44,3 +44,10 @@ htmlcov/
 
 # Boş/eski klasörler
 dikte/
+
+# Antigravity & Geçici AI Scriptleri
+cleaner.py
+check.py
+diff.txt
+.gemini/
+CONTEXT.md

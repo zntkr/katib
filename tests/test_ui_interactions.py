@@ -20,7 +20,7 @@ def dashboard(qapp, mock_settings):
 
 class TestDashboardMethods:
 
-    # ── __init__ DWM exception handler ──────────────────────────────────────
+    # __init__ DWM exception handler
 
     def test_init_survives_dark_mode_error(self, qapp, mock_settings):
         from ui.utils import _make_icon
@@ -28,7 +28,7 @@ class TestDashboardMethods:
             w = DashboardWindow(mock_settings, icon_idle=_make_icon("#ffffff"))
         assert w is not None
 
-    # ── _on_audio_inputs_changed ─────────────────────────────────────────────
+    # _on_audio_inputs_changed
 
     def test_audio_inputs_changed_emits_refresh(self, dashboard):
         from PySide6.QtTest import QSignalSpy
@@ -36,7 +36,7 @@ class TestDashboardMethods:
         dashboard._on_audio_inputs_changed()
         assert spy.count() == 1
 
-    # ── setup_icon_button fallback (no SVG) ──────────────────────────────────
+    # setup_icon_button fallback (no SVG)
 
     def test_icon_button_fallback_text_when_no_svg(self, qapp, mock_settings):
         with patch("os.path.exists", return_value=False):
@@ -44,7 +44,7 @@ class TestDashboardMethods:
             w = DashboardWindow(mock_settings, icon_idle=_make_icon("#ffffff"))
         assert w is not None
 
-    # ── _toggle_logs ─────────────────────────────────────────────────────────
+    # _toggle_logs
 
     def test_toggle_logs_shows_log_widget(self, dashboard):
         assert dashboard.log_widget.isHidden()
@@ -59,7 +59,7 @@ class TestDashboardMethods:
         assert dashboard.log_widget.isHidden()
         dashboard.hide()
 
-    # ── _populate_devices ────────────────────────────────────────────────────
+    # _populate_devices
 
     def test_populate_devices_emits_signal(self, dashboard):
         from PySide6.QtTest import QSignalSpy
@@ -67,7 +67,7 @@ class TestDashboardMethods:
         dashboard._populate_devices()
         assert spy.count() == 1
 
-    # ── populate_devices ─────────────────────────────────────────────────────
+    # populate_devices
 
     def test_populate_devices_fills_combo(self, dashboard):
         items = [("Mic 1", 0, True), ("Mic 2", 1, False)]
@@ -91,7 +91,7 @@ class TestDashboardMethods:
         dashboard.populate_devices([])
         assert "WRN" in logs
 
-    # ── _position_bottom_right ───────────────────────────────────────────────
+    # _position_bottom_right
 
     def test_position_bottom_right_runs(self, dashboard, qapp):
         with patch("ui.utils_win.get_dwm_visual_bounds", return_value=None):
@@ -101,7 +101,7 @@ class TestDashboardMethods:
         with patch("ui.utils_win.get_dwm_visual_bounds", return_value=(0, 0, 330, 200)):
             dashboard._position_bottom_right()
 
-    # ── showEvent ────────────────────────────────────────────────────────────
+    # showEvent
 
     def test_show_event_runs(self, dashboard, qapp):
         from PySide6.QtGui import QShowEvent
@@ -109,14 +109,14 @@ class TestDashboardMethods:
         event = QShowEvent()
         dashboard.showEvent(event)
 
-    # ── paintEvent ───────────────────────────────────────────────────────────
+    # paintEvent
 
     def test_paint_event_runs(self, dashboard, qapp):
         dashboard.show()
         qapp.processEvents()
         dashboard.hide()
 
-    # ── _on_device_changed ────────────────────────────────────────────────────
+    # _on_device_changed
 
     def test_device_changed_saves_and_emits(self, dashboard, mock_settings):
         from PySide6.QtTest import QSignalSpy
@@ -133,7 +133,7 @@ class TestDashboardMethods:
         dashboard.mic_combo.blockSignals(False)
         dashboard._on_device_changed(dashboard.mic_combo.currentIndex())
 
-    # ── set_loading_indicator ─────────────────────────────────────────────────
+    # set_loading_indicator
 
     def test_set_loading_indicator_active_sets_indeterminate(self, dashboard):
         dashboard.set_loading_indicator(True)
@@ -144,7 +144,7 @@ class TestDashboardMethods:
         dashboard.set_loading_indicator(False)
         assert dashboard.level_bar.maximum() == 100
 
-    # ── append_log_entry ─────────────────────────────────────────────────────
+    # append_log_entry
 
     def test_append_log_entry_ok(self, dashboard):
         dashboard.append_log_entry("OK", "TST", "test message")
@@ -164,7 +164,7 @@ class TestDashboardMethods:
     def test_append_log_entry_escapes_html(self, dashboard):
         dashboard.append_log_entry("OK", "TST", "<script>alert(1)</script>")
 
-    # ── update_level ─────────────────────────────────────────────────────────
+    # update_level
 
     def test_update_level_low(self, dashboard):
         from core.settings import STATE_LISTENING
@@ -192,7 +192,7 @@ class TestDashboardMethods:
         dashboard._last_level_color = dashboard._last_level_color
         dashboard.update_level(0.3)  # same color, no stylesheet update
 
-    # ── set_status ───────────────────────────────────────────────────────────
+    # set_status
 
     def test_set_status_ok(self, dashboard):
         from core.settings import STATE_READY
@@ -206,7 +206,7 @@ class TestDashboardMethods:
     def test_set_status_unknown_level(self, dashboard):
         dashboard.set_status("Unknown", "XYZ")
 
-    # ── show_model_missing_guidance ───────────────────────────────────────────
+    # show_model_missing_guidance
 
     def test_model_missing_guidance_opens_log_panel(self, dashboard):
         assert dashboard.log_widget.isHidden()
@@ -261,7 +261,7 @@ class TestDashboardMethods:
             dashboard._on_status_label_click(event)
         mock_open.assert_not_called()
 
-    # ── keyPressEvent ─────────────────────────────────────────────────────────
+    # keyPressEvent
 
     def test_keypressevent_escape_hides(self, dashboard):
         from PySide6.QtGui import QKeyEvent
@@ -277,13 +277,13 @@ class TestDashboardMethods:
         event = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Return, Qt.KeyboardModifier.NoModifier)
         dashboard.keyPressEvent(event)
 
-    # ── selected_device_index ─────────────────────────────────────────────────
+    # selected_device_index
 
     def test_selected_device_index_returns_current_data(self, dashboard):
         dashboard.populate_devices([("Mic", 5, True)])
         assert dashboard.selected_device_index() == 5
 
-    # ── set_download_state ────────────────────────────────────────────────────
+    # set_download_state
 
     def test_set_download_state_no_dialog(self, dashboard):
         dashboard.set_download_state(True)
@@ -294,7 +294,7 @@ class TestDashboardMethods:
         dashboard.set_download_state(True)
         assert not dashboard._settings_dialog.btn_download.isEnabled()
 
-    # ── on_download_complete ──────────────────────────────────────────────────
+    # on_download_complete
 
     def test_on_download_complete_no_dialog_emits_signal(self, dashboard):
         from PySide6.QtTest import QSignalSpy
@@ -307,7 +307,7 @@ class TestDashboardMethods:
         dashboard.on_download_complete(str(tmp_path))
         assert str(tmp_path) in dashboard._settings_dialog.lbl_model_path.toolTip()
 
-    # ── show_help ─────────────────────────────────────────────────────────────
+    # show_help
 
     def test_show_help_creates_window(self, dashboard):
         dashboard.show_help()
@@ -319,7 +319,7 @@ class TestDashboardMethods:
         dashboard.show_help()
         assert dashboard._help_window is w1
 
-    # ── _open_settings_dialog overflow ───────────────────────────────────────
+    # _open_settings_dialog overflow
 
     def test_open_settings_dialog_overflow_x(self, dashboard):
         with patch.object(dashboard, "frameGeometry") as mock_geo:
@@ -329,7 +329,7 @@ class TestDashboardMethods:
             mock_geo.return_value.height.return_value = 200
             dashboard._open_settings_dialog()
 
-    # ── _on_hotkey_from_dialog ────────────────────────────────────────────────
+    # _on_hotkey_from_dialog
 
     def test_on_hotkey_from_dialog_emits_signal(self, dashboard):
         from PySide6.QtTest import QSignalSpy
@@ -359,7 +359,7 @@ def settings_dialog(qapp, mock_settings):
 
 class TestSettingsDialogInteractions:
 
-    # ── wheelEvent ───────────────────────────────────────────────────────────
+    # wheelEvent
 
     def test_no_scroll_combo_ignores_wheel_event(self, settings_dialog):
         from PySide6.QtCore import QPoint, QPointF
@@ -377,12 +377,12 @@ class TestSettingsDialogInteractions:
         combo.wheelEvent(event)
         assert combo.currentIndex() == before
 
-    # ── paintEvent ───────────────────────────────────────────────────────────
+    # paintEvent
 
     def test_paint_event_does_not_raise(self, settings_dialog):
         settings_dialog.repaint()
 
-    # ── show() exception handler ─────────────────────────────────────────────
+    # show() exception handler
 
     def test_show_survives_dark_mode_error(self, settings_dialog):
         with patch("ui.settings_dialog.apply_dark_mode_to_window", side_effect=Exception("no dwm")):
@@ -390,7 +390,7 @@ class TestSettingsDialogInteractions:
         settings_dialog.hide()
 
 
-    # ── log folder ───────────────────────────────────────────────────────────
+    # log folder
 
     def test_open_log_folder_when_missing_emits_warning(self, settings_dialog):
         logs = []
@@ -405,7 +405,7 @@ class TestSettingsDialogInteractions:
             settings_dialog._open_log_folder()
         mock_sf.assert_called_once()
 
-    # ── hotkey capture ───────────────────────────────────────────────────────
+    # hotkey capture
 
     def test_start_hotkey_capture_changes_button_text(self, settings_dialog):
         settings_dialog._start_hotkey_capture()
@@ -418,7 +418,7 @@ class TestSettingsDialogInteractions:
         assert settings_dialog.btn_hotkey.text() == "F10"
         assert settings_dialog._capturing_hotkey is False
 
-    # ── keyPressEvent ────────────────────────────────────────────────────────
+    # keyPressEvent
 
     def test_keypressevent_escape_hides_dialog(self, settings_dialog):
         from PySide6.QtGui import QKeyEvent
@@ -466,9 +466,9 @@ class TestSettingsDialogInteractions:
             settings_dialog.keyPressEvent(event)
         assert mock_settings.get("hotkey") == "ctrl+f1"
 
-    # ── theme changed ─────────────────────────────────────────────────────────
+    # theme changed
 
-    # ── combo index changed ──────────────────────────────────────────────────
+    # combo index changed
 
     def test_combo_custom_item_does_not_save_repo(self, settings_dialog, mock_settings):
         custom_id = "custom:/some/path"
@@ -489,7 +489,7 @@ class TestSettingsDialogInteractions:
         settings_dialog._revert_combo()
         assert settings_dialog.model_select_combo.currentIndex() == 1
 
-    # ── browse model dir ─────────────────────────────────────────────────────
+    # browse model dir
 
     def test_browse_model_dir_cancel_reverts_combo(self, settings_dialog):
         settings_dialog._last_combo_idx = 0
@@ -512,7 +512,7 @@ class TestSettingsDialogInteractions:
             settings_dialog._browse_model_dir()
         assert spy.count() == 1
 
-    # ── sync combo with custom path ──────────────────────────────────────────
+    # sync combo with custom path
 
     def test_sync_combo_with_unrecognised_dir_adds_custom_item(self, settings_dialog):
         settings_dialog._sync_combo_with_current_dir("/some/custom/model-xyz")
@@ -525,7 +525,7 @@ class TestSettingsDialogInteractions:
         settings_dialog._sync_combo_with_current_dir("/some/custom/model-xyz")
         assert settings_dialog.model_select_combo.count() == count_before
 
-    # ── check selected model status guard ────────────────────────────────────
+    # check selected model status guard
 
     def test_check_status_returns_early_for_browse_custom(self, settings_dialog):
         settings_dialog.model_select_combo.blockSignals(True)
@@ -535,7 +535,7 @@ class TestSettingsDialogInteractions:
         settings_dialog.model_select_combo.blockSignals(False)
         settings_dialog._check_selected_model_status()  # should not raise
 
-    # ── download clicked guards ──────────────────────────────────────────────
+    # download clicked guards
 
     def test_download_clicked_browse_custom_is_noop(self, settings_dialog):
         settings_dialog.model_select_combo.blockSignals(True)
@@ -553,7 +553,7 @@ class TestSettingsDialogInteractions:
             settings_dialog._on_download_clicked()
         assert mock_settings.get("model_dir") != "/fake"
 
-    # ── compute type ─────────────────────────────────────────────────────────
+    # compute type
 
     def test_compute_type_changed_with_no_data_is_noop(self, settings_dialog):
         settings_dialog.compute_combo.clear()
@@ -563,7 +563,7 @@ class TestSettingsDialogInteractions:
         settings_dialog._populate_compute_type_options()
         assert settings_dialog.compute_combo.count() > 0
 
-    # ── refresh values ───────────────────────────────────────────────────────
+    # refresh values
 
     def test_refresh_values_syncs_all_widgets(self, settings_dialog, mock_settings):
         mock_settings.set("hotkey", "f5")
@@ -572,7 +572,7 @@ class TestSettingsDialogInteractions:
         assert settings_dialog.btn_hotkey.text() == "F5"
 
 
-    # ── set_download_state ───────────────────────────────────────────────────
+    # set_download_state
 
     def test_set_download_state_active_disables_button(self, settings_dialog):
         settings_dialog.set_download_state(True)
@@ -583,13 +583,13 @@ class TestSettingsDialogInteractions:
         settings_dialog.set_download_state(False)
         assert settings_dialog.btn_download.isEnabled()
 
-    # ── on_download_complete ─────────────────────────────────────────────────
+    # on_download_complete
 
     def test_on_download_complete_updates_path_label(self, settings_dialog, tmp_path):
         settings_dialog.on_download_complete(str(tmp_path))
         assert str(tmp_path) in settings_dialog.lbl_model_path.toolTip()
 
-    # ── paintEvent ───────────────────────────────────────────────────────────
+    # paintEvent
 
     def test_paint_event_via_show(self, settings_dialog, qapp):
         from PySide6.QtGui import QPaintEvent
@@ -604,7 +604,7 @@ class TestSettingsDialogInteractions:
         qapp.processEvents()
         settings_dialog.hide()
 
-    # ── _on_dynamic_changed ──────────────────────────────────────────────────
+    # _on_dynamic_changed
 
     def test_dynamic_widget_change_saves_setting(self, settings_dialog, mock_settings):
         lang_widget = settings_dialog._dynamic_widgets.get("language")
@@ -612,7 +612,7 @@ class TestSettingsDialogInteractions:
         lang_widget.setCurrentIndex(0)
         assert mock_settings.get("language") is None  # "auto" → None conversion
 
-    # ── badge "not installed" branch ─────────────────────────────────────────
+    # badge "not installed" branch
 
     def test_refresh_badges_marks_uninstalled_models(self, settings_dialog):
         with patch("ui.settings_dialog.validate_model_dir", return_value=None):
@@ -620,7 +620,7 @@ class TestSettingsDialogInteractions:
         text = settings_dialog.model_select_combo.itemText(0)
         assert text.startswith("  ")
 
-    # ── download: Yes triggers emit ───────────────────────────────────────────
+    # download: Yes triggers emit
 
     def test_download_clicked_yes_emits_download_requested(self, settings_dialog):
         from PySide6.QtTest import QSignalSpy
@@ -632,7 +632,7 @@ class TestSettingsDialogInteractions:
             settings_dialog._on_download_clicked()
         assert spy.count() == 1
 
-    # ── compute type valid change ─────────────────────────────────────────────
+    # compute type valid change
 
     def test_compute_type_changed_saves_and_emits(self, settings_dialog, mock_settings):
         from PySide6.QtTest import QSignalSpy
@@ -641,7 +641,7 @@ class TestSettingsDialogInteractions:
         settings_dialog.compute_combo.setCurrentIndex(1)
         assert spy.count() >= 1
 
-    # ── _reset_advanced ───────────────────────────────────────────────────────
+    # _reset_advanced
 
     def test_reset_advanced_emits_ok_log(self, settings_dialog, mock_settings):
         logs = []
@@ -649,7 +649,7 @@ class TestSettingsDialogInteractions:
         settings_dialog._reset_advanced()
         assert "OK" in logs
 
-    # ── keyPressEvent non-escape when not capturing ───────────────────────────
+    # keyPressEvent non-escape when not capturing
 
     def test_keypressevent_non_escape_when_not_capturing(self, settings_dialog):
         from PySide6.QtGui import QKeyEvent
@@ -658,7 +658,7 @@ class TestSettingsDialogInteractions:
         event = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Return, Qt.KeyboardModifier.NoModifier)
         settings_dialog.keyPressEvent(event)  # should not raise
 
-    # ── apply_installed model (regression) ──────────────────────────────────
+    # apply_installed model (regression)
     def test_apply_installed_model_saves_model_dir(self, settings_dialog, mock_settings, tmp_path):
         """When a downloaded model is selected from the combo (Auto-Apply), model_dir should be written to settings."""
         fake_model_dir = str(tmp_path)
@@ -689,7 +689,7 @@ class TestSettingsDialogInteractions:
         assert spy.at(0)[0] == fake_model_dir
 
 
-# ── HelpWindow ────────────────────────────────────────────────────────────────
+# HelpWindow
 
 @pytest.fixture
 def help_window(qapp):

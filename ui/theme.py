@@ -4,16 +4,16 @@ from PySide6.QtGui import QPalette, QColor
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import Qt
 
-# ── 8-pt Grid System ─────────────────────────────────────────────
+# 8-pt Grid System
 G_1, G_2, G_3, G_4, G_5, G_6 = 8, 16, 24, 32, 40, 48
 
-# ── Typography Scale ─────────────────────────────────────────────
+# Typography Scale
 FONT_SIZE_SM = 8   # pt — log box, helper labels
 FONT_SIZE_MD = 9   # pt — general UI default
 FONT_SIZE_LG = 10  # pt — toolbar icons
 FONT_SIZE_OSD = 14 # px — OSD overlay
 
-# ── Panel Dimensions ────────────────────────────────────────────
+# Panel Dimensions
 PANEL_WIDTH = 320      # px — Dashboard and OSD
 DIALOG_WIDTH = 384     # px — HelpWindow
 SETTINGS_WIDTH  = 600  # px — SettingsDialog fixed width
@@ -23,7 +23,7 @@ COMBO_HEIGHT = G_4     # px — mic combo outer height (flush with buttons)
 LOG_BOX_HEIGHT = 144   # px — dashboard log widget height
 OSD_BOTTOM_MARGIN = 48 # px — OSD bottom offset (taskbar clearance)
 
-# ── Palettes (Gruvbox Dark) ──────────────────────────────────────
+# Palettes (Gruvbox Dark)
 DARK_PALETTE = {
     # Functional states (Gruvbox Bright Variants)
     "CLR_OK":        "#b8bb26",  # Green
@@ -67,7 +67,7 @@ DARK_PALETTE = {
 }
 
 
-# ── Palettes (Gruvbox Light) ─────────────────────────────────────
+# Palettes (Gruvbox Light)
 LIGHT_PALETTE = {
     # Functional states — Gruvbox Row 2 (bright) light, koyu temanın tam karşılığı
     "CLR_OK":        "#79740e",  # bright green light  ↔ #b8bb26 dark
@@ -111,7 +111,7 @@ LIGHT_PALETTE = {
 }
 
 
-# ── Theme Manager ────────────────────────────────────────────────
+# Theme Manager
 class ThemeManager:
     def __init__(self):
         self.is_dark = True

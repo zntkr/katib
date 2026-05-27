@@ -21,7 +21,7 @@ os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"     # prevent tqdm crashes when
 os.environ["CT2_VERBOSE"] = "-3"                     # silence all CTranslate2 (C++) hardware warnings
 warnings.filterwarnings("ignore", category=UserWarning) # suppress Python (Whisper) warnings
 
-# ── Logging System ────────────────────────────────────────────────────
+# Logging System
 class StreamToLogger(io.TextIOBase):
     """Redirects console output (print, tqdm, library errors) to the log file."""
     def __init__(self, logger: logging.Logger, level: int):
@@ -121,7 +121,7 @@ def setup_logging():
 global_logger = setup_logging()
 global_logger.info("=== Katib Starting ===")
 
-# ── QApplication ─────────────────────────────────────────────────────────
+# QApplication
 # Qt objects (QPixmap, QIcon, QWidget, etc.) can only exist AFTER QApplication.
 # Therefore all other imports come AFTER QApplication is created.
 
@@ -136,7 +136,7 @@ def _sigint_handler(signum, frame):
 
 def main():
     signal.signal(signal.SIGINT, _sigint_handler)
-    # ── Single-Instance Lock ──────────────────────────────────────────────
+    # Single-Instance Lock
     # Silently prevents a second launch; QSharedMemory lives for the process lifetime.
     from PySide6.QtCore import QSharedMemory
     _shared_memory = QSharedMemory("Katib_SingleInstance_Mutex")
@@ -176,18 +176,11 @@ def main():
     theme_manager.apply_theme(app, settings_manager.get("theme", "system"))
     global_logger.info("Theme and settings loaded.")
 
-    # Qt environment is ready — import UI module now.
-    # Workers are imported deferred, after the event loop starts.
     from ui.tray_app import TrayApp
 
     global_logger.info("Building UI (Tray/Dashboard)...")
     tray = TrayApp(settings=settings_manager)
     app.setWindowIcon(tray._icon_idle)
-
-    # ── Deferred Startup ──────────────────────────────────────────────────
-    # show() is intentionally called at the END of _deferred_init.
-    # Calling show() before all heavy imports finish blocks the main thread,
-    # leaving DWM's initial white frame visible until WM_PAINT is processed (flash).
 
     _workers = {}
 
@@ -335,7 +328,7 @@ def main():
         # Send only a soft stop signal to worker threads — no wait() — to avoid
         # freezing the UI or triggering a GIL deadlock.
         if 'hw' in _workers:
-            global_logger.info("Arka plan Worker thread'leri durduruluyor...")
+            global_logger.info("Stopping worker threads...")
             _workers['hw'].stop()
             _workers['aw'].stop()
             _workers['tw'].stop()
