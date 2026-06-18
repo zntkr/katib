@@ -30,7 +30,8 @@ def inject_text(text: str, log_callback=None) -> None:
         else:
             from pynput.keyboard import Controller, Key
             _kb = Controller()
-            with _kb.pressed(Key.ctrl):
+            modifier = Key.cmd if sys.platform == "darwin" else Key.ctrl
+            with _kb.pressed(modifier):
                 _kb.press("v")
                 _kb.release("v")
 

@@ -41,7 +41,6 @@ No internet required after the one-time model download.
 
 ## What it doesn't do
 
-- Work on macOS — not supported
 - Transcribe in real-time — it processes after you release the key
 - Accept voice commands or edit by voice — dictation only
 
@@ -76,7 +75,7 @@ No internet required after the one-time model download.
 | Windows 10/11 | ✅ Full support | Pre-built binary available |
 | Linux (X11) | ✅ Supported | Run from source; requires an X11 session |
 | Linux (Wayland) | ⚠️ Partial | UI and transcription work; global hotkey unavailable — log in with "Ubuntu on Xorg" |
-| macOS | ❌ Not supported | — |
+| macOS | ⚠️ Partial | Run from source; requires Accessibility permission in System Settings for the global hotkey |
 
 ---
 

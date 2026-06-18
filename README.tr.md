@@ -95,6 +95,17 @@ Katib, ağdan yalıtılmış ortamlara uygun şekilde tasarlanmıştır:
 
 ---
 
+## Platform Desteği
+
+| Platform | Durum | Notlar |
+|----------|-------|--------|
+| Windows 10/11 | ✅ Tam destek | Hazır ikili (exe) mevcut |
+| Linux (X11) | ✅ Destekleniyor | Kaynak koddan çalıştırılır |
+| Linux (Wayland) | ⚠️ Kısmi | Arayüz ve çeviri çalışır; global kısayol engellenir — "Ubuntu on Xorg" ile giriş yapın |
+| macOS | ⚠️ Kısmi | Kaynak koddan çalıştırılır; global kısayol için Sistem Ayarlarından "Erişilebilirlik" izni şarttır |
+
+---
+
 ## Kaynak koddan derleme
 
 ```bash
