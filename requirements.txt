@@ -6,3 +6,4 @@ keyboard
 pynput
 pyperclip
 huggingface_hub
+truststore

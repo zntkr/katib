@@ -1,4 +1,13 @@
 import sys
+
+# --- MİMARİ AĞ DÜZELTMESİ: Windows SSL Sertifika Deposunu Kullan ---
+# Şirket proxy'lerine (Zscaler vb.) takılan sertifika hatalarını çözer.
+try:
+    import truststore
+    truststore.inject_into_ssl()
+except ImportError:
+    pass
+# -------------------------------------------------------------------
 import os
 import io
 import typing
