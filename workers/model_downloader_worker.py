@@ -118,6 +118,7 @@ class ModelDownloaderWorker(BaseWorker):
             else:
                 user_msg = "Download failed. Please try again."
                 osd_key = "osd.dl_failed"
+                self.log_entry.emit("ERR", "DL", f"Detailed Error: {err_msg}")
 
             self.log_entry.emit("ERR", "DL", user_msg)
             self.error_occurred.emit(osd_key)
