@@ -98,6 +98,9 @@ class ModelDownloaderWorker(BaseWorker):
             self.download_finished.emit(str(final_dir))
 
         except Exception as e:
+            import logging
+            logging.getLogger("Katib").exception("Model downloader encountered an error:")
+
             # Rollback: delete the incomplete temp directory.
             if temp_dir.exists():
                 try:
