@@ -39,7 +39,7 @@ def _capture(worker: TranscriptionWorker) -> dict:
 
 def _make_worker_with_model(qapp, mock_settings, segments_text: list[str] | None = None) -> TranscriptionWorker:
     """Returns a worker ready with a mock _model."""
-    worker = TranscriptionWorker(mock_settings)
+    worker = TranscriptionWorker(mock_settings, MagicMock())
     if segments_text is None:
         segments_text = [" Hello world"]
     worker._model = MagicMock()
@@ -53,55 +53,55 @@ def _make_worker_with_model(qapp, mock_settings, segments_text: list[str] | None
 class TestCheckModelExists:
 
     def test_returns_false_when_no_current_dir(self, qapp, mock_settings):
-        worker = TranscriptionWorker(mock_settings)
+        worker = TranscriptionWorker(mock_settings, MagicMock())
         assert worker.check_model_exists() is False
 
     def test_returns_false_when_dir_not_on_filesystem(self, qapp, mock_settings):
-        worker = TranscriptionWorker(mock_settings)
+        worker = TranscriptionWorker(mock_settings, MagicMock())
         worker._current_model_dir = "/nonexistent/path/xyz"
         assert worker.check_model_exists() is False
 
     def test_returns_true_when_dir_exists(self, qapp, tmp_path, mock_settings):
-        worker = TranscriptionWorker(mock_settings)
+        worker = TranscriptionWorker(mock_settings, MagicMock())
         worker._current_model_dir = str(tmp_path)
         assert worker.check_model_exists() is True
 
     def test_does_not_mutate_is_ready_when_dir_missing(self, qapp, mock_settings):
-        worker = TranscriptionWorker(mock_settings)
+        worker = TranscriptionWorker(mock_settings, MagicMock())
         worker.is_ready = True
         worker.check_model_exists()
         assert worker.is_ready is True
 
     def test_does_not_change_is_ready_when_dir_exists(self, qapp, tmp_path, mock_settings):
-        worker = TranscriptionWorker(mock_settings)
+        worker = TranscriptionWorker(mock_settings, MagicMock())
         worker._current_model_dir = str(tmp_path)
         worker.is_ready = True
         worker.check_model_exists()
         assert worker.is_ready is True
 
     def test_emits_error_occurred_when_dir_missing(self, qapp, mock_settings):
-        worker = TranscriptionWorker(mock_settings)
+        worker = TranscriptionWorker(mock_settings, MagicMock())
         errors = []
         worker.error_occurred.connect(errors.append)
         worker.check_model_exists()
         assert len(errors) == 1
 
     def test_emits_err_log_when_dir_missing(self, qapp, mock_settings):
-        worker = TranscriptionWorker(mock_settings)
+        worker = TranscriptionWorker(mock_settings, MagicMock())
         logs = []
         worker.log_entry.connect(lambda l, c, m: logs.append(l))
         worker.check_model_exists()
         assert "ERR" in logs
 
     def test_emits_status_changed_when_dir_missing(self, qapp, mock_settings):
-        worker = TranscriptionWorker(mock_settings)
+        worker = TranscriptionWorker(mock_settings, MagicMock())
         statuses = []
         worker.status_changed.connect(lambda t, c: statuses.append((t, c)))
         worker.check_model_exists()
         assert statuses
 
     def test_no_signals_when_dir_exists(self, qapp, tmp_path, mock_settings):
-        worker = TranscriptionWorker(mock_settings)
+        worker = TranscriptionWorker(mock_settings, MagicMock())
         worker._current_model_dir = str(tmp_path)
         errors = []
         worker.error_occurred.connect(errors.append)
@@ -114,13 +114,13 @@ class TestCheckModelExists:
 class TestAddAudioMissingModel:
 
     def test_queue_stays_empty_when_not_ready(self, qapp, mock_settings):
-        worker = TranscriptionWorker(mock_settings)  # is_ready = False
+        worker = TranscriptionWorker(mock_settings, MagicMock())  # is_ready = False
         worker.add_audio(AUDIO)
         assert worker._queue.qsize() == 0
 
     def test_add_audio_emits_no_error_when_not_ready(self, qapp, mock_settings):
         """If the model is missing, _load_model already emitted a signal; add_audio should return silently."""
-        worker = TranscriptionWorker(mock_settings)  # is_ready = False
+        worker = TranscriptionWorker(mock_settings, MagicMock())  # is_ready = False
         errors = []
         worker.error_occurred.connect(errors.append)
         worker.add_audio(AUDIO)
@@ -128,7 +128,7 @@ class TestAddAudioMissingModel:
 
     def test_add_audio_emits_no_status_when_not_ready(self, qapp, mock_settings):
         """If the model is missing, add_audio should not emit status_changed — _load_model already did."""
-        worker = TranscriptionWorker(mock_settings)  # is_ready = False
+        worker = TranscriptionWorker(mock_settings, MagicMock())  # is_ready = False
         statuses = []
         worker.status_changed.connect(lambda t, c: statuses.append((t, c)))
         worker.add_audio(AUDIO)
@@ -140,12 +140,12 @@ class TestAddAudioMissingModel:
 class TestStop:
 
     def test_puts_poison_pill_in_queue(self, qapp, mock_settings):
-        worker = TranscriptionWorker(mock_settings)
+        worker = TranscriptionWorker(mock_settings, MagicMock())
         worker.stop()
         assert worker._queue.get_nowait() is None
 
     def test_drains_queue_before_poison_pill(self, qapp, mock_settings):
-        worker = TranscriptionWorker(mock_settings)
+        worker = TranscriptionWorker(mock_settings, MagicMock())
         for _ in range(3):
             worker._queue.put_nowait(AUDIO)
         worker.stop()
@@ -158,7 +158,7 @@ class TestStop:
 class TestAddAudioFullQueue:
 
     def test_full_queue_emits_warning_log(self, qapp, mock_settings):
-        worker = TranscriptionWorker(mock_settings)
+        worker = TranscriptionWorker(mock_settings, MagicMock())
         worker.is_ready = True
         logs = []
         worker.log_entry.connect(lambda l, c, m: logs.append((l, m)))
@@ -168,7 +168,7 @@ class TestAddAudioFullQueue:
         assert any(lvl == "WRN" for lvl, m in logs)
 
     def test_full_queue_emits_error_occurred(self, qapp, mock_settings):
-        worker = TranscriptionWorker(mock_settings)
+        worker = TranscriptionWorker(mock_settings, MagicMock())
         worker.is_ready = True
         errors = []
         worker.error_occurred.connect(errors.append)
@@ -183,12 +183,12 @@ class TestAddAudioFullQueue:
 class TestReloadModel:
 
     def test_puts_reload_sentinel_in_queue(self, qapp, mock_settings):
-        worker = TranscriptionWorker(mock_settings)
+        worker = TranscriptionWorker(mock_settings, MagicMock())
         worker.reload_model()
         assert isinstance(worker._queue.get_nowait(), _ReloadCommand)
 
     def test_full_queue_emits_warning_log(self, qapp, mock_settings):
-        worker = TranscriptionWorker(mock_settings)
+        worker = TranscriptionWorker(mock_settings, MagicMock())
         logs = []
         worker.log_entry.connect(lambda l, c, m: logs.append((l, m)))
         for _ in range(QUEUE_MAXSIZE):
@@ -197,13 +197,13 @@ class TestReloadModel:
         assert any(lvl == "WRN" for lvl, m in logs)
 
     def test_full_queue_does_not_raise(self, qapp, mock_settings):
-        worker = TranscriptionWorker(mock_settings)
+        worker = TranscriptionWorker(mock_settings, MagicMock())
         for _ in range(QUEUE_MAXSIZE):
             worker._queue.put_nowait(AUDIO)
         worker.reload_model()   # should not raise an exception
 
     def test_full_queue_does_not_change_queue_size(self, qapp, mock_settings):
-        worker = TranscriptionWorker(mock_settings)
+        worker = TranscriptionWorker(mock_settings, MagicMock())
         for _ in range(QUEUE_MAXSIZE):
             worker._queue.put_nowait(AUDIO)
         worker.reload_model()
@@ -215,9 +215,9 @@ class TestReloadModel:
 class TestLoadModelNoValidDir:
 
     def _run(self, qapp, mock_settings) -> tuple[TranscriptionWorker, dict]:
-        worker = TranscriptionWorker(mock_settings)
+        worker = TranscriptionWorker(mock_settings, MagicMock())
         s = _capture(worker)
-        with patch.object(mock_settings, "get_resolved_model_dir", return_value=None):
+        with patch.object(worker.model_provider, "get_active_model_path", return_value=None):
             worker._load_model()
         return worker, s
 
@@ -239,8 +239,8 @@ class TestLoadModelNoValidDir:
         assert s["loading"] == []
 
     def test_whispermodel_not_instantiated(self, qapp, mock_settings):
-        worker = TranscriptionWorker(mock_settings)
-        with patch.object(mock_settings, "get_resolved_model_dir", return_value=None), \
+        worker = TranscriptionWorker(mock_settings, MagicMock())
+        with patch.object(worker.model_provider, "get_active_model_path", return_value=None), \
              patch(_PATCH_MODEL_CLS) as mock_cls:
             worker._load_model()
         mock_cls.assert_not_called()
@@ -251,9 +251,9 @@ class TestLoadModelNoValidDir:
 class TestLoadModelSuccess:
 
     def _run(self, qapp, mock_settings) -> tuple[TranscriptionWorker, dict]:
-        worker = TranscriptionWorker(mock_settings)
+        worker = TranscriptionWorker(mock_settings, MagicMock())
         s = _capture(worker)
-        with patch.object(mock_settings, "get_resolved_model_dir", return_value="/fake/dir"), \
+        with patch.object(worker.model_provider, "get_active_model_path", return_value="/fake/dir"), \
              patch(_PATCH_MODEL_CLS):
             worker._load_model()
         return worker, s
@@ -286,16 +286,16 @@ class TestLoadModelSuccess:
 
     def test_local_files_only_is_always_true(self, qapp, mock_settings):
         """local_files_only=True invariant; this must never be broken."""
-        worker = TranscriptionWorker(mock_settings)
-        with patch.object(mock_settings, "get_resolved_model_dir", return_value="/fake/dir"), \
+        worker = TranscriptionWorker(mock_settings, MagicMock())
+        with patch.object(worker.model_provider, "get_active_model_path", return_value="/fake/dir"), \
              patch(_PATCH_MODEL_CLS) as mock_cls:
             worker._load_model()
         _, kwargs = mock_cls.call_args
         assert kwargs.get("local_files_only") is True
 
     def test_device_is_cpu(self, qapp, mock_settings):
-        worker = TranscriptionWorker(mock_settings)
-        with patch.object(mock_settings, "get_resolved_model_dir", return_value="/fake/dir"), \
+        worker = TranscriptionWorker(mock_settings, MagicMock())
+        with patch.object(worker.model_provider, "get_active_model_path", return_value="/fake/dir"), \
              patch(_PATCH_MODEL_CLS) as mock_cls:
             worker._load_model()
         _, kwargs = mock_cls.call_args
@@ -303,8 +303,8 @@ class TestLoadModelSuccess:
 
     def test_compute_type_matches_constant(self, qapp, mock_settings):
         mock_settings.set("compute_type", "int8")
-        worker = TranscriptionWorker(mock_settings)
-        with patch.object(mock_settings, "get_resolved_model_dir", return_value="/fake/dir"), \
+        worker = TranscriptionWorker(mock_settings, MagicMock())
+        with patch.object(worker.model_provider, "get_active_model_path", return_value="/fake/dir"), \
              patch(_PATCH_MODEL_CLS) as mock_cls:
             worker._load_model()
         _, kwargs = mock_cls.call_args
@@ -319,9 +319,9 @@ class TestLoadModelSuccess:
         assert s["missing"] == []
 
     def test_deletes_old_model_and_runs_gc(self, qapp, mock_settings):
-        worker = TranscriptionWorker(mock_settings)
+        worker = TranscriptionWorker(mock_settings, MagicMock())
         worker._model = MagicMock()
-        with patch.object(mock_settings, "get_resolved_model_dir", return_value="/fake/dir"), \
+        with patch.object(worker.model_provider, "get_active_model_path", return_value="/fake/dir"), \
              patch(_PATCH_MODEL_CLS), \
              patch("gc.collect") as mock_gc:
             worker._load_model()
@@ -334,9 +334,9 @@ class TestLoadModelSuccess:
 class TestLoadModelFailure:
 
     def _run(self, qapp, mock_settings, exc=Exception("model corrupted")) -> tuple[TranscriptionWorker, dict]:
-        worker = TranscriptionWorker(mock_settings)
+        worker = TranscriptionWorker(mock_settings, MagicMock())
         s = _capture(worker)
-        with patch.object(mock_settings, "get_resolved_model_dir", return_value="/fake/dir"), \
+        with patch.object(worker.model_provider, "get_active_model_path", return_value="/fake/dir"), \
              patch(_PATCH_MODEL_CLS, side_effect=exc):
             worker._load_model()
         return worker, s
@@ -383,9 +383,9 @@ class TestLoadModelFallbackLogging:
 
     def test_wrn_log_when_fallback_used(self, qapp, mock_settings):
         mock_settings.set("model_dir", "/selected/folder")
-        worker = TranscriptionWorker(mock_settings)
+        worker = TranscriptionWorker(mock_settings, MagicMock())
         s = _capture(worker)
-        with patch.object(mock_settings, "get_resolved_model_dir", return_value="/different/folder"), \
+        with patch.object(worker.model_provider, "get_active_model_path", return_value="/different/folder"), \
              patch(_PATCH_MODEL_CLS) as mock_cls:
             mock_cls.return_value = MagicMock()
             worker._load_model()
@@ -394,9 +394,9 @@ class TestLoadModelFallbackLogging:
 
     def test_no_wrn_log_when_dir_unchanged(self, qapp, mock_settings):
         mock_settings.set("model_dir", "/correct/folder")
-        worker = TranscriptionWorker(mock_settings)
+        worker = TranscriptionWorker(mock_settings, MagicMock())
         s = _capture(worker)
-        with patch.object(mock_settings, "get_resolved_model_dir", return_value="/correct/folder"), \
+        with patch.object(worker.model_provider, "get_active_model_path", return_value="/correct/folder"), \
              patch(_PATCH_MODEL_CLS) as mock_cls:
             mock_cls.return_value = MagicMock()
             worker._load_model()
@@ -409,14 +409,14 @@ class TestLoadModelFallbackLogging:
 class TestTranscribeModelNone:
 
     def test_emits_err_log(self, qapp, mock_settings):
-        worker = TranscriptionWorker(mock_settings)  # _model = None
+        worker = TranscriptionWorker(mock_settings, MagicMock())  # _model = None
         logs = []
         worker.log_entry.connect(lambda l, c, m: logs.append(l))
         worker._transcribe(AUDIO)
         assert "ERR" in logs
 
     def test_no_text_ready(self, qapp, mock_settings):
-        worker = TranscriptionWorker(mock_settings)
+        worker = TranscriptionWorker(mock_settings, MagicMock())
         texts = []
         worker.text_ready.connect(texts.append)
         worker._transcribe(AUDIO)
@@ -542,20 +542,20 @@ class TestRunLoop:
     """run() body (lines 42-55): queue is pre-filled and called synchronously."""
 
     def test_run_calls_load_model_on_start(self, qapp, mock_settings):
-        worker = TranscriptionWorker(mock_settings)
+        worker = TranscriptionWorker(mock_settings, MagicMock())
         worker._queue.put(None)
         with patch.object(worker, "_load_model") as mock_load:
             worker.run()
         mock_load.assert_called_once()
 
     def test_run_poison_pill_exits_loop(self, qapp, mock_settings):
-        worker = TranscriptionWorker(mock_settings)
+        worker = TranscriptionWorker(mock_settings, MagicMock())
         worker._queue.put(None)
         with patch.object(worker, "_load_model"):
             worker.run()  # must return, not block
 
     def test_run_dispatches_audio_to_transcribe(self, qapp, mock_settings):
-        worker = TranscriptionWorker(mock_settings)
+        worker = TranscriptionWorker(mock_settings, MagicMock())
         audio = np.zeros(16000, dtype="float32")
         worker._queue.put(audio)
         worker._queue.put(None)
@@ -565,7 +565,7 @@ class TestRunLoop:
         mock_transcribe.assert_called_once_with(audio)
 
     def test_run_reload_calls_load_model_again(self, qapp, mock_settings):
-        worker = TranscriptionWorker(mock_settings)
+        worker = TranscriptionWorker(mock_settings, MagicMock())
         worker._queue.put(_RELOAD)
         worker._queue.put(None)
         with patch.object(worker, "_load_model") as mock_load:
@@ -573,7 +573,7 @@ class TestRunLoop:
         assert mock_load.call_count == 2  # start + _RELOAD
 
     def test_run_multiple_audio_chunks(self, qapp, mock_settings):
-        worker = TranscriptionWorker(mock_settings)
+        worker = TranscriptionWorker(mock_settings, MagicMock())
         for _ in range(3):
             worker._queue.put(np.zeros(8000, dtype="float32"))
         worker._queue.put(None)
@@ -585,7 +585,7 @@ class TestRunLoop:
 
     def test_run_unexpected_exception_emits_error(self, qapp, mock_settings):
         """If _transcribe raises an unexpected exception, error_occurred should be emitted."""
-        worker = TranscriptionWorker(mock_settings)
+        worker = TranscriptionWorker(mock_settings, MagicMock())
         worker._queue.put(np.zeros(8000, dtype="float32"))
         worker._queue.put(None)
         s = _capture(worker)
@@ -596,7 +596,7 @@ class TestRunLoop:
 
     def test_run_unexpected_exception_emits_err_log(self, qapp, mock_settings):
         """If _transcribe raises an unexpected exception, an ERR log should be written."""
-        worker = TranscriptionWorker(mock_settings)
+        worker = TranscriptionWorker(mock_settings, MagicMock())
         worker._queue.put(np.zeros(8000, dtype="float32"))
         worker._queue.put(None)
         s = _capture(worker)

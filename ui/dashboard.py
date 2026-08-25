@@ -47,7 +47,7 @@ class DashboardWindow(QWidget):
     language_change_requested = Signal(str)
     theme_changed             = Signal(str)
 
-    def __init__(self, settings, icon_idle: QIcon, parent: QWidget | None = None):
+    def __init__(self, settings, model_provider, icon_idle: QIcon, parent: QWidget | None = None):
         flags = (
             Qt.WindowType.Window |
             Qt.WindowType.CustomizeWindowHint |
@@ -59,6 +59,7 @@ class DashboardWindow(QWidget):
         super().__init__(parent, flags)
         self.setObjectName("DashboardWindow")
         self.settings = settings
+        self.model_provider = model_provider
         self.setWindowTitle(APP_NAME)
         self.setWindowIcon(icon_idle)
 
@@ -550,7 +551,7 @@ class DashboardWindow(QWidget):
             return
 
         if self._settings_dialog is None:
-            self._settings_dialog = SettingsDialog(settings=self.settings, parent=self)
+            self._settings_dialog = SettingsDialog(settings=self.settings, model_provider=self.model_provider, parent=self)
             self._settings_dialog.hotkey_changed.connect(self._on_hotkey_from_dialog)
             self._settings_dialog.capture_mode_changed.connect(self.hotkey_capture_mode)
             self._settings_dialog.model_dir_changed.connect(self.model_dir_changed)

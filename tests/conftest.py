@@ -48,7 +48,7 @@ def _init_i18n():
 def _stub_qt_os_hooks():
     """Disables the QMediaDevices Windows IMMDeviceEnumerator hook.
     Otherwise the COM thread blocks the process at test teardown."""
-    with patch("PySide6.QtMultimedia.QMediaDevices", MagicMock):
+    with patch("PySide6.QtMultimedia.QMediaDevices"):
         yield
 
 

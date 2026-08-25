@@ -1,3 +1,4 @@
+from core.models import ModelProvider
 """
 HelpWindow and SettingsDialog tests.
 """
@@ -43,7 +44,9 @@ class TestSettingsDialog:
     @pytest.fixture
     def dialog(self, qapp, mock_settings):
         from ui.settings_dialog import SettingsDialog
-        d = SettingsDialog(mock_settings)
+        from PySide6.QtWidgets import QWidget
+        parent = QWidget()
+        d = SettingsDialog(mock_settings, ModelProvider("."), parent)
         yield d
         d.close()
         d.deleteLater()
@@ -86,7 +89,7 @@ class TestSettingsDialog:
         from PySide6.QtWidgets import QWidget
         parent = QWidget()
         parent.setGeometry(100, 100, 400, 400)
-        d = SettingsDialog(mock_settings, parent)
+        d = SettingsDialog(mock_settings, ModelProvider("."), parent)
         d.show()
         assert d.isVisible()
         d.close()
@@ -153,13 +156,13 @@ class TestSettingsDialog:
 
     def test_browse_model_dir_valid_but_oserror(self, dialog):
         with patch("PySide6.QtWidgets.QFileDialog.getExistingDirectory", return_value="/valid/path"), \
-             patch("ui.settings_dialog.validate_model_dir", return_value="/valid/path"):
+             patch("core.models.ModelProvider.resolve_model_dir", return_value="/valid/path"):
             dialog._browse_model_dir()
             assert dialog.settings.get("model_dir") == "/valid/path"
 
     def test_browse_model_dir_success(self, dialog):
         with patch("PySide6.QtWidgets.QFileDialog.getExistingDirectory", return_value="/valid/path"), \
-             patch("ui.settings_dialog.validate_model_dir", return_value="/valid/path"):
+             patch("core.models.ModelProvider.resolve_model_dir", return_value="/valid/path"):
             dialog._browse_model_dir()
             assert dialog.settings.get("model_dir") == "/valid/path"
 
@@ -180,7 +183,7 @@ class TestSettingsDialog:
         from PySide6.QtWidgets import QWidget
         parent = QWidget()
         parent.setGeometry(100, 100, 800, 600)
-        d = SettingsDialog(mock_settings, parent)
+        d = SettingsDialog(mock_settings, ModelProvider("."), parent)
         d._center_on_screen()
 
     def test_refresh_values_success(self, dialog):

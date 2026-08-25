@@ -72,7 +72,8 @@ class TestLevelPaletteMapping:
         from unittest.mock import patch
         with patch("ui.utils.colorize_svg_icon") as mock_colorize:
             mock_colorize.return_value = _dummy_icon()
-            d = Dashboard(mock_settings, icon_idle=_dummy_icon())
+            from core.models import ModelProvider
+            d = Dashboard(mock_settings, ModelProvider("."), icon_idle=_dummy_icon())
             p = theme_manager.palette
             for level, palette_key in _LEVEL_PALETTE_KEY.items():
                 d.set_status("test", level)
@@ -82,7 +83,8 @@ class TestLevelPaletteMapping:
 
     def test_make_log_html_line_produces_inline_styles_for_all_levels(self, qapp, mock_settings):
         from ui.dashboard import DashboardWindow as Dashboard, _LEVEL_PALETTE_KEY
-        d = Dashboard(mock_settings, icon_idle=_dummy_icon())
+        from core.models import ModelProvider
+        d = Dashboard(mock_settings, ModelProvider("."), icon_idle=_dummy_icon())
         for level in _LEVEL_PALETTE_KEY:
             html = d._make_log_html_line(level, "TST", "message", "00:00:00")
             assert "style=" in html and "color:" in html, \

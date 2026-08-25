@@ -90,57 +90,6 @@ def get_settings_path() -> Path:
     return settings_dir / "settings.json"
 
 
-def validate_model_dir(path: str | None) -> str | None:
-    if not path:
-        return None
-    p = Path(path)
-    if not p.is_dir():
-        return None
-
-    if (p / "config.json").exists() and (
-        (p / "model.bin").exists() or (p / "model.safetensors").exists()
-    ):
-        return str(p)
-
-    try:
-        for root, dirs, files in os.walk(str(p)):
-            depth = len(Path(root).relative_to(p).parts)
-            if depth > 4:
-                dirs.clear()
-                continue
-            if "config.json" in files and (
-                "model.bin" in files or "model.safetensors" in files
-            ):
-                return str(Path(root).resolve())
-    except OSError:
-        pass
-
-    return None
-
-
-def find_fallback_model_dir(parent_path: Path) -> str | None:
-    """Returns the first valid model directory found under the given parent."""
-    if not parent_path.exists() or not parent_path.is_dir():
-        return None
-
-    try:
-        # Check parent_path itself first (model may have been placed directly there).
-        res = validate_model_dir(str(parent_path))
-        if res:
-            return res
-
-        # Walk immediate subdirectories.
-        for item in parent_path.iterdir():
-            if item.is_dir():
-                res = validate_model_dir(str(item))
-                if res:
-                    return res
-    except OSError:
-        pass
-        
-    return None
-
-
 class SettingsManager:
     """Dependency Injected Settings Repository & Validator"""
     
@@ -190,21 +139,6 @@ class SettingsManager:
             return val if val in valid else "int8"
 
         return val
-
-    def get_resolved_model_dir(self) -> str | None:
-        """Validates the saved model dir; falls back to scanning if invalid."""
-        current = self.get("model_dir")
-        validated = validate_model_dir(current)
-        if validated:
-            return validated
-
-        # Fallback: scan the default download location.
-        fallback = find_fallback_model_dir(DEFAULT_DOWNLOAD_PARENT)
-        if fallback:
-            self.set("model_dir", fallback)
-            return fallback
-            
-        return None
 
     def set(self, key: str, value: Any, _save: bool = True):
         if key == "language" and value is None:

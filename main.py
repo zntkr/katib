@@ -160,9 +160,11 @@ def main():
     # The Fusion style can override CSS colors; we leave it disabled.
 
     from ui.theme import theme_manager
-    from core.settings import SettingsManager
+    from core.settings import SettingsManager, DEFAULT_DOWNLOAD_PARENT
+    from core.models import ModelProvider
 
     settings_manager = SettingsManager()
+    model_provider = ModelProvider(base_download_dir=DEFAULT_DOWNLOAD_PARENT, active_model_path=settings_manager.get("model_dir"))
     from core.i18n import set_language as _i18n_set_language, t as _t, available_languages
     _lang = settings_manager.get("app_language") or ""
     if not _lang:
@@ -188,7 +190,7 @@ def main():
     from ui.tray_app import TrayApp
 
     global_logger.info("Building UI (Tray/Dashboard)...")
-    tray = TrayApp(settings=settings_manager)
+    tray = TrayApp(settings=settings_manager, model_provider=model_provider)
     app.setWindowIcon(tray._icon_idle)
 
     _workers = {}
@@ -204,7 +206,7 @@ def main():
         global_logger.info("Creating workers...")
         hotkey_worker        = HotkeyWorker(settings=settings_manager, key=settings_manager.get("hotkey", "F9"))
         audio_worker         = AudioWorker(settings=settings_manager)
-        transcription_worker = TranscriptionWorker(settings=settings_manager)
+        transcription_worker = TranscriptionWorker(settings=settings_manager, model_provider=model_provider)
         downloader_worker    = ModelDownloaderWorker(settings=settings_manager)
         osd                  = MinimalOSD()
 
@@ -280,7 +282,11 @@ def main():
         )
 
         # Model folder or compute setting changed → reload model
-        tray.dashboard.model_dir_changed.connect(transcription_worker.reload_model)
+        def _on_model_dir_changed(path):
+            model_provider.active_model_path = path
+            transcription_worker.reload_model()
+            
+        tray.dashboard.model_dir_changed.connect(_on_model_dir_changed)
         tray.dashboard.model_reload_requested.connect(transcription_worker.reload_model)
 
         # Device list: UI requests → AudioWorker queries → UI populates

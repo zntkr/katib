@@ -1,3 +1,4 @@
+from core.models import ModelProvider
 """
 Qt UI component tests.
 _qt_key_to_keyboard, DashboardWindow, log limit, etc.
@@ -85,7 +86,7 @@ class TestQtKeyToKeyboard:
 @pytest.fixture
 def dashboard(qapp, mock_settings):
     from ui.dashboard import DashboardWindow
-    w = DashboardWindow(mock_settings, icon_idle=_make_icon())
+    w = DashboardWindow(mock_settings, ModelProvider("."), icon_idle=_make_icon())
     yield w
     w.close()
 
@@ -244,14 +245,14 @@ class TestPopulateDevices:
 class TestTrayApp:
     def test_tray_app_creates_dashboard(self, qapp, mock_settings):
         from ui.tray_app import TrayApp
-        tray = TrayApp(mock_settings)
+        tray = TrayApp(mock_settings, ModelProvider("."))
         assert tray.dashboard is not None
         tray.tray.hide()
         tray.dashboard.close()
 
     def test_set_recording_true(self, qapp, mock_settings):
         from ui.tray_app import TrayApp
-        tray = TrayApp(mock_settings)
+        tray = TrayApp(mock_settings, ModelProvider("."))
         tray.set_recording(True)
         from core.settings import STATE_LISTENING
         from core.i18n import t
@@ -261,7 +262,7 @@ class TestTrayApp:
 
     def test_set_recording_false(self, qapp, mock_settings):
         from ui.tray_app import TrayApp
-        tray = TrayApp(mock_settings)
+        tray = TrayApp(mock_settings, ModelProvider("."))
         tray.set_recording(False)
         from core.settings import STATE_READY
         from core.i18n import t
@@ -272,7 +273,7 @@ class TestTrayApp:
     def test_on_tray_activated(self, qapp, mock_settings):
         from ui.tray_app import TrayApp
         from PySide6.QtWidgets import QSystemTrayIcon
-        tray = TrayApp(mock_settings)
+        tray = TrayApp(mock_settings, ModelProvider("."))
         with patch.object(tray, "_show_dashboard") as mock_show:
             tray._on_tray_activated(QSystemTrayIcon.ActivationReason.DoubleClick)
             mock_show.assert_called_once()
@@ -283,7 +284,7 @@ class TestTrayApp:
 
     def test_show_dashboard(self, qapp, mock_settings):
         from ui.tray_app import TrayApp
-        tray = TrayApp(mock_settings)
+        tray = TrayApp(mock_settings, ModelProvider("."))
         tray._show_dashboard()
         assert tray.dashboard.isVisible()
         tray.tray.hide()
@@ -291,7 +292,7 @@ class TestTrayApp:
 
     def test_on_hotkey_pressed(self, qapp, mock_settings):
         from ui.tray_app import TrayApp
-        tray = TrayApp(mock_settings)
+        tray = TrayApp(mock_settings, ModelProvider("."))
         tray.audio_worker = MagicMock()
         tray.on_hotkey_pressed()
         tray.audio_worker.start_recording.assert_called_once()
@@ -301,7 +302,7 @@ class TestTrayApp:
     def test_on_hotkey_pressed_model_not_ready_blocks_recording(self, qapp, mock_settings):
         """Recording should not start if the model is not ready."""
         from ui.tray_app import TrayApp
-        tray = TrayApp(mock_settings)
+        tray = TrayApp(mock_settings, ModelProvider("."))
         tray.audio_worker = MagicMock()
         tray.transcription_worker = MagicMock()
         tray.transcription_worker.is_ready = False
@@ -313,7 +314,7 @@ class TestTrayApp:
     def test_on_hotkey_pressed_model_not_ready_shows_osd_error(self, qapp, mock_settings):
         """If the model is not ready, the OSD should switch to an error state."""
         from ui.tray_app import TrayApp
-        tray = TrayApp(mock_settings)
+        tray = TrayApp(mock_settings, ModelProvider("."))
         tray.transcription_worker = MagicMock()
         tray.transcription_worker.is_ready = False
         tray.osd = MagicMock()
@@ -325,7 +326,7 @@ class TestTrayApp:
     def test_on_hotkey_pressed_model_not_ready_does_not_set_recording_state(self, qapp, mock_settings):
         """If the model is not ready, the dashboard should not show the 'Listening' state."""
         from ui.tray_app import TrayApp
-        tray = TrayApp(mock_settings)
+        tray = TrayApp(mock_settings, ModelProvider("."))
         tray.transcription_worker = MagicMock()
         tray.transcription_worker.is_ready = False
         tray.on_hotkey_pressed()
@@ -336,7 +337,7 @@ class TestTrayApp:
 
     def test_on_hotkey_released(self, qapp, mock_settings):
         from ui.tray_app import TrayApp
-        tray = TrayApp(mock_settings)
+        tray = TrayApp(mock_settings, ModelProvider("."))
         tray.audio_worker = MagicMock()
         tray.on_hotkey_released()
         tray.audio_worker.stop_recording.assert_called_once()
@@ -381,7 +382,7 @@ class TestDashboardExtras:
     def test_apply_dark_mode_exception(self, qapp, mock_settings):
         from ui.dashboard import DashboardWindow
         with patch("ui.dashboard.apply_dark_mode_to_window", side_effect=Exception("No DWM")):
-            w = DashboardWindow(mock_settings, icon_idle=_make_icon())
+            w = DashboardWindow(mock_settings, ModelProvider("."), icon_idle=_make_icon())
             assert w is not None
 
     def test_on_audio_inputs_changed(self, dashboard):

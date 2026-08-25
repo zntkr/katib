@@ -1,3 +1,4 @@
+from core.models import ModelProvider
 """
 User Interface (UI) interaction tests written using pure PySide6.
 Simulates button clicks, theme changes, and user confirmation boxes (QMessageBox)
@@ -14,7 +15,8 @@ from ui.utils import _make_icon
 
 @pytest.fixture
 def dashboard(qapp, mock_settings):
-    w = DashboardWindow(mock_settings, icon_idle=_make_icon("#ffffff"))
+    from core.models import ModelProvider
+    w = DashboardWindow(mock_settings, ModelProvider("."), icon_idle=_make_icon("#ffffff"))
     return w
 
 
@@ -24,8 +26,9 @@ class TestDashboardMethods:
 
     def test_init_survives_dark_mode_error(self, qapp, mock_settings):
         from ui.utils import _make_icon
+        from core.models import ModelProvider
         with patch("ui.dashboard.apply_dark_mode_to_window", side_effect=Exception("no dwm")):
-            w = DashboardWindow(mock_settings, icon_idle=_make_icon("#ffffff"))
+            w = DashboardWindow(mock_settings, ModelProvider("."), icon_idle=_make_icon("#ffffff"))
         assert w is not None
 
     # _on_audio_inputs_changed
@@ -41,7 +44,8 @@ class TestDashboardMethods:
     def test_icon_button_fallback_text_when_no_svg(self, qapp, mock_settings):
         with patch("os.path.exists", return_value=False):
             from ui.utils import _make_icon
-            w = DashboardWindow(mock_settings, icon_idle=_make_icon("#ffffff"))
+            from core.models import ModelProvider
+            w = DashboardWindow(mock_settings, ModelProvider("."), icon_idle=_make_icon("#ffffff"))
         assert w is not None
 
     # _toggle_logs
@@ -353,7 +357,7 @@ class TestDashboardUIInteractions:
 @pytest.fixture
 def settings_dialog(qapp, mock_settings):
     from ui.settings_dialog import SettingsDialog
-    dlg = SettingsDialog(mock_settings)
+    dlg = SettingsDialog(mock_settings, ModelProvider("."))
     return dlg
 
 
@@ -499,7 +503,7 @@ class TestSettingsDialogInteractions:
 
     def test_browse_model_dir_invalid_path_shows_warning(self, settings_dialog):
         with patch("ui.settings_dialog.QFileDialog.getExistingDirectory", return_value="/some/path"), \
-             patch("ui.settings_dialog.validate_model_dir", return_value=None), \
+             patch("core.models.ModelProvider.resolve_model_dir", return_value=None), \
              patch("ui.settings_dialog.QMessageBox.warning") as mock_warn:
             settings_dialog._browse_model_dir()
         mock_warn.assert_called_once()
@@ -508,7 +512,7 @@ class TestSettingsDialogInteractions:
         from PySide6.QtTest import QSignalSpy
         spy = QSignalSpy(settings_dialog.model_dir_changed)
         with patch("ui.settings_dialog.QFileDialog.getExistingDirectory", return_value=str(tmp_path)), \
-             patch("ui.settings_dialog.validate_model_dir", return_value=str(tmp_path)):
+             patch("core.models.ModelProvider.resolve_model_dir", return_value=str(tmp_path)):
             settings_dialog._browse_model_dir()
         assert spy.count() == 1
 
@@ -546,7 +550,7 @@ class TestSettingsDialogInteractions:
         settings_dialog._on_download_clicked()  # should not raise or emit
 
     def test_download_clicked_not_installed_no_reply_does_nothing(self, settings_dialog, mock_settings):
-        with patch("ui.settings_dialog.validate_model_dir", return_value=None), \
+        with patch("core.models.ModelProvider.resolve_model_dir", return_value=None), \
              patch.object(settings_dialog, "_get_selected_model_path", return_value=MagicMock()), \
              patch("ui.settings_dialog.QMessageBox.question",
                    return_value=QMessageBox.StandardButton.No):
@@ -615,7 +619,7 @@ class TestSettingsDialogInteractions:
     # badge "not installed" branch
 
     def test_refresh_badges_marks_uninstalled_models(self, settings_dialog):
-        with patch("ui.settings_dialog.validate_model_dir", return_value=None):
+        with patch("core.models.ModelProvider.resolve_model_dir", return_value=None):
             settings_dialog._refresh_model_combo_badges()
         text = settings_dialog.model_select_combo.itemText(0)
         assert text.startswith("  ")
@@ -625,7 +629,7 @@ class TestSettingsDialogInteractions:
     def test_download_clicked_yes_emits_download_requested(self, settings_dialog):
         from PySide6.QtTest import QSignalSpy
         spy = QSignalSpy(settings_dialog.download_model_requested)
-        with patch("ui.settings_dialog.validate_model_dir", return_value=None), \
+        with patch("core.models.ModelProvider.resolve_model_dir", return_value=None), \
              patch.object(settings_dialog, "_get_selected_model_path", return_value=MagicMock()), \
              patch("ui.settings_dialog.QMessageBox.question",
                    return_value=QMessageBox.StandardButton.Yes):
@@ -662,7 +666,7 @@ class TestSettingsDialogInteractions:
     def test_apply_installed_model_saves_model_dir(self, settings_dialog, mock_settings, tmp_path):
         """When a downloaded model is selected from the combo (Auto-Apply), model_dir should be written to settings."""
         fake_model_dir = str(tmp_path)
-        with patch("ui.settings_dialog.validate_model_dir", return_value=fake_model_dir):
+        with patch("core.models.ModelProvider.resolve_model_dir", return_value=fake_model_dir):
             with patch.object(settings_dialog, "_get_selected_model_path", return_value=tmp_path):
                 settings_dialog.model_select_combo.blockSignals(True)
                 settings_dialog.model_select_combo.addItem("Fake Model", userData="repo/fake")
@@ -677,7 +681,7 @@ class TestSettingsDialogInteractions:
         from PySide6.QtTest import QSignalSpy
         fake_model_dir = str(tmp_path)
         spy = QSignalSpy(settings_dialog.model_dir_changed)
-        with patch("ui.settings_dialog.validate_model_dir", return_value=fake_model_dir):
+        with patch("core.models.ModelProvider.resolve_model_dir", return_value=fake_model_dir):
             with patch.object(settings_dialog, "_get_selected_model_path", return_value=tmp_path):
                 settings_dialog.model_select_combo.blockSignals(True)
                 settings_dialog.model_select_combo.addItem("Fake Model", userData="repo/fake")
@@ -746,7 +750,8 @@ class TestDashboardCoverage:
     def test_icon_button_setup_with_existing_svg(self, qapp, mock_settings):
         with patch("os.path.exists", return_value=True):
             from ui.utils import _make_icon
-            w = DashboardWindow(mock_settings, icon_idle=_make_icon("#ffffff"))
+            from core.models import ModelProvider
+            w = DashboardWindow(mock_settings, ModelProvider("."), icon_idle=_make_icon("#ffffff"))
         assert w is not None
 
     def test_finalize_position_in_showEvent(self, dashboard):

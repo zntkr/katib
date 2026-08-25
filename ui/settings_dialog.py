@@ -11,7 +11,6 @@ from ui.utils_win import apply_dark_mode_to_window
 from ui.utils import qt_key_to_keyboard
 from core.settings import (
     APP_NAME, WHISPER_MODELS,
-    validate_model_dir,
     DEFAULT_DOWNLOAD_PARENT, COMPUTE_TYPE_OPTIONS_CPU,
     SETTINGS_SCHEMA
 )
@@ -50,7 +49,7 @@ class SettingsDialog(QDialog):
     language_change_requested = Signal(str)
     theme_changed             = Signal(str)
 
-    def __init__(self, settings, parent: QWidget | None = None):
+    def __init__(self, settings, model_provider, parent: QWidget | None = None):
         flags = (
             Qt.WindowType.Window |
             Qt.WindowType.CustomizeWindowHint |
@@ -61,6 +60,7 @@ class SettingsDialog(QDialog):
         )
         super().__init__(parent, flags)
         self.settings = settings
+        self.model_provider = model_provider
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setWindowTitle(f"{APP_NAME} - {t('settings.title')}")
         self.setFixedSize(SETTINGS_WIDTH, SETTINGS_HEIGHT)
@@ -419,7 +419,7 @@ class SettingsDialog(QDialog):
 
             # Auto-apply: switch immediately if the selected model is already installed.
             target_path = self._get_selected_model_path()
-            if target_path and validate_model_dir(str(target_path)) is not None:
+            if target_path and self.model_provider.resolve_model_dir(str(target_path)) is not None:
                 current_dir = self.settings.get("model_dir")
                 if current_dir != str(target_path):
                     self.settings.set("model_dir", str(target_path))
@@ -442,7 +442,7 @@ class SettingsDialog(QDialog):
         if not folder:
             self._revert_combo()
             return
-        resolved = validate_model_dir(folder)
+        resolved = self.model_provider.resolve_model_dir(folder)
         if resolved:
             self.settings.set("model_dir", resolved)
             self._update_model_path_label(resolved)
@@ -525,7 +525,7 @@ class SettingsDialog(QDialog):
             folder_name = repo.split('/')[-1]
             expected = DEFAULT_DOWNLOAD_PARENT / folder_name
             is_active = active_path is not None and active_path.name == folder_name
-            is_installed = is_active or validate_model_dir(str(expected)) is not None
+            is_installed = is_active or self.model_provider.resolve_model_dir(str(expected)) is not None
             if is_active:
                 prefix = "▶ "
                 self.model_select_combo.setItemData(i, bold_font, Qt.ItemDataRole.FontRole)
@@ -541,7 +541,7 @@ class SettingsDialog(QDialog):
     def _check_selected_model_status(self, _idx: int = 0) -> None:
         target_path = self._get_selected_model_path()
         if not target_path: return
-        is_installed = validate_model_dir(str(target_path)) is not None
+        is_installed = self.model_provider.resolve_model_dir(str(target_path)) is not None
         
         repo = self.model_select_combo.currentData()
         can_download = not is_installed and not (repo and str(repo).startswith("custom:"))
@@ -554,7 +554,7 @@ class SettingsDialog(QDialog):
         if not selected_repo or selected_repo == "browse_custom" or str(selected_repo).startswith("custom:"): return
         target_path = self._get_selected_model_path()
         if not target_path: return
-        is_installed = validate_model_dir(str(target_path)) is not None
+        is_installed = self.model_provider.resolve_model_dir(str(target_path)) is not None
         if not is_installed:
             model_name = self.model_select_combo.currentText().split(" (")[0]
             msg = t("settings.download_confirm_msg").format(model=model_name)

@@ -33,9 +33,10 @@ class TranscriptionWorker(BaseWorker):
     transcription_started = Signal()
     transcription_finished = Signal()
 
-    def __init__(self, settings, parent=None):
+    def __init__(self, settings, model_provider, parent=None):
         super().__init__(parent)
         self.settings = settings
+        self.model_provider = model_provider
         self._queue: queue.Queue = queue.Queue(maxsize=QUEUE_MAXSIZE)
         self._model: "WhisperModel | None" = None
         self.is_ready: bool = False
@@ -66,7 +67,7 @@ class TranscriptionWorker(BaseWorker):
     def _load_model(self):
         self.is_ready = False
         original_dir = self.settings.get("model_dir")
-        valid_dir = self.settings.get_resolved_model_dir()
+        valid_dir = self.model_provider.get_active_model_path()
 
         if not valid_dir:
             self.status_changed.emit(MSG_MODEL_NOT_FOUND, "WARN")

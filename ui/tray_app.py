@@ -21,9 +21,10 @@ class TrayApp(QObject):
     Instantiated AFTER QApplication is created in main.py.
     """
 
-    def __init__(self, settings, parent: QObject | None = None):
+    def __init__(self, settings, model_provider, parent: QObject | None = None):
         super().__init__(parent)
         self.settings = settings
+        self.model_provider = model_provider
 
         self.audio_worker: 'AudioWorker | None' = None
         self.transcription_worker: 'TranscriptionWorker | None' = None
@@ -34,7 +35,7 @@ class TrayApp(QObject):
         self._icon_idle = colorize_svg_icon(ICN_MIC, p["CLR_TEXT_MUTED"], size=64)
         self._icon_rec  = colorize_svg_icon(ICN_MIC, p["CLR_ERR"], size=64)
 
-        self.dashboard = DashboardWindow(settings=self.settings, icon_idle=self._icon_idle)
+        self.dashboard = DashboardWindow(settings=self.settings, model_provider=self.model_provider, icon_idle=self._icon_idle)
         if QSystemTrayIcon.isSystemTrayAvailable():
             self._build_tray()
         else:
