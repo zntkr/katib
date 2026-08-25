@@ -205,7 +205,10 @@ def main():
 
         global_logger.info("Creating workers...")
         hotkey_worker        = HotkeyWorker(settings=settings_manager, key=settings_manager.get("hotkey", "F9"))
-        audio_worker         = AudioWorker(settings=settings_manager)
+        from core.portaudio_source import PortAudioSource
+        
+        audio_source         = PortAudioSource()
+        audio_worker         = AudioWorker(settings=settings_manager, audio_source=audio_source)
         transcription_worker = TranscriptionWorker(settings=settings_manager, model_provider=model_provider)
         downloader_worker    = ModelDownloaderWorker(settings=settings_manager)
         osd                  = MinimalOSD()

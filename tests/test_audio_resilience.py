@@ -4,7 +4,7 @@ from workers.audio_worker import AudioWorker
 
 def test_audio_worker_handles_unexpected_disconnect(mock_settings):
     # Create AudioWorker
-    worker = AudioWorker(settings=mock_settings)
+    worker = AudioWorker(settings=mock_settings, audio_source=MagicMock())
 
     # Listen to signals
     error_spy = MagicMock()
@@ -20,7 +20,7 @@ def test_audio_worker_handles_unexpected_disconnect(mock_settings):
 
     # trigger _on_stream_finished
     with patch("sounddevice.query_devices", return_value=[]):
-        worker._on_stream_finished()
+        worker._on_stream_finished(Exception('disconnect'))
 
     # Verification:
     # - Error message must be emitted
