@@ -77,6 +77,7 @@ class ModelDownloaderWorker(BaseWorker):
             snapshot_download(
                 repo_id=self._repo_id,
                 local_dir=str(temp_dir),
+                local_dir_use_symlinks=False,
             )
 
             # Atomic rename: only move to the target directory once the download is complete.

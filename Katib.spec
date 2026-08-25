@@ -153,7 +153,7 @@ a = Analysis(
         'xmlrpc', 'xmlrpc.client', 'xmlrpc.server',
         'curses', 'antigravity', 'this',
         'lib2to3', 'idlelib', 'turtledemo', 'turtle',
-        'ensurepip', 'venv', 'distutils',
+        'ensurepip', 'venv',
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
