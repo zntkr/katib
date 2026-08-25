@@ -63,14 +63,22 @@ class TestStopRecording:
         worker = AudioWorker(mock_settings, mock_audio_source)
         worker.set_device(1)
         worker.start_recording()
-        
-        worker._chunks.append(np.zeros(SAMPLE_RATE, dtype=np.float32) + 0.1) # 1 sec of noise
-        
+    
+        # Mock background noise
+        for _ in range(5):
+            worker._chunks.append(np.zeros(SAMPLE_RATE // 10, dtype=np.float32) + 0.01)
+            worker._rms_history.append(0.01)
+            
+        # Mock speech (loud, exceeding 10dB margin) for at least 0.3 seconds
+        for _ in range(5):
+            worker._chunks.append(np.zeros(SAMPLE_RATE // 10, dtype=np.float32) + 0.5)
+            worker._rms_history.append(0.5)
+    
         audio_results = []
         worker.audio_ready.connect(audio_results.append)
-        
+    
         worker.stop_recording()
-        
+    
         mock_audio_source.stop.assert_called_once()
         assert not worker._is_recording
         assert len(audio_results) == 1

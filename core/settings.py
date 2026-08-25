@@ -71,6 +71,8 @@ SETTINGS_SCHEMA = [
     SettingDef("model_dir", str, "", "Model", "Model Path", "custom"),
     SettingDef("device_index", int, None, "Audio", "Microphone", "custom"),
     SettingDef("selected_model_repo", str, "", "Model", "Selected Model", "custom"),
+    SettingDef("injection_method", str, "clipboard", "General", "settings.injection_method_label", "combobox",
+               {"options": [("Clipboard (Fast)", "clipboard"), ("Keystroke (Safe)", "keystroke")], "full_width": True}),
 
     # Auto-generated UI settings:
     SettingDef("language", str, "auto", "Processing", "schema.language.label", "combobox",

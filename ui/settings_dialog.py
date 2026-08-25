@@ -158,6 +158,19 @@ class SettingsDialog(QDialog):
         left.addWidget(QLabel(t("settings.theme_label")))
         left.addWidget(self._theme_combo)
 
+        self._injection_combo = NoScrollComboBox()
+        self._injection_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        for label, value in [
+            ("Clipboard (Fast)", "clipboard"),
+            ("Keystroke (Safe)", "keystroke"),
+        ]:
+            self._injection_combo.addItem(label, userData=value)
+        self._injection_combo.currentIndexChanged.connect(
+            lambda _idx: self._on_dynamic_changed("injection_method", self._injection_combo.currentData())
+        )
+        left.addWidget(QLabel(t("settings.injection_method_label")))
+        left.addWidget(self._injection_combo)
+
         left.addSpacing(G_4)
 
         left.addWidget(self._section_title("settings.group_system"))
@@ -604,6 +617,13 @@ class SettingsDialog(QDialog):
             self._lang_combo.blockSignals(True)
             self._lang_combo.setCurrentIndex(lang_idx)
             self._lang_combo.blockSignals(False)
+            
+        inj = self.settings.get("injection_method", "clipboard")
+        inj_idx = self._injection_combo.findData(inj)
+        if inj_idx >= 0:
+            self._injection_combo.blockSignals(True)
+            self._injection_combo.setCurrentIndex(inj_idx)
+            self._injection_combo.blockSignals(False)
         current_dir = self.settings.get("model_dir")
         if current_dir:
             self._update_model_path_label(current_dir)

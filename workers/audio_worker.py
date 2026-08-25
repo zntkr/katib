@@ -24,6 +24,7 @@ class AudioWorker(BaseWorker):
     audio_ready        = Signal(object)  # numpy array (float32, 16kHz, mono)
     level_changed      = Signal(float)   # 0.0 – 1.0
     devices_ready      = Signal(list)    # list of (label: str, index: int, is_default: bool)
+    speech_detected    = Signal(bool)    # dynamic VAD state for UI
     muted_detected     = Signal()        # mathematical 0.0 (muted) detected
     recording_finished = Signal()        # emitted when recording stops (in all cases)
     audio_failed       = Signal()        # recording too short or silent
@@ -36,6 +37,8 @@ class AudioWorker(BaseWorker):
         
         self._device_index: int | None = None
         self._chunks: list = []
+        self._rms_history: list = []
+        self._running_noise_floor: float = -120.0
         self._chunks_lock              = threading.Lock()
         
         # Keep track if we are actively recording.
@@ -86,6 +89,8 @@ class AudioWorker(BaseWorker):
 
         with self._chunks_lock:
             self._chunks.clear()
+            self._rms_history.clear()
+            self._running_noise_floor = -120.0
 
         try:
             self.audio_source.start(self._audio_callback, self._on_stream_finished)
@@ -141,8 +146,12 @@ class AudioWorker(BaseWorker):
                 self.audio_failed.emit()
                 return
                 
-            if float(np.sqrt(np.mean(audio ** 2))) < 0.001:
-                self.log_entry.emit("WRN", "MIC", "Audio too quiet, skipped")
+            from core.transcription_filter import analyse_vad, is_silent
+            chunk_duration = len(audio) / SAMPLE_RATE / len(self._rms_history) if self._rms_history else 0.1
+            stats = analyse_vad(self._rms_history, chunk_duration)
+            
+            if is_silent(stats):
+                self.log_entry.emit("WRN", "MIC", f"Audio discarded as silence/noise (Noise floor: {stats['noise_db']:.1f} dB, Speech peak: {stats['speech_db']:.1f} dB, Voiced: {stats['voiced_seconds']:.2f}s)")
                 self.error_occurred.emit("osd.audio_too_quiet")
                 self.audio_failed.emit()
                 return
@@ -161,11 +170,25 @@ class AudioWorker(BaseWorker):
                 self.log_entry.emit("WRN", "MIC", f"Status: {status_msg}")
 
             if indata is not None:
-                with self._chunks_lock:
-                    self._chunks.append(indata.copy())
                 rms = float(np.sqrt(np.mean(indata ** 2)))
                 if not np.isfinite(rms):
                     return
+                
+                from core.transcription_filter import to_db
+                chunk_db = to_db(rms)
+                
+                if self._running_noise_floor == -120.0 or chunk_db < self._running_noise_floor:
+                    self._running_noise_floor = chunk_db
+                else:
+                    self._running_noise_floor += 0.02  # slowly creep up to adapt to changing environments
+                
+                is_speech = chunk_db > self._running_noise_floor + 10.0
+                self.speech_detected.emit(is_speech)
+                
+                with self._chunks_lock:
+                    self._chunks.append(indata.copy())
+                    self._rms_history.append(rms)
+
                 self.level_changed.emit(min(rms * 5.0, 1.0))
 
                 # Mute detection: mathematical 0.0 sustained for > 1500 ms.

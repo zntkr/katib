@@ -118,7 +118,8 @@ class TrayApp(QObject):
     def on_text_ready(self, text: str) -> None:
         from core.text_injector import inject_text
         self.dashboard.set_last_transcript(text)
-        inject_text(text, log_callback=self.dashboard.append_log_entry)
+        method = self.settings.get("injection_method", "clipboard")
+        inject_text(text, log_callback=self.dashboard.append_log_entry, injection_method=method)
 
     @Slot()
     def on_hotkey_pressed(self):

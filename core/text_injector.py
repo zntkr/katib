@@ -1,10 +1,32 @@
-def inject_text(text: str, log_callback=None) -> None:
-    """Injects text into the active window via the clipboard.
-
-    Backs up current clipboard contents (image, file, etc.), pastes the text,
-    then restores the old clipboard asynchronously.
+def inject_text(text: str, log_callback=None, injection_method: str = "clipboard") -> None:
+    """Injects text into the active window.
+    
+    If injection_method == 'clipboard', backs up current clipboard contents,
+    pastes the text, then restores the old clipboard asynchronously.
+    
+    If injection_method == 'keystroke', uses virtual keyboard to type the text
+    character by character (safer but slower).
     """
     import sys
+    
+    if injection_method == "keystroke":
+        try:
+            if sys.platform == "win32":
+                import keyboard
+                keyboard.write(text + " ")
+            else:
+                from pynput.keyboard import Controller
+                _kb = Controller()
+                _kb.type(text + " ")
+                
+            if log_callback:
+                log_callback("OK", "STT", f'Written (Keystroke): "{text.strip()}"')
+        except Exception as e:
+            if log_callback:
+                log_callback("ERR", "SYS", f"Keystroke operation failed: {e}")
+        return
+
+    # Default to clipboard injection
     from PySide6.QtGui import QGuiApplication
     from PySide6.QtCore import QTimer, QCoreApplication, QMimeData
 
@@ -45,7 +67,7 @@ def inject_text(text: str, log_callback=None) -> None:
             QTimer.singleShot(150, _restore)
 
         if log_callback:
-            log_callback("OK", "STT", f'Written: "{text.strip()}"')
+            log_callback("OK", "STT", f'Written (Clipboard): "{text.strip()}"')
 
     except Exception as e:
         if log_callback:

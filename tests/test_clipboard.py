@@ -66,7 +66,7 @@ class TestClipboardInjectText:
         mock_clipboard.setMimeData.assert_called_with(mock_backup_mime)
 
         # Was the log callback called with a success message?
-        mock_log_callback.assert_called_once_with("OK", "STT", 'Written: "Test text"')
+        mock_log_callback.assert_called_once_with("OK", "STT", 'Written (Clipboard): "Test text"')
 
     @patch("PySide6.QtGui.QGuiApplication")
     @patch("PySide6.QtCore.QTimer")
@@ -94,7 +94,7 @@ class TestClipboardInjectText:
 
         # Text must have been pasted and logged successfully
         mock_keyboard_send.assert_called_once_with("ctrl+v")
-        mock_log_callback.assert_called_once_with("OK", "STT", 'Written: "Text only"')
+        mock_log_callback.assert_called_once_with("OK", "STT", 'Written (Clipboard): "Text only"')
 
     @patch("PySide6.QtGui.QGuiApplication")
     @patch("PySide6.QtCore.QTimer")
@@ -146,3 +146,12 @@ class TestClipboardInjectText:
         assert args[0] == "ERR"
         assert args[1] == "SYS"
         assert "Access Denied" in args[2]
+
+    @patch("sys.platform", "win32")
+    @patch("keyboard.write")
+    def test_inject_text_keystroke_win32(self, mock_keyboard_write):
+        """Test typing text via keystroke simulation."""
+        mock_log_callback = MagicMock()
+        inject_text("Hello", log_callback=mock_log_callback, injection_method="keystroke")
+        mock_keyboard_write.assert_called_once_with("Hello ")
+        mock_log_callback.assert_called_once_with("OK", "STT", 'Written (Keystroke): "Hello"')
