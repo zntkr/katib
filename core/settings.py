@@ -19,34 +19,39 @@ STATE_READY         = "status.ready"
 
 WHISPER_MODELS = {
     "tiny": {
-        "repo_id": "Systran/faster-whisper-tiny",
-        "size": "~150 MB",
+        "repo_id": "ggerganov/whisper.cpp",
+        "filename": "ggml-tiny.bin",
+        "size": "~75 MB",
         "desc": "Very Fast, Low Accuracy (Old PCs)",
-        "req_bytes": 500 * 1024**2
+        "req_bytes": 100 * 1024**2
     },
     "base": {
-        "repo_id": "Systran/faster-whisper-base",
-        "size": "~300 MB",
+        "repo_id": "ggerganov/whisper.cpp",
+        "filename": "ggml-base.bin",
+        "size": "~140 MB",
         "desc": "Fast, Decent Accuracy",
-        "req_bytes": 500 * 1024**2
+        "req_bytes": 200 * 1024**2
     },
     "small": {
-        "repo_id": "Systran/faster-whisper-small",
-        "size": "~500 MB",
+        "repo_id": "ggerganov/whisper.cpp",
+        "filename": "ggml-small.bin",
+        "size": "~480 MB",
         "desc": "Balanced (Default / Recommended)",
-        "req_bytes": 1 * 1024**3
+        "req_bytes": 600 * 1024**2
     },
     "medium": {
-        "repo_id": "Systran/faster-whisper-medium",
+        "repo_id": "ggerganov/whisper.cpp",
+        "filename": "ggml-medium.bin",
         "size": "~1.5 GB",
         "desc": "Slow, High Accuracy (High-End Hardware)",
-        "req_bytes": 2 * 1024**3
+        "req_bytes": 1.7 * 1024**3
     },
     "large-v3": {
-        "repo_id": "Systran/faster-whisper-large-v3",
+        "repo_id": "ggerganov/whisper.cpp",
+        "filename": "ggml-large-v3.bin",
         "size": "~3 GB",
         "desc": "Very Slow, Maximum Accuracy (Top-End Hardware)",
-        "req_bytes": 4 * 1024**3
+        "req_bytes": 3.2 * 1024**3
     }
 }
 

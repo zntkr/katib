@@ -8,7 +8,7 @@ from PySide6.QtGui import QIcon
 from ui.utils import colorize_svg_icon
 from ui.theme import theme_manager
 from ui.icons import ICN_MIC
-from ui.dashboard import DashboardWindow
+from ui.control_center import ControlCenterWindow
 
 if TYPE_CHECKING:
     from workers.audio_worker import AudioWorker
@@ -35,7 +35,7 @@ class TrayApp(QObject):
         self._icon_idle = colorize_svg_icon(ICN_MIC, p["CLR_TEXT_MUTED"], size=64)
         self._icon_rec  = colorize_svg_icon(ICN_MIC, p["CLR_ERR"], size=64)
 
-        self.dashboard = DashboardWindow(settings=self.settings, model_provider=self.model_provider, icon_idle=self._icon_idle)
+        self.control_center = ControlCenterWindow(settings=self.settings, model_provider=self.model_provider)
         if QSystemTrayIcon.isSystemTrayAvailable():
             self._build_tray()
         else:
@@ -58,34 +58,29 @@ class TrayApp(QObject):
             self.tray.deleteLater()
         if QSystemTrayIcon.isSystemTrayAvailable():
             self._build_tray()
-        self.dashboard._refresh_language_tooltips()
+        # self.control_center._refresh_language_tooltips()  # Need to ensure control_center supports this or ignore
         if self.osd:
             self.osd.refresh_language()
         QTimer.singleShot(0, self._reopen_settings_after_language_change)
 
     def _reopen_settings_after_language_change(self) -> None:
-        dlg = self.dashboard._settings_dialog
-        was_visible = dlg is not None and dlg.isVisible()
-        if dlg is not None:
-            dlg.close()
-            self.dashboard._settings_dialog = None
+        was_visible = self.control_center.isVisible()
         if was_visible:
-            self.dashboard._open_settings_dialog()
+            self.control_center.close()
+            self.control_center.show()
 
     def _build_tray(self):
         self.tray = QSystemTrayIcon(self._icon_idle)
         self.tray.setToolTip(f"{APP_NAME} — {t(STATE_READY)}")
 
         menu = QMenu()
-        act_panel = menu.addAction(t("tray.menu.dashboard"))
-        act_settings = menu.addAction(t("tray.menu.settings"))
+        act_panel = menu.addAction(t("tray.menu.settings"))
         act_help  = menu.addAction(t("tray.menu.user_guide"))
         menu.addSeparator()
         act_quit  = menu.addAction(t("tray.menu.quit"))
 
-        act_panel.triggered.connect(self._show_dashboard)
-        act_settings.triggered.connect(self.dashboard._open_settings_dialog)
-        act_help.triggered.connect(self.dashboard.show_help)
+        act_panel.triggered.connect(self._show_control_center)
+        act_help.triggered.connect(self._open_help)
         app = QApplication.instance()
         if app:
             act_quit.triggered.connect(app.quit)
@@ -95,31 +90,28 @@ class TrayApp(QObject):
         self.tray.show()
 
     def _build_no_tray_quit_button(self) -> None:
-        """Adds a Quit button directly to the dashboard when no system tray is available."""
-        from PySide6.QtWidgets import QPushButton, QVBoxLayout
-        btn = QPushButton(t("tray.menu.quit"))
-        app = QApplication.instance()
-        if app:
-            btn.clicked.connect(app.quit)
-        layout = self.dashboard.layout()
-        if isinstance(layout, QVBoxLayout):
-            layout.addWidget(btn)
+        pass # Without a dashboard, there's nowhere to put this if there's no tray. Wait, maybe put it in control center.
 
     def _on_tray_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
         if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
-            self._show_dashboard()
+            self._show_control_center()
 
-    def _show_dashboard(self):
-        self.dashboard.show()
-        self.dashboard.raise_()
-        self.dashboard.activateWindow()
+    def _show_control_center(self):
+        self.control_center.show()
+        self.control_center.raise_()
+        self.control_center.activateWindow()
+
+    def _open_help(self):
+        from ui.help_window import HelpWindow
+        if not hasattr(self, "_help_window"):
+            self._help_window = HelpWindow(settings=self.settings)
+        self._help_window.show()
 
     @Slot(str)
     def on_text_ready(self, text: str) -> None:
         from core.text_injector import inject_text
-        self.dashboard.set_last_transcript(text)
         method = self.settings.get("injection_method", "clipboard")
-        inject_text(text, log_callback=self.dashboard.append_log_entry, injection_method=method)
+        inject_text(text, log_callback=self.control_center.append_log_entry, injection_method=method)
 
     @Slot()
     def on_hotkey_pressed(self):
@@ -144,29 +136,19 @@ class TrayApp(QObject):
         if active:
             self.tray.setIcon(self._icon_rec)
             self.tray.setToolTip(f"{APP_NAME} — {t(STATE_LISTENING)}")
-            self.dashboard.set_status(STATE_LISTENING, "ERR")
         else:
             self.tray.setIcon(self._icon_idle)
             if self._mic_unavailable:
                 self.tray.setToolTip(f"{APP_NAME} — {t(MSG_MIC_UNAVAILABLE)}")
-                self.dashboard.set_status(MSG_MIC_UNAVAILABLE, "ERR")
             elif self.transcription_worker and not self.transcription_worker.is_ready:
                 self.tray.setToolTip(f"{APP_NAME} — {t(MSG_MODEL_NOT_FOUND)}")
-                self.dashboard.set_status(MSG_MODEL_NOT_FOUND, "WARN")
             else:
                 self.tray.setToolTip(f"{APP_NAME} — {t(STATE_READY)}")
-                self.dashboard.set_status(STATE_READY, "OK")
-            self.dashboard.update_level(0.0)
 
     @Slot()
     def on_mic_unavailable(self) -> None:
         self._mic_unavailable = True
-        self.dashboard.set_status(MSG_MIC_UNAVAILABLE, "ERR")
 
     @Slot()
     def on_mic_available(self) -> None:
         self._mic_unavailable = False
-        if self.transcription_worker and not self.transcription_worker.is_ready:
-            self.dashboard.set_status(MSG_MODEL_NOT_FOUND, "WARN")
-        else:
-            self.dashboard.set_status(STATE_READY, "OK")

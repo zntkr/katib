@@ -66,7 +66,7 @@ class AudioWorker(BaseWorker):
         self._device_index = device_index
         try:
             label = self.audio_source.set_device(device_index)
-            self.log_entry.emit("OK", "MIC", f"Device → {label}")
+            self.log_entry.emit("OK", "MIC", f"Device -> {label}")
         except AudioDeviceError as e:
             self.log_entry.emit("ERR", "MIC", f"Device error: {e}")
             self._device_index = None

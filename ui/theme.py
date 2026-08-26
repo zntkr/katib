@@ -159,26 +159,26 @@ class ThemeManager:
         url_up = _get_cached_svg("up", ICN_UP.replace("{color}", p['CLR_TEXT_MUTED']))
 
         return f"""
-        * {{ font-family: 'Segoe UI', system-ui, sans-serif; font-size: {FONT_SIZE_MD}pt; outline: none; }}
+        * {{ font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, sans-serif; font-size: {FONT_SIZE_MD}pt; outline: none; }}
         QWidget {{ color: {p['CLR_TEXT']}; }}
         QLabel, QCheckBox, QRadioButton {{ background: transparent; }}
         QFrame {{ border: none; }}
 
-        QPushButton {{ background-color: {p['CLR_BG_ELEVATED']}; border: none; border-radius: 2px; padding: 4px 12px; color: {p['CLR_TEXT']}; min-height: 20px; }}
+        QPushButton {{ background-color: {p['CLR_BG_ELEVATED']}; border: none; border-radius: 6px; padding: 6px 14px; color: {p['CLR_TEXT']}; min-height: 22px; }}
         QPushButton:hover {{ background-color: {p['CLR_BG_HOVER']}; }}
         QPushButton:pressed {{ background-color: {p['CLR_PRESSED_BG']}; }}
         QPushButton:disabled {{ color: {p['CLR_TEXT_MUTED']}; background-color: {p['CLR_BG_DEEP']}; }}
-        QPushButton[isIconBtn="true"] {{ padding: 5px; }}
+        QPushButton[isIconBtn="true"] {{ padding: 6px; border-radius: 6px; }}
 
         QToolTip {{
             background-color: {p['CLR_BG_ELEVATED']};
             color: {p['CLR_TEXT_CONTENT']};
             border: 1px solid {p['CLR_BORDER_LIGHT']};
-            border-radius: 2px;
-            padding: 4px;
+            border-radius: 6px;
+            padding: 6px;
         }}
 
-        QComboBox {{ background-color: {p['CLR_BG']}; border: 1px solid {p['CLR_BG_ACTIVE']}; border-radius: 2px; padding: 2px 24px 2px 8px; color: {p['CLR_FG3']}; min-height: 20px; combobox-popup: 0; }}
+        QComboBox {{ background-color: {p['CLR_BG']}; border: 1px solid {p['CLR_BG_ACTIVE']}; border-radius: 6px; padding: 4px 24px 4px 10px; color: {p['CLR_FG3']}; min-height: 22px; combobox-popup: 0; }}
         QComboBox:hover {{ background-color: {p['CLR_BG_DEEP']}; border-color: {p['CLR_TEXT_STATUS']}; color: {p['CLR_FG2']}; }}
         QComboBox:focus {{ background-color: {p['CLR_BG_DEEP']}; border-color: {p['CLR_FOCUS_BORDER']}; color: {p['CLR_TEXT']}; }}
         QComboBox:disabled {{ color: {p['CLR_TEXT_MUTED']}; border-color: {p['CLR_BORDER']}; }}
@@ -189,28 +189,28 @@ class ThemeManager:
         QComboBox::down-arrow:disabled {{ image: {url_down_disabled}; width: 14px; height: 14px; }}
         
         /* --- DROPDOWN MENU (Tactile / Floating Chip) --- */
-        QComboBox QAbstractItemView {{ background-color: {p['CLR_BG_ELEVATED']}; border: 1px solid {p['CLR_BG_ACTIVE']}; border-radius: 2px; outline: none; padding: 0px; show-decoration-selected: 1; }}
-        QComboBox QAbstractItemView::item {{ min-height: {G_3}px; max-height: {G_3}px; padding-left: {G_1}px; color: {p['CLR_TEXT']}; border-radius: 0px; margin: 0px; }}
+        QComboBox QAbstractItemView {{ background-color: {p['CLR_BG_ELEVATED']}; border: 1px solid {p['CLR_BG_ACTIVE']}; border-radius: 6px; outline: none; padding: 4px; show-decoration-selected: 1; }}
+        QComboBox QAbstractItemView::item {{ min-height: {G_3 + 4}px; max-height: {G_3 + 4}px; padding-left: {G_1}px; color: {p['CLR_TEXT']}; border-radius: 4px; margin: 2px 0px; }}
         QComboBox QAbstractItemView::item:hover {{ background-color: {p['CLR_BG_HOVER']}; }}
-        QComboBox QAbstractItemView::item:selected {{ background-color: {p['CLR_BG_ACTIVE']}; color: {p['CLR_TEXT']}; font-weight: bold; border-left: 2px solid {p['CLR_YELLOW']}; }}
+        QComboBox QAbstractItemView::item:selected {{ background-color: {p['CLR_BG_ACTIVE']}; color: {p['CLR_TEXT']}; font-weight: bold; border-left: 3px solid {p['CLR_YELLOW']}; padding-left: {G_1 - 3}px; }}
         QComboBox QAbstractItemView::item:pressed {{ background-color: {p['CLR_PRESSED_BG']}; color: {p['CLR_TEXT']}; }}
         QComboBox QAbstractItemView QScrollBar:vertical {{ background-color: {p['CLR_BG_DEEP']}; }}
 
-        QSpinBox, QDoubleSpinBox {{ background-color: {p['CLR_BG_ELEVATED']}; border: 1px solid {p['CLR_BORDER']}; border-radius: 2px; padding: 2px 4px; min-height: 20px; }}
+        QSpinBox, QDoubleSpinBox {{ background-color: {p['CLR_BG_ELEVATED']}; border: 1px solid {p['CLR_BORDER']}; border-radius: 6px; padding: 4px 6px; min-height: 22px; }}
         QSpinBox:hover, QDoubleSpinBox:hover {{ border-color: {p['CLR_HOVER_BORDER']}; }}
         QSpinBox:focus, QDoubleSpinBox:focus {{ border-color: {p['CLR_FOCUS_BORDER']}; }}
         QSpinBox:pressed, QDoubleSpinBox:pressed {{ background-color: {p['CLR_PRESSED_BG']}; border-color: {p['CLR_TEXT_MUTED']}; }}
 
-        QSpinBox::up-button, QDoubleSpinBox::up-button {{ subcontrol-origin: border; subcontrol-position: top right; width: 16px; border-left: 1px solid {p['CLR_BORDER']}; background-color: {p['CLR_BG_ELEVATED']}; }}
+        QSpinBox::up-button, QDoubleSpinBox::up-button {{ subcontrol-origin: border; subcontrol-position: top right; width: 20px; border-left: 1px solid {p['CLR_BORDER']}; background-color: {p['CLR_BG_ELEVATED']}; border-top-right-radius: 6px; }}
         QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {{ image: {url_up}; width: 12px; height: 12px; }}
-        QSpinBox::down-button, QDoubleSpinBox::down-button {{ subcontrol-origin: border; subcontrol-position: bottom right; width: 16px; border-left: 1px solid {p['CLR_BORDER']}; border-top: 1px solid {p['CLR_BORDER']}; background-color: {p['CLR_BG_ELEVATED']}; }}
+        QSpinBox::down-button, QDoubleSpinBox::down-button {{ subcontrol-origin: border; subcontrol-position: bottom right; width: 20px; border-left: 1px solid {p['CLR_BORDER']}; border-top: 1px solid {p['CLR_BORDER']}; background-color: {p['CLR_BG_ELEVATED']}; border-bottom-right-radius: 6px; }}
         QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {{ image: {url_down}; width: 12px; height: 12px; }}
 
         #log_box {{ 
             background-color: {p['CLR_BG_DEEP']}; 
             color: {p['CLR_TEXT_CONTENT']};
             border: 1px solid {p['CLR_BORDER_LIGHT']};
-            border-radius: 2px;
+            border-radius: 6px;
         }}
         #log_box:hover {{ border-color: {p['CLR_TEXT_STATUS']}; }}
 
@@ -220,22 +220,23 @@ class ThemeManager:
             background-color: {p['CLR_BG_DEEP']}; 
             color: {p['CLR_TEXT_CONTENT']}; 
             border: 1px solid {p['CLR_BORDER_LIGHT']}; 
-            border-radius: 2px; 
-            padding: 4px 6px; 
+            border-radius: 6px; 
+            padding: 6px 8px; 
             selection-background-color: {p['CLR_INFO']}; 
             selection-color: #ffffff; 
         }}
         QLineEdit:hover, QTextEdit:hover, QPlainTextEdit:hover {{ border-color: {p['CLR_HOVER_BORDER']}; }}
         QPlainTextEdit:focus, QTextEdit:focus, QLineEdit:focus {{ border-color: {p['CLR_FOCUS_BORDER']}; }}
 
-        QProgressBar {{ border: 1px solid {p['CLR_BORDER']}; border-radius: 2px; background: {p['CLR_BG_DEEP']}; text-align: center; }}
-        QProgressBar::chunk {{ background-color: {p['CLR_LEVEL_LOW']}; border-radius: 2px; }}
+        QProgressBar {{ border: 1px solid {p['CLR_BORDER']}; border-radius: 4px; background: {p['CLR_BG_DEEP']}; text-align: center; }}
+        QProgressBar::chunk {{ background-color: {p['CLR_LEVEL_LOW']}; border-radius: 3px; }}
 
         QScrollBar:vertical {{
             border: none;
             background-color: {p['CLR_BG_DEEP']};
             width: 8px;
             margin: 0;
+            border-radius: 4px;
         }}
         QScrollBar::handle:vertical {{
             background-color: {p['CLR_BG_ELEVATED']};
@@ -247,8 +248,8 @@ class ThemeManager:
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; border: none; background: none; }}
         QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: none; }}
 
-        QTabWidget::pane {{ border: 1px solid {p['CLR_BORDER_LIGHT']}; border-radius: 2px; background-color: {p['CLR_BG']}; top: -1px; }}
-        QTabBar::tab {{ background-color: {p['CLR_BG_ELEVATED']}; color: {p['CLR_TEXT_MUTED']}; border: 1px solid {p['CLR_BORDER']}; border-bottom: none; border-top-left-radius: 3px; border-top-right-radius: 3px; padding: 6px 16px; margin-right: 2px; }}
+        QTabWidget::pane {{ border: 1px solid {p['CLR_BORDER_LIGHT']}; border-radius: 6px; background-color: {p['CLR_BG']}; top: -1px; }}
+        QTabBar::tab {{ background-color: {p['CLR_BG_ELEVATED']}; color: {p['CLR_TEXT_MUTED']}; border: 1px solid {p['CLR_BORDER']}; border-bottom: none; border-top-left-radius: 6px; border-top-right-radius: 6px; padding: 8px 18px; margin-right: 4px; }}
         QTabBar::tab:selected {{ background-color: {p['CLR_BG']}; color: {p['CLR_TEXT']}; border: 1px solid {p['CLR_BORDER_LIGHT']}; border-bottom: 1px solid {p['CLR_BG']}; font-weight: bold; }}
         QTabBar::tab:hover:!selected {{ background-color: {p['CLR_HOVER_BG']}; color: {p['CLR_TEXT']}; }}
 
@@ -264,7 +265,7 @@ class ThemeManager:
 
         /* --- COMPONENTS (Settings Card) --- */
         QLabel#settingCardTitle {{ color: {p['CLR_YELLOW']}; font-weight: bold; font-size: {FONT_SIZE_SM}pt; letter-spacing: 1px; }}
-        QFrame#settingCard {{ background-color: {p['CLR_BG']}; border-radius: 2px; border: 1px solid {p['CLR_BORDER_LIGHT']}; }}
+        QFrame#settingCard {{ background-color: {p['CLR_BG']}; border-radius: 6px; border: 1px solid {p['CLR_BORDER_LIGHT']}; padding: 8px; }}
 
         QFrame#settingCard QPushButton {{ background-color: {p['CLR_BG_ELEVATED']}; }}
         QFrame#settingCard QPushButton:hover {{ background-color: {p['CLR_BG_HOVER']}; }}
@@ -282,12 +283,12 @@ class ThemeManager:
             background-color: {p['CLR_BG_ELEVATED']};
             color: {p['CLR_TEXT']};
             border: 1px solid {p['CLR_BORDER_LIGHT']};
-            border-radius: 4px;
+            border-radius: 8px;
             padding: 4px;
         }}
         QMenu::item {{
             padding: 6px 24px 6px 12px;
-            border-radius: 2px;
+            border-radius: 4px;
         }}
         QMenu::item:selected {{
             background-color: {p['CLR_BG_HOVER']};
@@ -306,7 +307,7 @@ class ThemeManager:
         }}
 
         /* --- FINAL ENFORCEMENT --- */
-        #DashboardWindow {{ background-color: {p['CLR_BG']}; }}
+        #DashboardWindow {{ background-color: transparent; }}
         #log_box {{ background-color: {p['CLR_BG_DEEP']}; }}
         #top_panel, #log_widget {{ background: transparent; }}
         """

@@ -189,7 +189,7 @@ def main():
 
     from ui.tray_app import TrayApp
 
-    global_logger.info("Building UI (Tray/Dashboard)...")
+    global_logger.info("Building UI (Tray/Control Center)...")
     tray = TrayApp(settings=settings_manager, model_provider=model_provider)
     app.setWindowIcon(tray._icon_idle)
 
@@ -242,21 +242,21 @@ def main():
         hotkey_worker.error_occurred.connect(lambda msg: osd.setStateError(msg))
         transcription_worker.error_occurred.connect(lambda msg: osd.setStateError(msg))
         transcription_worker.model_missing.connect(lambda: osd.setStateError(MSG_MODEL_NOT_FOUND))
-        transcription_worker.model_missing.connect(tray.dashboard.show_model_missing_guidance)
-        transcription_worker.model_loaded.connect(tray.dashboard.clear_model_missing_guidance)
         downloader_worker.error_occurred.connect(lambda msg: osd.setStateError(msg))
 
         audio_worker.audio_ready.connect(transcription_worker.add_audio)
 
         transcription_worker.text_ready.connect(tray.on_text_ready)
+        transcription_worker.status_changed.connect(tray.control_center.set_system_status)
 
-        audio_worker.level_changed.connect(tray.dashboard.update_level)
-        transcription_worker.status_changed.connect(tray.dashboard.set_status)
-        transcription_worker.loading_state_changed.connect(tray.dashboard.set_loading_indicator)
-
-        audio_worker.log_entry.connect(tray.dashboard.append_log_entry)
-        transcription_worker.log_entry.connect(tray.dashboard.append_log_entry)
-        hotkey_worker.log_entry.connect(tray.dashboard.append_log_entry)
+        audio_worker.log_entry.connect(tray.control_center.append_log_entry)
+        transcription_worker.log_entry.connect(tray.control_center.append_log_entry)
+        hotkey_worker.log_entry.connect(tray.control_center.append_log_entry)
+        downloader_worker.log_entry.connect(tray.control_center.append_log_entry)
+        
+        # Download progress
+        downloader_worker.download_state_changed.connect(tray.control_center.set_download_state)
+        downloader_worker.download_progress.connect(tray.control_center.set_download_progress)
 
         # Bridge UI log entries to the disk log as well.
         def _file_log_bridge(lvl, cat, msg):
@@ -271,51 +271,48 @@ def main():
         hotkey_worker.log_entry.connect(_file_log_bridge)
         downloader_worker.log_entry.connect(_file_log_bridge)
 
-
-
         # Microphone change → update audio worker + clear error flag
-        tray.dashboard.device_changed.connect(audio_worker.set_device)
-        tray.dashboard.device_changed.connect(lambda _: tray.on_mic_available())
+        tray.control_center.device_changed.connect(audio_worker.set_device)
+        tray.control_center.device_changed.connect(lambda _: tray.on_mic_available())
 
         # Hotkey change → update hotkey worker
-        tray.dashboard.hotkey_changed.connect(hotkey_worker.set_key)
+        tray.control_center.hotkey_changed.connect(hotkey_worker.set_key)
         # Pause hotkey worker during capture mode so accidental presses don't start recording.
-        tray.dashboard.hotkey_capture_mode.connect(
+        tray.control_center.capture_mode_changed.connect(
             lambda capturing: hotkey_worker.pause() if capturing else hotkey_worker.resume()
         )
 
-        # Model folder or compute setting changed → reload model
         def _on_model_dir_changed(path):
             model_provider.active_model_path = path
             transcription_worker.reload_model()
             
-        tray.dashboard.model_dir_changed.connect(_on_model_dir_changed)
-        tray.dashboard.model_reload_requested.connect(transcription_worker.reload_model)
+        tray.control_center.model_dir_changed.connect(_on_model_dir_changed)
+        tray.control_center.model_reload_requested.connect(transcription_worker.reload_model)
 
         # Device list: UI requests → AudioWorker queries → UI populates
-        tray.dashboard.refresh_devices_requested.connect(audio_worker.refresh_devices)
-        audio_worker.devices_ready.connect(tray.dashboard.populate_devices)
+        tray.control_center.refresh_devices_requested.connect(audio_worker.refresh_devices)
+        audio_worker.devices_ready.connect(tray.control_center.populate_devices)
         audio_worker.refresh_devices()   # populate combo on startup
         # populate_devices finds the saved microphone and emits device_changed to call set_device.
 
         # Model downloader: UI → downloader → dashboard + transcription
-        tray.dashboard.download_model_requested.connect(downloader_worker.start_download)
-        downloader_worker.log_entry.connect(tray.dashboard.append_log_entry)
-        downloader_worker.error_occurred.connect(lambda _: tray.dashboard.set_loading_indicator(False))
-        downloader_worker.error_occurred.connect(lambda _: tray.dashboard.set_download_state(False))
-        downloader_worker.status_changed.connect(tray.dashboard.set_status)
-        downloader_worker.download_state_changed.connect(tray.dashboard.set_download_state)
-        downloader_worker.download_finished.connect(tray.dashboard.on_download_complete)
+        tray.control_center.download_model_requested.connect(downloader_worker.start_download)
+        downloader_worker.log_entry.connect(tray.control_center.append_log_entry)
+        downloader_worker.error_occurred.connect(lambda _: tray.control_center.update(False))
+        downloader_worker.error_occurred.connect(lambda _: tray.control_center.set_download_state(False))
+        downloader_worker.status_changed.connect(tray.control_center.set_status)
+        downloader_worker.download_state_changed.connect(tray.control_center.set_download_state)
+        downloader_worker.download_finished.connect(tray.control_center.on_download_complete)
 
-        tray.dashboard.language_change_requested.connect(tray.apply_language)
+        tray.control_center.language_change_requested.connect(tray.apply_language)
 
         def _on_theme_changed(theme: str) -> None:
             theme_manager.apply_theme(app, theme)
-            tray.dashboard.refresh_theme()
-            if tray.dashboard._settings_dialog is not None:
-                tray.dashboard._settings_dialog.refresh_theme()
+            tray.control_center.refresh_theme()
+            if tray.control_center is not None:
+                tray.control_center.refresh_theme()
 
-        tray.dashboard.theme_changed.connect(_on_theme_changed)
+        tray.control_center.theme_changed.connect(_on_theme_changed)
         app.styleHints().colorSchemeChanged.connect(
             lambda: settings_manager.get("theme", "system") == "system"
             and theme_manager.apply_theme(app, "system")
@@ -327,15 +324,15 @@ def main():
         audio_worker.start()
         hotkey_worker.start()
 
-        tray.dashboard.show()
-        tray.dashboard.raise_()
-        tray.dashboard.append_log_entry("OK", "APP", _t("app.started").format(key=settings_manager.get('hotkey', 'F9').upper()))
+        tray.control_center.show()
+        tray.control_center.raise_()
+        tray.control_center.append_log_entry("OK", "APP", _t("app.started").format(key=settings_manager.get('hotkey', 'F9').upper()))
         global_logger.info("System ready.")
 
     # ----------------------------------------------------- graceful shutdown
     def shutdown():
         global_logger.info("=== Shutdown Started ===")
-        tray.dashboard.append_log_entry("...", "APP", _t("app.shutting_down"))
+        tray.control_center.append_log_entry("...", "APP", _t("app.shutting_down"))
 
         # Hide windows to avoid C++-side drawing errors (QBackingStore) after the event loop ends.
         for window in QApplication.topLevelWidgets():

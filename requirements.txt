@@ -1,7 +1,7 @@
 PySide6
-faster-whisper
+requests==2.32.3
 numpy
-sounddevice
+sounddevice==0.4.7
 keyboard
 pynput
 pyperclip

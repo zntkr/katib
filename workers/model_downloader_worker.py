@@ -10,6 +10,7 @@ class ModelDownloaderWorker(BaseWorker):
     download_finished      = Signal(str)        # final model dir path (on success)
     status_changed         = Signal(str, str)   # text, level — "OK"|"ERR"|"INFO"
     download_state_changed = Signal(bool)       # True=started, False=finished/error
+    download_progress      = Signal(int, float, float)  # percent, downloaded_mb, total_mb
 
     def __init__(self, settings, parent=None):
         super().__init__(parent)
@@ -29,20 +30,56 @@ class ModelDownloaderWorker(BaseWorker):
         self._repo_id = repo_id
         self.start()
 
+    def _download_server_if_needed(self, target_parent: Path) -> bool:
+        import requests
+        import zipfile
+        import io
+        
+        bin_dir = target_parent.parent / "bin"
+        server_exe = bin_dir / "whisper-server.exe"
+        if server_exe.exists():
+            return True
+            
+        bin_dir.mkdir(parents=True, exist_ok=True)
+        url = "https://github.com/ggerganov/whisper.cpp/releases/latest/download/whisper-bin-x64.zip"
+        self.log_entry.emit("...", "DL", "Downloading whisper-server.exe (latest)...")
+        
+        try:
+            resp = requests.get(url, timeout=60)
+            resp.raise_for_status()
+            with zipfile.ZipFile(io.BytesIO(resp.content)) as z:
+                for name in z.namelist():
+                    if name.endswith("whisper-server.exe"):
+                        with z.open(name) as source, open(server_exe, "wb") as target:
+                            shutil.copyfileobj(source, target)
+                        break
+            if not server_exe.exists():
+                self.log_entry.emit("ERR", "DL", "whisper-server.exe not found in zip.")
+                return False
+            self.log_entry.emit("OK", "DL", "whisper-server.exe downloaded.")
+            return True
+        except Exception as e:
+            self.log_entry.emit("ERR", "DL", f"Server download failed: {e}")
+            return False
+
     # ------------------------------------------------------------------ QThread
     def run(self) -> None:
-        from huggingface_hub import snapshot_download
+        from huggingface_hub import hf_hub_download
 
         target_parent = self._target_parent
         target_parent.mkdir(parents=True, exist_ok=True)
 
-        # PRE-FLIGHT DISK CHECK
-        # For unknown / external models, assume 4 GB as a safe upper bound.
-        required_space_bytes = 4 * 1024**3
-        for model_info in WHISPER_MODELS.values():
-            if model_info["repo_id"] == self._repo_id:
-                required_space_bytes = model_info.get("req_bytes", required_space_bytes)
-                break
+        model_info = WHISPER_MODELS.get(self._repo_id)
+        if not model_info:
+            self.log_entry.emit("ERR", "DL", "Unknown model requested.")
+            self.error_occurred.emit("osd.dl_model_not_found")
+            self.status_changed.emit("status.download_error", "ERR")
+            self.download_state_changed.emit(False)
+            return
+
+        hf_repo_id = model_info["repo_id"]
+        filename = model_info["filename"]
+        required_space_bytes = model_info.get("req_bytes", 2 * 1024**3)
 
         free_space_bytes = shutil.disk_usage(target_parent).free
 
@@ -59,55 +96,50 @@ class ModelDownloaderWorker(BaseWorker):
             return
         # ───────────────────────────────────────────────────────────────
 
-        final_dir_name = self._repo_id.split("/")[-1]
-        final_dir = target_parent / final_dir_name
-        temp_dir  = target_parent / f".temp_{final_dir_name}"
-
-        # Clean up any leftover temp directory from a previous incomplete download.
-        if temp_dir.exists():
-            self.log_entry.emit("...", "DL", "Cleaning up previous incomplete download...")
-            shutil.rmtree(temp_dir, ignore_errors=True)
+        final_file = target_parent / filename
 
         self.download_state_changed.emit(True)
+        
+        # 1. Download server executable if missing
+        if not self._download_server_if_needed(target_parent):
+            self.error_occurred.emit("osd.dl_failed")
+            self.status_changed.emit("status.download_error", "ERR")
+            self.download_state_changed.emit(False)
+            return
+
+        # 2. Download model
         self.status_changed.emit("status.downloading_model", "INFO")
-        self.log_entry.emit("...", "DL", f"Source: {self._repo_id}")
+        self.log_entry.emit("...", "DL", f"Source: {hf_repo_id}/{filename}")
         self.log_entry.emit("...", "DL", "Download started, please wait...")
 
         try:
-            snapshot_download(
-                repo_id=self._repo_id,
-                local_dir=str(temp_dir),
-                local_dir_use_symlinks=False,
-            )
+            import requests
+            url = f"https://huggingface.co/{hf_repo_id}/resolve/main/{filename}"
+            resp = requests.get(url, stream=True, timeout=10)
+            resp.raise_for_status()
 
-            # Atomic rename: only move to the target directory once the download is complete.
-            if final_dir.exists():
-                # Back up the existing model, put the new one in place, then delete the backup.
-                backup_dir = target_parent / f".old_{final_dir_name}"
-                if backup_dir.exists():
-                    shutil.rmtree(backup_dir, ignore_errors=True)
-                os.rename(str(final_dir), str(backup_dir))
-                os.rename(str(temp_dir), str(final_dir))
-                shutil.rmtree(str(backup_dir), ignore_errors=True)
-            else:
-                os.rename(str(temp_dir), str(final_dir))
+            total_size = int(resp.headers.get('content-length', 0))
+            downloaded = 0
+            
+            with open(final_file, 'wb') as f:
+                for chunk in resp.iter_content(chunk_size=1024 * 1024):  # 1 MB chunks
+                    if chunk:
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if total_size > 0:
+                            pct = int((downloaded / total_size) * 100)
+                            dl_mb = downloaded / (1024 * 1024)
+                            tot_mb = total_size / (1024 * 1024)
+                            self.download_progress.emit(pct, dl_mb, tot_mb)
 
-            self.log_entry.emit("OK", "DL", f"Download complete → {final_dir}")
+            self.log_entry.emit("OK", "DL", f"Download complete → {final_file}")
             self.status_changed.emit("status.loading_model", "OK")
             self.download_state_changed.emit(False)
-            self.download_finished.emit(str(final_dir))
+            self.download_finished.emit(str(final_file))
 
         except Exception as e:
             import logging
             logging.getLogger("Katib").exception("Model downloader encountered an error:")
-
-            # Rollback: delete the incomplete temp directory.
-            if temp_dir.exists():
-                try:
-                    shutil.rmtree(temp_dir)
-                    self.log_entry.emit("...", "DL", "Rollback: temporary files cleaned up.")
-                except Exception:
-                    self.log_entry.emit("WRN", "DL", "Temporary files could not be deleted")
 
             err_msg = str(e)
             if "No space left" in err_msg or "Disk full" in err_msg:
