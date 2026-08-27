@@ -105,7 +105,9 @@
         "trouble_title4": "La app no abre / falta el icono en la bandeja",
         "trouble_desc4": "La app puede estar ejecutándose en segundo plano. Busca {app} en el Administrador de tareas.",
         "trouble_title5": "El habla fue reconocida pero no se escribió el texto",
-        "trouble_desc5": "Haz clic en el campo de destino antes de hablar para que tenga el foco."
+        "trouble_desc5": "Haz clic en el campo de destino antes de hablar para que tenga el foco.",
+        "trouble_title6": "Model Download Error / Network Error",
+        "trouble_desc6": "If you are on a corporate network, downloads may be blocked by a firewall. Please contact your IT department for offline deployment."
     },
     "schema": {
         "language": {

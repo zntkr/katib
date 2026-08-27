@@ -105,7 +105,9 @@
         "trouble_title4": "Приложение не открывается / значок в трее отсутствует",
         "trouble_desc4": "Приложение может уже работать в фоне. Найдите {app} в Диспетчере задач.",
         "trouble_title5": "Речь распознана, но текст не введён",
-        "trouble_desc5": "Перед тем как говорить, кликните в целевое поле, чтобы оно получило фокус."
+        "trouble_desc5": "Перед тем как говорить, кликните в целевое поле, чтобы оно получило фокус.",
+        "trouble_title6": "Model Download Error / Network Error",
+        "trouble_desc6": "If you are on a corporate network, downloads may be blocked by a firewall. Please contact your IT department for offline deployment."
     },
     "schema": {
         "language": {

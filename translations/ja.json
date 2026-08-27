@@ -105,7 +105,9 @@
         "trouble_title4": "アプリが開かない / トレイアイコンがない",
         "trouble_desc4": "アプリがすでにバックグラウンドで動作している可能性があります。タスクマネージャーで{app}を探してください。",
         "trouble_title5": "音声は認識されたがテキストが入力されない",
-        "trouble_desc5": "話す前に対象フィールドをクリックしてフォーカスを当ててください。"
+        "trouble_desc5": "話す前に対象フィールドをクリックしてフォーカスを当ててください。",
+        "trouble_title6": "Model Download Error / Network Error",
+        "trouble_desc6": "If you are on a corporate network, downloads may be blocked by a firewall. Please contact your IT department for offline deployment."
     },
     "schema": {
         "language": {

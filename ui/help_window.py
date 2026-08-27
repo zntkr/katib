@@ -208,6 +208,7 @@ class HelpWindow(QWidget):
             (t("help.trouble_title3"), t("help.trouble_desc3")),
             (t("help.trouble_title4"), t("help.trouble_desc4").format(app=APP_NAME)),
             (t("help.trouble_title5"), t("help.trouble_desc5")),
+            (t("help.trouble_title6"), t("help.trouble_desc6")),
         ]
         for title, desc in sorunlar:
             grp_sorun.group_layout.addWidget(_lbl(f"· {title}", bold=True))

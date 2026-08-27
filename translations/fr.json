@@ -105,7 +105,9 @@
         "trouble_title4": "L'application ne s'ouvre pas / icône de la barre des tâches manquante",
         "trouble_desc4": "L'application est peut-être déjà en cours d'exécution en arrière-plan. Recherchez {app} dans le Gestionnaire des tâches.",
         "trouble_title5": "La parole a été reconnue mais le texte n'a pas été tapé",
-        "trouble_desc5": "Cliquez sur le champ cible avant de parler pour qu'il soit actif."
+        "trouble_desc5": "Cliquez sur le champ cible avant de parler pour qu'il soit actif.",
+        "trouble_title6": "Model Download Error / Network Error",
+        "trouble_desc6": "If you are on a corporate network, downloads may be blocked by a firewall. Please contact your IT department for offline deployment."
     },
     "schema": {
         "language": {

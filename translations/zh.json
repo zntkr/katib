@@ -105,7 +105,9 @@
         "trouble_title4": "应用无法打开 / 托盘图标缺失",
         "trouble_desc4": "应用可能已在后台运行。请在任务管理器中搜索 {app}。",
         "trouble_title5": "语音已识别但未输入文本",
-        "trouble_desc5": "说话前请点击目标字段以使其获得焦点。"
+        "trouble_desc5": "说话前请点击目标字段以使其获得焦点。",
+        "trouble_title6": "Model Download Error / Network Error",
+        "trouble_desc6": "If you are on a corporate network, downloads may be blocked by a firewall. Please contact your IT department for offline deployment."
     },
     "schema": {
         "language": {

@@ -105,7 +105,9 @@
         "trouble_title4": "App öffnet sich nicht / Tray-Symbol fehlt",
         "trouble_desc4": "Die App läuft möglicherweise bereits im Hintergrund. Suche nach {app} im Task-Manager.",
         "trouble_title5": "Sprache wurde erkannt, aber Text wurde nicht getippt",
-        "trouble_desc5": "Klicke vor dem Sprechen in das Zielfeld, damit es den Fokus hat."
+        "trouble_desc5": "Klicke vor dem Sprechen in das Zielfeld, damit es den Fokus hat.",
+        "trouble_title6": "Model Download Error / Network Error",
+        "trouble_desc6": "If you are on a corporate network, downloads may be blocked by a firewall. Please contact your IT department for offline deployment."
     },
     "schema": {
         "language": {

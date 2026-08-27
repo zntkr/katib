@@ -105,7 +105,9 @@
         "trouble_title4": "App won't open / tray icon missing",
         "trouble_desc4": "The app may already be running in the background. Search for {app} in Task Manager.",
         "trouble_title5": "Text not typed but speech was recognized",
-        "trouble_desc5": "Click the target field before speaking so it has focus."
+        "trouble_desc5": "Click the target field before speaking so it has focus.",
+        "trouble_title6": "Model Download Error / Network Error",
+        "trouble_desc6": "If you are on a corporate network, downloads may be blocked by a firewall. Please contact your IT department for offline deployment."
     },
     "schema": {
         "language": {

@@ -105,7 +105,9 @@
         "trouble_title4": "Uygulama açılmıyor / tepsi simgesi eksik",
         "trouble_desc4": "Uygulama arka planda çalışıyor olabilir. Görev Yöneticisi'nde {app} arayın.",
         "trouble_title5": "Konuşma tanındı ama metin yazılmadı",
-        "trouble_desc5": "Konuşmadan önce hedef alana tıklayın ve odaklanmasını sağlayın."
+        "trouble_desc5": "Konuşmadan önce hedef alana tıklayın ve odaklanmasını sağlayın.",
+        "trouble_title6": "Model İndirilemiyor / Ağ Hatası",
+        "trouble_desc6": "Eğer kurumsal bir ağdaysanız indirme işlemi güvenlik duvarına takılabilir. Lütfen uygulamanın çevrimdışı kurulumu (offline deployment) için IT departmanınızla görüşün."
     },
     "schema": {
         "language": {

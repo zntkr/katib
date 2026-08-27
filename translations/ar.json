@@ -105,7 +105,9 @@
         "trouble_title4": "التطبيق لا يفتح / رمز علبة النظام مفقود",
         "trouble_desc4": "قد يكون التطبيق يعمل بالفعل في الخلفية. ابحث عن {app} في إدارة المهام.",
         "trouble_title5": "لم يُكتب النص رغم التعرف على الكلام",
-        "trouble_desc5": "انقر على الحقل المستهدف قبل التحدث حتى يكون التركيز عليه."
+        "trouble_desc5": "انقر على الحقل المستهدف قبل التحدث حتى يكون التركيز عليه.",
+        "trouble_title6": "Model Download Error / Network Error",
+        "trouble_desc6": "If you are on a corporate network, downloads may be blocked by a firewall. Please contact your IT department for offline deployment."
     },
     "schema": {
         "language": {
