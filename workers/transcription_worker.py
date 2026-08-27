@@ -2,11 +2,6 @@ import os
 import time
 import queue
 import numpy as np
-import subprocess
-import requests
-import io
-import wave
-import socket
 from typing import TYPE_CHECKING
 from pathlib import Path
 
@@ -16,20 +11,14 @@ from PySide6.QtCore import Signal
 from workers.base_worker import BaseWorker, measure_time
 from core.transcription_filter import TranscriptionFilter
 from core.settings import MSG_MODEL_NOT_FOUND, STATE_READY, STATE_PROCESSING
+from core.whisper_inference import WhisperInferenceModule
 
-
-DEVICE        = "cpu"
 QUEUE_MAXSIZE = 5
 
 class _ReloadCommand:
     pass
 
 _RELOAD = _ReloadCommand()
-
-def _find_free_port():
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(('127.0.0.1', 0))
-        return s.getsockname()[1]
 
 class TranscriptionWorker(BaseWorker):
     text_ready            = Signal(str)
@@ -45,11 +34,10 @@ class TranscriptionWorker(BaseWorker):
         self.settings = settings
         self.model_provider = model_provider
         self._queue: queue.Queue = queue.Queue(maxsize=QUEUE_MAXSIZE)
-        self._server_proc = None
-        self._port = None
         self.is_ready: bool = False
         self._current_model_dir: str | None = None
         self._filter = TranscriptionFilter()
+        self._inference = WhisperInferenceModule()
 
     def run(self):
         self._load_model()
@@ -73,13 +61,8 @@ class TranscriptionWorker(BaseWorker):
                 self.error_occurred.emit("osd.stt_crashed")
             
     def _stop_server(self):
-        if self._server_proc:
-            try:
-                self._server_proc.terminate()
-                self._server_proc.wait(timeout=2)
-            except Exception:
-                pass
-            self._server_proc = None
+        if self._inference:
+            self._inference.stop_server()
 
     def _load_model(self):
         self.is_ready = False
@@ -110,43 +93,10 @@ class TranscriptionWorker(BaseWorker):
         self.loading_state_changed.emit(True)
 
         try:
-            self._port = _find_free_port()
-            cmd = [
-                str(server_exe),
-                "-m", valid_path,
-                "--port", str(self._port),
-                "--host", "127.0.0.1"
-            ]
-
-            startupinfo = None
-            if os.name == 'nt':
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-
             start_time = time.time()
-            self._server_proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                startupinfo=startupinfo
-            )
-
-            # Wait for server to become available
-            server_ready = False
-            for _ in range(30):
-                try:
-                    resp = requests.get(f"http://127.0.0.1:{self._port}/", timeout=1)
-                    if resp.status_code == 200:
-                        server_ready = True
-                        break
-                except Exception:
-                    pass
-                time.sleep(0.5)
-
-            if not server_ready:
-                raise RuntimeError("Server failed to respond to HTTP requests.")
-
+            self._inference.start_server(valid_path, str(server_exe))
             self._current_model_dir = valid_path
+            
             elapsed = time.time() - start_time
             hotkey = self.settings.get("hotkey", "F9").upper()
             self.log_entry.emit("OK", "STT", f"Model ready ({elapsed:.1f}s) — hold {hotkey} to speak")
@@ -181,7 +131,8 @@ class TranscriptionWorker(BaseWorker):
             self.error_occurred.emit("osd.model_inaccessible")
             self.log_entry.emit("ERR", "STT", "Model file not found.")
             self.status_changed.emit("status.folder_error", "ERR")
-            self.download_state_changed.emit(False)
+            if hasattr(self, "download_state_changed"):
+                self.download_state_changed.emit(False)
             return False
         return True
 
@@ -196,8 +147,8 @@ class TranscriptionWorker(BaseWorker):
 
     @measure_time("STT", "Whisper Transcription")
     def _transcribe(self, audio):
-        if not self._server_proc or self._server_proc.poll() is not None:
-            self.log_entry.emit("ERR", "STT", "Server is not running.")
+        if not self._inference:
+            self.log_entry.emit("ERR", "STT", "Inference module not initialized.")
             return
 
         self.log_entry.emit("...", "STT", "Transcription started")
@@ -207,38 +158,10 @@ class TranscriptionWorker(BaseWorker):
             rms = float(np.sqrt(np.mean(audio ** 2)))
             self.log_entry.emit("...", "STT", f"Audio RMS={rms:.4f}, duration={len(audio)/16000:.1f}s")
 
-            # Convert float32 numpy array to 16-bit PCM WAV in memory
-            audio_int16 = (audio * 32767).astype(np.int16)
-            wav_io = io.BytesIO()
-            with wave.open(wav_io, 'wb') as wf:
-                wf.setnchannels(1)
-                wf.setsampwidth(2)
-                wf.setframerate(16000)
-                wf.writeframes(audio_int16.tobytes())
-            
-            wav_data = wav_io.getvalue()
-
             lang_setting = self.settings.get("language", "auto")
             target_lang = lang_setting if lang_setting != "auto" else "auto"
 
-            files = {'file': ('audio.wav', wav_data, 'audio/wav')}
-            data = {
-                'response_format': 'json',
-            }
-            if target_lang != "auto":
-                data['language'] = target_lang
-
-            resp = requests.post(
-                f"http://127.0.0.1:{self._port}/inference", 
-                files=files, 
-                data=data,
-                timeout=30
-            )
-            resp.raise_for_status()
-
-            result = resp.json()
-            raw_text = result.get("text", "").strip()
-
+            raw_text = self._inference.transcribe(audio, target_lang)
             final_text = self._filter.clean(raw_text)
             
             if not final_text:
@@ -249,9 +172,6 @@ class TranscriptionWorker(BaseWorker):
             self.log_entry.emit("OK", "STT", f"Transcript: {final_text!r}")
             self.text_ready.emit(final_text)
 
-        except requests.exceptions.RequestException as e:
-            self.log_entry.emit("ERR", "STT", f"HTTP Error: {e}")
-            self.error_occurred.emit("osd.stt_error")
         except Exception as e:
             self.log_entry.emit("ERR", "STT", f"Transcription error: {e}")
             self.error_occurred.emit("osd.stt_error")

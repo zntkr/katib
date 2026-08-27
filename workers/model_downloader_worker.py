@@ -37,24 +37,25 @@ class ModelDownloaderWorker(BaseWorker):
         
         bin_dir = target_parent.parent / "bin"
         server_exe = bin_dir / "whisper-server.exe"
-        if server_exe.exists():
+        ggml_dll = bin_dir / "ggml.dll"
+        if server_exe.exists() and ggml_dll.exists():
             return True
             
         bin_dir.mkdir(parents=True, exist_ok=True)
         url = "https://github.com/ggerganov/whisper.cpp/releases/latest/download/whisper-bin-x64.zip"
-        self.log_entry.emit("...", "DL", "Downloading whisper-server.exe (latest)...")
+        self.log_entry.emit("...", "DL", "Downloading whisper-server.exe and libraries...")
         
         try:
             resp = requests.get(url, timeout=60)
             resp.raise_for_status()
             with zipfile.ZipFile(io.BytesIO(resp.content)) as z:
                 for name in z.namelist():
-                    if name.endswith("whisper-server.exe"):
-                        with z.open(name) as source, open(server_exe, "wb") as target:
+                    if name.endswith("whisper-server.exe") or name.endswith(".dll"):
+                        target_file = bin_dir / name.split("/")[-1]
+                        with z.open(name) as source, open(target_file, "wb") as target:
                             shutil.copyfileobj(source, target)
-                        break
-            if not server_exe.exists():
-                self.log_entry.emit("ERR", "DL", "whisper-server.exe not found in zip.")
+            if not server_exe.exists() or not ggml_dll.exists():
+                self.log_entry.emit("ERR", "DL", "whisper-server.exe or required DLLs not found in zip.")
                 return False
             self.log_entry.emit("OK", "DL", "whisper-server.exe downloaded.")
             return True

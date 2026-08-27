@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QApplication, QWidget, QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel,
     QPushButton, QComboBox, QSpinBox, QDoubleSpinBox,
     QFrame, QFileDialog, QMessageBox, QLineEdit, QTextEdit,
-    QSizePolicy, QTabWidget, QProgressBar, QTextBrowser
+    QSizePolicy, QTabWidget, QProgressBar, QTextBrowser, QScrollArea, QPlainTextEdit
 )
 from PySide6.QtCore import Qt, Signal, QTimer, Slot
 from PySide6.QtGui import QColor, QPainter, QPaintEvent, QKeyEvent, QFont
@@ -14,10 +14,84 @@ from core.settings import (
     DEFAULT_DOWNLOAD_PARENT, COMPUTE_TYPE_OPTIONS_CPU,
     SETTINGS_SCHEMA
 )
-from ui.theme import G_1, G_2, G_4, G_6, FONT_SIZE_SM, SETTINGS_WIDTH, SETTINGS_HEIGHT, theme_manager
+from ui.theme import G_1, G_2, G_4, G_6, FONT_SIZE_SM, FONT_SIZE_MD, SETTINGS_WIDTH, SETTINGS_HEIGHT, theme_manager
 from ui.components import NoScrollComboBox, DynamicIconButton
 from ui.icons import ICN_DOWNLOAD, ICN_TICK
 from core.i18n import t, available_languages
+
+class ModelItemWidget(QFrame):
+    download_requested = Signal(str)
+    select_requested = Signal(str)
+
+    def __init__(self, model_id, model_info, is_installed, is_active, parent=None):
+        super().__init__(parent)
+        self.model_id = model_id
+        self.model_info = model_info
+        self.is_installed = is_installed
+        self.is_active = is_active
+        self.setStyleSheet("QFrame { border: 1px solid #444; border-radius: 6px; background: #222; } QFrame:hover { border-color: #666; }")
+        self.setFixedHeight(70)
+        
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(10, 10, 10, 10)
+        
+        left_layout = QVBoxLayout()
+        name_lbl = QLabel(f"<b>{model_id.upper()}</b> <span style='color: #888; font-size: 9pt;'>({model_info.get('size', '')})</span>")
+        name_lbl.setStyleSheet("border: none; background: transparent;")
+        desc_lbl = QLabel(model_info.get('desc', ''))
+        desc_lbl.setStyleSheet("color: #aaa; font-size: 9pt; border: none; background: transparent;")
+        left_layout.addWidget(name_lbl)
+        left_layout.addWidget(desc_lbl)
+        layout.addLayout(left_layout)
+        
+        layout.addStretch()
+        
+        self.progress = QProgressBar()
+        self.progress.setFixedWidth(100)
+        self.progress.setFixedHeight(12)
+        self.progress.hide()
+        layout.addWidget(self.progress)
+        
+        self.btn_action = QPushButton()
+        self.btn_action.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_action.setFixedWidth(80)
+        layout.addWidget(self.btn_action)
+        
+        self.update_state(is_installed, is_active)
+        self.btn_action.clicked.connect(self._on_action)
+
+    def update_state(self, is_installed, is_active):
+        self.is_installed = is_installed
+        self.is_active = is_active
+        if is_active:
+            self.btn_action.setText("Aktif")
+            self.btn_action.setStyleSheet("QPushButton { padding: 4px 12px; border-radius: 4px; background: #4CAF50; color: white; font-weight: bold; }")
+            self.btn_action.setEnabled(False)
+            self.setStyleSheet("QFrame { border: 1px solid #4CAF50; border-radius: 6px; background: #2a332a; }")
+        elif is_installed:
+            self.btn_action.setText("Seç")
+            self.btn_action.setStyleSheet("QPushButton { padding: 4px 12px; border-radius: 4px; background: #333; color: white; font-weight: bold; } QPushButton:hover { background: #444; }")
+            self.btn_action.setEnabled(True)
+            self.setStyleSheet("QFrame { border: 1px solid #444; border-radius: 6px; background: #222; } QFrame:hover { border-color: #666; }")
+        else:
+            self.btn_action.setText("İndir")
+            self.btn_action.setStyleSheet("QPushButton { padding: 4px 12px; border-radius: 4px; background: #FFC107; color: black; font-weight: bold; } QPushButton:hover { background: #FFB300; }")
+            self.btn_action.setEnabled(True)
+            self.setStyleSheet("QFrame { border: 1px solid #444; border-radius: 6px; background: #222; } QFrame:hover { border-color: #666; }")
+
+    def set_downloading(self, downloading):
+        if downloading:
+            self.btn_action.hide()
+            self.progress.show()
+        else:
+            self.btn_action.show()
+            self.progress.hide()
+
+    def _on_action(self):
+        if self.is_installed:
+            self.select_requested.emit(self.model_id)
+        else:
+            self.download_requested.emit(self.model_id)
 
 class ControlCenterWindow(QDialog):
     _DEFAULT_PROMPTS: dict[str, str] = {
@@ -104,6 +178,9 @@ class ControlCenterWindow(QDialog):
         if hasattr(self, "log_display"):
             self.log_display.append(html)
 
+        if hasattr(self, "_update_dashboard_log"):
+            self._update_dashboard_log(level, category, message)
+
     @Slot(int, float, float)
     def set_download_progress(self, percent: int, downloaded_mb: float, total_mb: float) -> None:
         if hasattr(self, "dl_progress"):
@@ -146,6 +223,65 @@ class ControlCenterWindow(QDialog):
         )
         return lbl
 
+    def _build_dashboard_tab(self):
+        p = theme_manager.palette
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
+        layout.addSpacing(G_4)
+        
+        self.dashboard_led = QLabel("●")
+        self.dashboard_led.setStyleSheet(f"color: {p['CLR_TEXT_MUTED']}; font-size: 32pt;")
+        self.dashboard_status = QLabel(t("status.idle"))
+        self.dashboard_status.setStyleSheet(f"font-size: 16pt; font-weight: bold; color: {p['CLR_TEXT']};")
+        
+        status_layout = QHBoxLayout()
+        status_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        status_layout.addWidget(self.dashboard_led)
+        status_layout.addWidget(self.dashboard_status)
+        layout.addLayout(status_layout)
+        
+        self.dashboard_model = QLabel("Aktif Model: -")
+        self.dashboard_model.setStyleSheet(f"color: {p['CLR_TEXT_MUTED']}; font-size: 10pt;")
+        layout.addWidget(self.dashboard_model, alignment=Qt.AlignmentFlag.AlignCenter)
+        
+        layout.addSpacing(G_4)
+        
+        self.dashboard_log = QPlainTextEdit()
+        self.dashboard_log.setReadOnly(True)
+        self.dashboard_log.setFixedHeight(80)
+        self.dashboard_log.setStyleSheet(
+            f"background: {p['CLR_BG_ELEVATED']}; border: 1px solid {p['CLR_BORDER_LIGHT']}; "
+            f"border-radius: 4px; font-family: Consolas, monospace; font-size: 9pt; color: {p['CLR_TEXT']};"
+        )
+        layout.addWidget(self.dashboard_log)
+        
+        self.tabs.addTab(tab, "Ana Ekran")
+
+    def _update_dashboard_log(self, level, category, message):
+        text = f"[{category}] {message}"
+        self.dashboard_log.appendPlainText(text)
+        # Keep only last 10 lines
+        doc = self.dashboard_log.document()
+        if doc.blockCount() > 10:
+            cursor = self.dashboard_log.textCursor()
+            cursor.movePosition(cursor.MoveOperation.Start)
+            cursor.movePosition(cursor.MoveOperation.Down, cursor.MoveMode.KeepAnchor)
+            cursor.removeSelectedText()
+
+    def _update_dashboard_status(self, state, status_type):
+        p = theme_manager.palette
+        self.dashboard_status.setText(t(state))
+        color = p.get(f"CLR_{status_type}", p["CLR_TEXT"])
+        if status_type == "OK": color = p["CLR_GREEN"]
+        elif status_type == "ERR": color = p["CLR_RED"]
+        elif status_type == "WARN": color = p["CLR_YELLOW"]
+        elif status_type == "IDLE": color = p["CLR_TEXT_MUTED"]
+        self.dashboard_led.setStyleSheet(f"color: {color}; font-size: 32pt;")
+
+    def _handle_link(self, url):
+        pass
+
     def _make_row(self, label_text: str, widget: QWidget) -> QHBoxLayout:
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
@@ -165,8 +301,16 @@ class ControlCenterWindow(QDialog):
         outer.setSizeConstraint(QVBoxLayout.SizeConstraint.SetFixedSize)
 
         self.tabs = QTabWidget()
-        self.tabs.setStyleSheet(f"QTabWidget::pane {{ border: 1px solid {p['CLR_BORDER_LIGHT']}; border-radius: 4px; }} QTabBar::tab {{ padding: 8px 16px; margin-right: 2px; }}")
+        self.tabs.setTabPosition(QTabWidget.TabPosition.West)
+        self.tabs.setStyleSheet(
+            f"QTabWidget::pane {{ border: 1px solid {p['CLR_BORDER_LIGHT']}; border-radius: 4px; background: transparent; }}"
+            f"QTabBar::tab {{ padding: 12px 16px; margin-bottom: 2px; font-weight: bold; font-size: {FONT_SIZE_MD}pt; color: {p['CLR_TEXT_MUTED']}; border-radius: 4px; min-width: 100px; text-align: left; }}"
+            f"QTabBar::tab:selected {{ color: {p['CLR_TEXT']}; background: {p['CLR_BG_ELEVATED']}; border-left: 3px solid {p['CLR_YELLOW']}; }}"
+            f"QTabBar::tab:hover {{ background: {p['CLR_BG_ELEVATED']}; }}"
+        )
         outer.addWidget(self.tabs)
+
+        self._build_dashboard_tab()
 
         tab_general = QWidget()
         left = QFormLayout(tab_general)
@@ -242,55 +386,57 @@ class ControlCenterWindow(QDialog):
         btn_reset.clicked.connect(self._reset_advanced)
         left.addRow(btn_reset)
 
+        self._build_model_tab()
+
+        # Status Bar
+        status_bar = QWidget()
+        status_lay = QHBoxLayout(status_bar)
+        status_lay.setContentsMargins(G_2, G_1, G_2, G_1)
+        status_lay.setSpacing(G_1)
+        self.led_indicator = QLabel("●")
+        self.led_indicator.setStyleSheet(f"color: {p['CLR_IDLE']}; font-size: 12pt;")
+        self.lbl_status = QLabel(t('status.idle'))
+        self.lbl_status.setStyleSheet(f"color: {p.get('CLR_TEXT_MUTED', '#928374')}; font-size: {FONT_SIZE_SM}pt;")
+        status_lay.addWidget(self.led_indicator)
+        status_lay.addWidget(self.lbl_status)
+        status_lay.addStretch(1)
         
+        outer.addWidget(status_bar)
 
+        self.tabs.currentChanged.connect(self._on_tab_changed)
+        self._on_tab_changed(0)
+
+
+
+    def _build_model_tab(self):
+        p = theme_manager.palette
         tab_model = QWidget()
-        right = QFormLayout(tab_model)
-        right.setVerticalSpacing(G_2)
-        right.setHorizontalSpacing(G_4)
+        right = QVBoxLayout(tab_model)
+        right.setSpacing(G_2)
         right.setContentsMargins(G_4, G_4, G_4, G_4)
-        self.tabs.addTab(tab_model, "Model & Donanım")
-
-        right.addRow(self._section_title("settings.group_model"))
-
-        self.model_select_combo = NoScrollComboBox()
-        self.model_select_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self._model_combo_base_labels: dict[str, str] = {}
-        self._populate_model_combo()
-        self.model_select_combo.currentIndexChanged.connect(self._on_combo_index_changed)
-
-        self.btn_download = DynamicIconButton(
-            ICN_DOWNLOAD, p["CLR_YELLOW"],
-            idle_color=p["CLR_YELLOW"], hover_color=p["CLR_YELLOW"]
-        )
-        self.btn_download.setToolTip(t("settings.download"))
-        self.btn_download.clicked.connect(self._on_download_clicked)
-
-        model_container = QWidget()
-        model_container_lay = QHBoxLayout(model_container)
-        model_container_lay.setContentsMargins(0, 0, 0, 0)
-        model_container_lay.setSpacing(G_1)
-        model_container_lay.addWidget(self.model_select_combo, 1)
-        model_container_lay.addWidget(self.btn_download)
-        right.addRow(t("settings.ai_model_label"), model_container)
-
-        self.dl_progress = QProgressBar()
-        self.dl_progress.setTextVisible(True)
-        self.dl_progress.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.dl_progress.setFixedHeight(18)
-        self.dl_progress.hide()
-        right.addRow(self.dl_progress)
-
-        self.lbl_model_path = QLabel(t("settings.path_not_selected"))
-        self.lbl_model_path.setStyleSheet(
-            f"color: {p['CLR_TEXT_MUTED']}; font-size: {FONT_SIZE_SM}pt; padding-left: 4px;"
-        )
-        self.lbl_model_path.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        self.lbl_model_path.setMinimumWidth(10)
-        right.addRow(self.lbl_model_path)
-
-        right.addRow(QLabel(""))
-        right.addRow(self._section_title("settings.group_processing"))
+        self.tabs.addTab(tab_model, "Modeller")
+        
+        right.addWidget(self._section_title("settings.group_model"))
+        
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet(f"QScrollArea {{ border: none; background: transparent; }}")
+        
+        self.model_list_widget = QWidget()
+        self.model_list_layout = QVBoxLayout(self.model_list_widget)
+        self.model_list_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        scroll.setWidget(self.model_list_widget)
+        right.addWidget(scroll)
+        
+        self._model_widgets = {}
+        self._populate_model_list()
+        
+        right.addSpacing(G_4)
+        right.addWidget(self._section_title("settings.group_processing"))
+        
+        proc_form = QFormLayout()
+        right.addLayout(proc_form)
+        
 
         for sdef in SETTINGS_SCHEMA:
             if sdef.ui_group != "Processing":
@@ -384,9 +530,9 @@ class ControlCenterWindow(QDialog):
                 self._dynamic_widgets[sdef.key] = real_widget
                 if full_width and sdef.key == "initial_prompt":
                     lbl_tmp = QLabel(t(sdef.ui_label))
-                    right.addRow(lbl_tmp, real_widget)
+                    proc_form.addRow(lbl_tmp, real_widget)
                 else:
-                    right.addRow(t(sdef.ui_label), real_widget)
+                    proc_form.addRow(t(sdef.ui_label), real_widget)
 
         
 
@@ -402,24 +548,6 @@ class ControlCenterWindow(QDialog):
         self.log_display.setStyleSheet("background-color: #0d0d0d; color: #d0d0d0; font-family: Consolas, monospace; font-size: 10pt; border: none; padding: 4px;")
         logs_layout.addWidget(self.log_display)
 
-        # Status Bar
-        status_bar = QWidget()
-        status_lay = QHBoxLayout(status_bar)
-        status_lay.setContentsMargins(G_2, G_1, G_2, G_1)
-        status_lay.setSpacing(G_1)
-        self.led_indicator = QLabel("●")
-        self.led_indicator.setStyleSheet(f"color: {p['CLR_IDLE']}; font-size: 12pt;")
-        self.lbl_status = QLabel(t('status.idle'))
-        self.lbl_status.setStyleSheet(f"color: {p.get('CLR_TEXT_MUTED', '#928374')}; font-size: {FONT_SIZE_SM}pt;")
-        status_lay.addWidget(self.led_indicator)
-        status_lay.addWidget(self.lbl_status)
-        status_lay.addStretch(1)
-        
-        outer.addWidget(status_bar)
-
-        self.tabs.currentChanged.connect(self._on_tab_changed)
-        self._on_tab_changed(0)
-
 
     def _on_tab_changed(self, index: int) -> None:
         for i in range(self.tabs.count()):
@@ -428,7 +556,7 @@ class ControlCenterWindow(QDialog):
         self.adjustSize()
 
     def focus_model(self) -> None:
-        QTimer.singleShot(50, self.model_select_combo.setFocus)
+        pass
 
     def _on_dynamic_changed(self, key: str, value):
         self.settings.set(key, value)
@@ -505,295 +633,187 @@ class ControlCenterWindow(QDialog):
         self.btn_hotkey.setFocus()
         self.capture_mode_changed.emit(True)
 
-    def _on_combo_index_changed(self, idx: int) -> None:
-        data = self.model_select_combo.currentData()
-        if data == "browse_custom":
-            self._browse_model_dir()
-        else:
-            self._last_combo_idx = idx
-            if data and not str(data).startswith("custom:"):
-                self.settings.set("selected_model_repo", data)
+    def _sync_list_with_current_dir(self, current_dir: str):
+        self._refresh_model_list_badges()
 
-            # Auto-apply: switch immediately if the selected model is already installed.
-            target_path = self._get_selected_model_path()
-            if target_path and self.model_provider.resolve_model_dir(str(target_path)) is not None:
-                current_dir = self.settings.get("model_dir")
-                if current_dir != str(target_path):
-                    self.settings.set("model_dir", str(target_path))
-                    self._update_model_path_label(str(target_path))
-                    self.model_dir_changed.emit(str(target_path))
-                    name = target_path.name if not str(data).startswith("custom:") else "Custom Folder"
-                    self.log_entry.emit("OK", "APP", f"Switched to model: {name}")
-            
-            self._check_selected_model_status()
+        if hasattr(self, "dashboard_model") and current_dir:
+            import os
+            self.dashboard_model.setText(f"Aktif Model: {os.path.basename(current_dir)}")
 
-    def _revert_combo(self):
-        self.model_select_combo.blockSignals(True)
-        self.model_select_combo.setCurrentIndex(getattr(self, '_last_combo_idx', 2))
-        self.model_select_combo.blockSignals(False)
-
-    def _browse_model_dir(self) -> None:
+    def _get_selected_model_path(self, repo):
         from pathlib import Path
-        start_dir = self.settings.get("model_dir") or str(Path.home())
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, 
-            t("settings.select_folder_dialog"), 
-            str(Path(start_dir).parent if Path(start_dir).is_file() else start_dir),
-            "GGML Models (*.bin *.gguf)"
-        )
-        if not file_path:
-            self._revert_combo()
-            return
-        resolved = self.model_provider.resolve_model_dir(file_path)
-        if resolved:
-            self.settings.set("model_dir", resolved)
-            self._update_model_path_label(resolved)
-            self.log_entry.emit("...", "APP", f"Model selected → {resolved}")
-            self.model_dir_changed.emit(resolved)
-            self._sync_combo_with_current_dir(resolved)
-        else:
-            QMessageBox.warning(self, t("settings.invalid_folder_title"), t("settings.invalid_folder_msg"))
-            self._revert_combo()
-
-    def _update_model_path_label(self, path: str) -> None:
-        from PySide6.QtGui import QFontMetrics
-        fm = QFontMetrics(self.lbl_model_path.font())
-        elided = fm.elidedText(path, Qt.TextElideMode.ElideMiddle, SETTINGS_WIDTH // 2 - G_2 * 3)
-        self.lbl_model_path.setText(f"Path: {elided}")
-        self.lbl_model_path.setToolTip(path)
-
-    def _sync_combo_with_current_dir(self, current_dir: str):
-        from pathlib import Path
-        if not current_dir:
-            # No model_dir — set the combo based on selected_model_repo instead.
-            saved_repo = self.settings.get("selected_model_repo", "")
-            if saved_repo:
-                idx = self.model_select_combo.findData(saved_repo)
-                if idx >= 0:
-                    self.model_select_combo.blockSignals(True)
-                    self.model_select_combo.setCurrentIndex(idx)
-                    self._last_combo_idx = idx
-                    self.model_select_combo.blockSignals(False)
-                    return
-            self.model_select_combo.setCurrentIndex(2)
-            return
-            
-        file_name = Path(current_dir).name
-        matched_idx = -1
-        for i in range(self.model_select_combo.count()):
-            repo = self.model_select_combo.itemData(i)
-            if repo and repo != "browse_custom" and not str(repo).startswith("custom:"):
-                model_info = WHISPER_MODELS.get(repo)
-                if model_info and model_info.get("filename") == file_name:
-                    matched_idx = i
-                    break
-        self.model_select_combo.blockSignals(True)
-        if matched_idx >= 0:
-            self.model_select_combo.setCurrentIndex(matched_idx)
-            self._last_combo_idx = matched_idx
-        else:
-            custom_id = f"custom:{current_dir}"
-            idx = self.model_select_combo.findData(custom_id)
-            if idx == -1:
-                idx = self.model_select_combo.count() - 1
-                base_name = t("settings.custom_folder").format(name=file_name) if t("settings.custom_folder") != "settings.custom_folder" else f"Local: {file_name}"
-                self._model_combo_base_labels[custom_id] = base_name
-                self.model_select_combo.insertItem(idx, base_name, userData=custom_id)
-            self.model_select_combo.setCurrentIndex(idx)
-            self._last_combo_idx = idx
-        self.model_select_combo.blockSignals(False)
-        self._check_selected_model_status()
-
-    def _get_selected_model_path(self):
-        from pathlib import Path
-        repo = self.model_select_combo.currentData()
         if not repo or repo == "browse_custom": return None
         if str(repo).startswith("custom:"):
             return Path(repo.split(":", 1)[1])
+        from core.settings import WHISPER_MODELS, DEFAULT_DOWNLOAD_PARENT
         model_info = WHISPER_MODELS.get(repo)
         if not model_info: return None
         return DEFAULT_DOWNLOAD_PARENT / model_info["filename"]
 
-    def _populate_model_combo(self):
+    def _populate_model_list(self):
         from pathlib import Path
-        self.model_select_combo.blockSignals(True)
-        self.model_select_combo.clear()
-        self._model_combo_base_labels.clear()
+        from core.settings import WHISPER_MODELS, DEFAULT_DOWNLOAD_PARENT
+        
+        # Clear existing widgets
+        for i in reversed(range(self.model_list_layout.count())):
+            widget = self.model_list_layout.itemAt(i).widget()
+            if widget:
+                widget.deleteLater()
+        self._model_widgets.clear()
+        
+        active_dir = self.settings.get("model_dir")
         
         # 1. Standard Models
         for key, info in WHISPER_MODELS.items():
-            label = f"{key.capitalize()} ({info['size']}) — {info['desc']}"
-            self._model_combo_base_labels[key] = label
-            self.model_select_combo.addItem(label, userData=key)
+            expected = DEFAULT_DOWNLOAD_PARENT / info["filename"]
+            is_installed = expected.exists()
+            is_active = (active_dir is not None and Path(active_dir) == expected)
             
-        # 2. Dynamic Models from DEFAULT_DOWNLOAD_PARENT
+            widget = ModelItemWidget(key, info, is_installed, is_active)
+            widget.download_requested.connect(self._on_model_download)
+            widget.select_requested.connect(self._on_model_select)
+            
+            self.model_list_layout.addWidget(widget)
+            self._model_widgets[key] = widget
+            
+        # 2. Dynamic Models
         if DEFAULT_DOWNLOAD_PARENT.exists():
             known_filenames = {info["filename"] for info in WHISPER_MODELS.values()}
             for child in DEFAULT_DOWNLOAD_PARENT.iterdir():
                 if child.is_file() and child.suffix in ('.bin', '.gguf'):
                     if child.name not in known_filenames:
                         custom_id = f"custom:{child}"
-                        label = f"Local: {child.name}"
-                        self._model_combo_base_labels[custom_id] = label
-                        self.model_select_combo.addItem(label, userData=custom_id)
+                        is_installed = True
+                        is_active = (active_dir is not None and Path(active_dir) == child)
+                        info = {"size": "Local File", "desc": "Custom imported model"}
                         
-        # 3. Browse Option
-        browse_idx = self.model_select_combo.count()
-        self.model_select_combo.addItem(t("settings.browse"), userData="browse_custom")
-        action_font = QFont()
-        action_font.setItalic(True)
-        self.model_select_combo.setItemData(browse_idx, action_font, Qt.ItemDataRole.FontRole)
-        self.model_select_combo.blockSignals(False)
+                        widget = ModelItemWidget(custom_id, info, is_installed, is_active)
+                        widget.download_requested.connect(self._on_model_download)
+                        widget.select_requested.connect(self._on_model_select)
+                        
+                        self.model_list_layout.addWidget(widget)
+                        self._model_widgets[custom_id] = widget
 
-    def _refresh_model_combo_badges(self) -> None:
+    def _refresh_model_list_badges(self) -> None:
         from pathlib import Path
-        active_path = self._get_selected_model_path()
-        bold_font = QFont()
-        bold_font.setBold(True)
-        normal_font = QFont()
-        normal_font.setBold(False)
+        from core.settings import WHISPER_MODELS, DEFAULT_DOWNLOAD_PARENT
+        active_dir = self.settings.get("model_dir")
         
-        for i in range(self.model_select_combo.count()):
-            repo = self.model_select_combo.itemData(i)
-            if not repo or repo == "browse_custom":
-                continue
-            
-            if str(repo).startswith("custom:"):
-                file_path = Path(str(repo).split(":", 1)[1])
-                is_active = active_path is not None and active_path == file_path
+        for key, widget in self._model_widgets.items():
+            if key.startswith("custom:"):
+                file_path = Path(key.split(":", 1)[1])
+                is_active = (active_dir is not None and Path(active_dir) == file_path)
                 is_installed = file_path.exists()
-                base = self._model_combo_base_labels.get(repo) or file_path.name
             else:
-                model_info = WHISPER_MODELS.get(repo)
-                if not model_info: continue
-                base = self._model_combo_base_labels.get(repo) or model_info["filename"]
-                file_name = model_info["filename"]
-                expected = DEFAULT_DOWNLOAD_PARENT / file_name
-                is_active = active_path is not None and active_path.name == file_name
+                info = WHISPER_MODELS.get(key)
+                if not info: continue
+                expected = DEFAULT_DOWNLOAD_PARENT / info["filename"]
+                is_active = (active_dir is not None and Path(active_dir) == expected)
                 is_installed = expected.exists()
             
-            if is_active:
-                prefix = "▶ "
-                self.model_select_combo.setItemData(i, bold_font, Qt.ItemDataRole.FontRole)
-            elif is_installed:
-                prefix = "● "
-                self.model_select_combo.setItemData(i, normal_font, Qt.ItemDataRole.FontRole)
-            else:
-                prefix = "  "
-                self.model_select_combo.setItemData(i, normal_font, Qt.ItemDataRole.FontRole)
-            self.model_select_combo.setItemText(i, prefix + base)
-        self.model_select_combo.blockSignals(False)
+            widget.update_state(is_installed, is_active)
 
-    def _check_selected_model_status(self, _idx: int = 0) -> None:
-        target_path = self._get_selected_model_path()
-        if not target_path: return
-        is_installed = self.model_provider.resolve_model_dir(str(target_path)) is not None
-        
-        repo = self.model_select_combo.currentData()
-        can_download = not is_installed and not (repo and str(repo).startswith("custom:"))
-        self.btn_download.setEnabled(can_download)
-            
-        self._refresh_model_combo_badges()
+    def _on_model_select(self, model_id: str):
+        target_path = self._get_selected_model_path(model_id)
+        if target_path and target_path.exists():
+            self.settings.set("model_dir", str(target_path))
+            self.model_dir_changed.emit(str(target_path))
+            self.log_entry.emit("OK", "APP", f"Switched to model: {target_path.name}")
+            self._refresh_model_list_badges()
+            if hasattr(self, "dashboard_model"):
+                self.dashboard_model.setText(f"Aktif Model: {model_id.upper()} ({target_path.name})")
 
-    def _on_download_clicked(self) -> None:
-        selected_repo = self.model_select_combo.currentData()
-        if not selected_repo or selected_repo == "browse_custom" or str(selected_repo).startswith("custom:"): return
-        target_path = self._get_selected_model_path()
+    def _on_model_download(self, model_id: str):
+        from core.settings import DEFAULT_DOWNLOAD_PARENT
+        target_path = self._get_selected_model_path(model_id)
         if not target_path: return
-        is_installed = self.model_provider.resolve_model_dir(str(target_path)) is not None
+        is_installed = target_path.exists()
         if not is_installed:
-            model_name = self.model_select_combo.currentText().split(" (")[0]
-            msg = t("settings.download_confirm_msg").format(model=model_name)
-            reply = QMessageBox.question(self, t("settings.download_confirm_title"), msg, QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-            self.model_select_combo.setFocus()
-            if reply == QMessageBox.StandardButton.Yes:
-                self.download_model_requested.emit(str(DEFAULT_DOWNLOAD_PARENT), selected_repo)
+            from core.i18n import t
+            msg = t("settings.download_confirm_msg").format(model=model_id)
+            reply = QMessageBox(self)
+            reply.setWindowTitle(t("settings.download_confirm_title"))
+            reply.setText(msg)
+            reply.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            reply.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
+            if reply.exec() == QMessageBox.StandardButton.Yes:
+                widget = self._model_widgets.get(model_id)
+                if widget:
+                    widget.set_downloading(True)
+                self.download_model_requested.emit(str(DEFAULT_DOWNLOAD_PARENT), model_id)
 
-    _COMPUTE_LABELS = {"int8": "Fast", "int8_float32": "Balanced", "int8_float16": "Balanced", "float16": "Fast", "float32": "Precise"}
-
-    def _on_compute_type_changed(self, _idx: int) -> None:
-        val = self.compute_combo.currentData()
-        if val is None: return
-        self.settings.set("compute_type", val)
-        self.log_entry.emit("...", "APP", f"Precision → {val}")
-        self.model_reload_requested.emit()
-
-    def _populate_compute_type_options(self) -> None:
-        options = COMPUTE_TYPE_OPTIONS_CPU
-        current = self.settings.get("compute_type")
-        self.compute_combo.blockSignals(True)
-        self.compute_combo.clear()
-        for val in options:
-            label = f"{self._COMPUTE_LABELS.get(val, val)} ({val})"
-            self.compute_combo.addItem(label, userData=val)
-            if val == current: self.compute_combo.setCurrentIndex(self.compute_combo.count() - 1)
-        self.compute_combo.blockSignals(False)
-
-    def _reset_advanced(self) -> None:
-        self.settings.reset_processing_settings()
-        self._refresh_values()
-        self.log_entry.emit("OK", "APP", "Settings reset.")
-
-    def refresh_theme(self) -> None:
-        from ui.theme import theme_manager
-        p = theme_manager.palette
-        self.btn_download.recolor(p["CLR_YELLOW"], idle_color=p["CLR_YELLOW"], hover_color=p["CLR_YELLOW"])
-        for btn in self.findChildren(DynamicIconButton):
-            if btn is not self.btn_download:
-                btn.recolor(p["CLR_YELLOW"])
-
-    def _refresh_values(self):
-        self.btn_hotkey.setText(self.settings.get("hotkey", "F9").upper())
-        lang = self.settings.get("app_language", "en") or "en"
-        lang_idx = self._lang_combo.findData(lang)
-        if lang_idx >= 0:
-            self._lang_combo.blockSignals(True)
-            self._lang_combo.setCurrentIndex(lang_idx)
-            self._lang_combo.blockSignals(False)
-            
-        inj = self.settings.get("injection_method", "clipboard")
-        inj_idx = self._injection_combo.findData(inj)
-        if inj_idx >= 0:
-            self._injection_combo.blockSignals(True)
-            self._injection_combo.setCurrentIndex(inj_idx)
-            self._injection_combo.blockSignals(False)
+    def _refresh_values(self, hard: bool = False) -> None:
         current_dir = self.settings.get("model_dir")
-        if current_dir:
-            self._update_model_path_label(current_dir)
-        else:
-            self.lbl_model_path.setText(t("settings.path_not_selected"))
-            self.lbl_model_path.setToolTip("")
-        self._sync_combo_with_current_dir(current_dir)
-        self._refresh_model_combo_badges()
+        fallback = self.model_provider.get_active_model_path()
+        if not current_dir and fallback:
+            if self.model_provider.resolve_model_dir(fallback):
+                current_dir = fallback
+                self.settings.set("model_dir", current_dir)
+                self.model_dir_changed.emit(current_dir)
+
+        self._sync_list_with_current_dir(current_dir)
         self._populate_compute_type_options()
         
-        # Reflect schema/saved values back into dynamically-generated widgets.
         for key, widget in self._dynamic_widgets.items():
             val = self.settings.get(key)
+            if val is None:
+                continue
             widget.blockSignals(True)
             if isinstance(widget, QComboBox):
                 idx = widget.findData(val)
-                if idx >= 0: widget.setCurrentIndex(idx)
-            elif isinstance(widget, QSpinBox) or isinstance(widget, QDoubleSpinBox):
-                if val is not None: widget.setValue(val)
+                if idx >= 0:
+                    widget.setCurrentIndex(idx)
+            elif isinstance(widget, (QSpinBox, QDoubleSpinBox)):
+                widget.setValue(val)
             elif isinstance(widget, QTextEdit):
-                if val is not None: widget.setPlainText(str(val))
-                parent_w = widget.parentWidget()
-                if parent_w is not None:
-                    btn = parent_w.findChild(QPushButton)
-                    if btn:
-                        btn.setEnabled(False)
+                if key == "initial_prompt":
+                    lang = self.settings.get("language", "auto")
+                    saved_prompts = self.settings.get("initial_prompts") or {}
+                    prompt_val = saved_prompts.get(lang) if lang != "auto" else ""
+                    if prompt_val is None:
+                        prompt_val = self._DEFAULT_PROMPTS.get(lang, "")
+                    widget.setPlainText(prompt_val)
+                else:
+                    widget.setPlainText(str(val))
             elif isinstance(widget, QLineEdit):
-                if val is not None: widget.setText(str(val))
-                parent_w = widget.parentWidget()
-                if parent_w is not None:
-                    btn = parent_w.findChild(QPushButton)
-                    if btn:
-                        btn.setEnabled(False)
+                widget.setText(str(val))
             widget.blockSignals(False)
-            
-        self._load_prompt_for_language(self.settings.get("language", "auto"))
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        if self._capturing_hotkey:
+            modifiers = event.modifiers()
+            parts = []
+            if modifiers & Qt.KeyboardModifier.ControlModifier: parts.append("ctrl")
+            if modifiers & Qt.KeyboardModifier.ShiftModifier: parts.append("shift")
+            if modifiers & Qt.KeyboardModifier.AltModifier: parts.append("alt")
+            if event.key() == Qt.Key.Key_Escape:
+                self._end_hotkey_capture(self.settings.get("hotkey", "F9"))
+                return
+            key_name = qt_key_to_keyboard(event.key())
+            if not key_name: return
+            parts.append(key_name)
+            new_key = "+".join(parts)
+            self.settings.set("hotkey", new_key)
+            self.hotkey_changed.emit(new_key)
+            self._end_hotkey_capture(new_key)
+            return
+        if event.key() == Qt.Key.Key_Escape: self.hide()
+        else: super().keyPressEvent(event)
 
+    def _end_hotkey_capture(self, key: str) -> None:
+        self._capturing_hotkey = False
+        self.btn_hotkey.setText(key.upper())
+        self.btn_hotkey.setStyleSheet("")
+        self.capture_mode_changed.emit(False)
+
+    def set_download_state(self, active: bool) -> None:
+        self.btn_download.setEnabled(not active)
+
+    def on_download_complete(self, model_dir: str) -> None:
+        self._update_model_path_label(model_dir)
+        self._sync_combo_with_current_dir(model_dir)
+        self._check_selected_model_status()
+
+    # --- Microphone Selection Methods ---
     def keyPressEvent(self, event: QKeyEvent) -> None:
         if self._capturing_hotkey:
             modifiers = event.modifiers()
@@ -882,6 +902,93 @@ class ControlCenterWindow(QDialog):
     def selected_device_index(self) -> int | None:
         return self.mic_combo.currentData()
         
+    _COMPUTE_LABELS = {"int8": "Fast", "int8_float32": "Balanced", "int8_float16": "Balanced", "float16": "Fast", "float32": "Precise"}
+
+    def _on_compute_type_changed(self, _idx: int) -> None:
+        val = self.compute_combo.currentData()
+        if val is None: return
+        self.settings.set("compute_type", val)
+        self.log_entry.emit("...", "APP", f"Precision → {val}")
+        self.model_reload_requested.emit()
+
+    def _populate_compute_type_options(self) -> None:
+        options = COMPUTE_TYPE_OPTIONS_CPU
+        current = self.settings.get("compute_type")
+        self.compute_combo.blockSignals(True)
+        self.compute_combo.clear()
+        for val in options:
+            label = f"{self._COMPUTE_LABELS.get(val, val)} ({val})"
+            self.compute_combo.addItem(label, userData=val)
+            if val == current: self.compute_combo.setCurrentIndex(self.compute_combo.count() - 1)
+        self.compute_combo.blockSignals(False)
+
+    def _reset_advanced(self) -> None:
+        self.settings.reset_processing_settings()
+        self._refresh_values()
+        self.log_entry.emit("OK", "APP", "Settings reset.")
+
+    def refresh_theme(self) -> None:
+        from ui.theme import theme_manager
+        p = theme_manager.palette
+        self.btn_download.recolor(p["CLR_YELLOW"], idle_color=p["CLR_YELLOW"], hover_color=p["CLR_YELLOW"])
+        for btn in self.findChildren(DynamicIconButton):
+            if btn is not self.btn_download:
+                btn.recolor(p["CLR_YELLOW"])
+
+
+    def populate_devices(self, items: list[tuple[str, int, bool]]) -> None:
+        if getattr(self, "_last_devices", None) == items:
+            return
+        self._last_devices = items
+        self.mic_combo.blockSignals(True)
+        self.mic_combo.clear()
+        saved_device  = self.settings.get("device_index")
+        saved_device_name = self.settings.get("device_name")
+        preferred_idx = -1
+        default_idx   = -1
+        for i, (label, index, is_default) in enumerate(items):
+            label = label.replace("\r", "").replace("\n", " ").strip()
+            self.mic_combo.addItem(label, userData=index)
+            clean_label = label.replace(" (Default)", "")
+            if saved_device_name:
+                if clean_label == saved_device_name:
+                    preferred_idx = i
+            elif index == saved_device:
+                preferred_idx = i
+            if is_default:
+                default_idx = i
+        select_idx = preferred_idx if preferred_idx != -1 else default_idx
+        if select_idx == -1 and items:
+            select_idx = 0
+        if select_idx != -1:
+            self.mic_combo.setCurrentIndex(select_idx)
+            
+        if not items:
+            self.mic_combo.setPlaceholderText(t("dashboard.no_mic_found"))
+            self.mic_combo.setCurrentIndex(-1)
+            self.mic_combo.setEnabled(False)
+        else:
+            self.mic_combo.setPlaceholderText("")
+            self.mic_combo.setEnabled(True)
+        self.mic_combo.blockSignals(False)
+
+    def _on_device_changed(self, combo_idx: int):
+        device_idx = self.mic_combo.itemData(combo_idx)
+        if device_idx is not None:
+            raw_text = self.mic_combo.itemText(combo_idx)
+            clean_name = raw_text.replace(" (Default)", "")
+            if " (Default)" in raw_text:
+                self.settings.set("device_index", -1)
+                self.settings.set("device_name", "")
+            else:
+                self.settings.set("device_index", device_idx)
+                self.settings.set("device_name", clean_name)
+            self.device_changed.emit(device_idx)
+
+    def selected_device_index(self) -> int | None:
+        return self.mic_combo.currentData()
+        
+
     def _copy_last_transcript(self) -> None:
         # SettingsDialog does not store the transcript natively, we can just proxy it via dashboard
         p = self.parentWidget()
@@ -913,6 +1020,9 @@ class ControlCenterWindow(QDialog):
         
         self.lbl_status.setText(t(text))
         self.led_indicator.setStyleSheet(f"color: {color}; font-size: 12pt;")
+
+        if hasattr(self, "_update_dashboard_status"):
+            self._update_dashboard_status(text, level)
 
     @Slot(list)
     def populate_devices(self, devices: list) -> None:
