@@ -11,7 +11,8 @@ from ui.utils import colorize_svg_icon
 # --- OSD Constants ---
 OSD_HEIGHT = 56
 FADE_DURATION_MS = 250
-PULSE_INTERVAL_MS = 50
+PULSE_INTERVAL_MS = 66
+
 ERROR_DISPLAY_MS = 3000
 ICON_SIZE = 14
 
@@ -47,6 +48,7 @@ class MinimalOSD(QWidget):
         self._error_timer.timeout.connect(self._hide_after_error)
         self._osd_state: str = "ready"
         self._osd_error_msg: str = ""
+        self.current_level = 0.0
         self._build_ui()
         self._setup_animations()
 
@@ -109,12 +111,15 @@ class MinimalOSD(QWidget):
         self.pulse_timer = QTimer(self)
         self.pulse_timer.timeout.connect(self._pulse_effect)
         self._pulse_val = 1.0
-        self._pulse_dir = -0.06
+
+    def update_level(self, level: float):
+        self.current_level = min(1.0, max(0.0, level))
 
     def _pulse_effect(self):
-        self._pulse_val += self._pulse_dir
-        if self._pulse_val <= 0.3 or self._pulse_val >= 1.0:
-            self._pulse_dir *= -1
+        # Target opacity based on audio level (0.3 for silence, 1.0 for loud)
+        target_opacity = 0.3 + (0.7 * self.current_level)
+        # LERP for smooth pulsing
+        self._pulse_val += (target_opacity - self._pulse_val) * 0.3
         self.icon_opacity.setOpacity(self._pulse_val)
 
     def _update_colors(self, *args):

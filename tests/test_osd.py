@@ -49,21 +49,21 @@ class TestSetupAnimations:
 class TestPulseEffect:
 
     def test_pulse_val_changes(self, osd):
+        osd.update_level(0.0)
+        osd._pulse_val = 1.0
         before = osd._pulse_val
         osd._pulse_effect()
-        assert osd._pulse_val != before
+        assert osd._pulse_val < before
 
-    def test_pulse_dir_reverses_at_lower_boundary(self, osd):
-        osd._pulse_val = 0.3
-        osd._pulse_dir = -0.06
-        osd._pulse_effect()
-        assert osd._pulse_dir > 0
-
-    def test_pulse_dir_reverses_at_upper_boundary(self, osd):
-        osd._pulse_val = 1.0
-        osd._pulse_dir = 0.06
-        osd._pulse_effect()
-        assert osd._pulse_dir < 0
+    def test_update_level_bounds(self, osd):
+        osd.update_level(-5.0)
+        assert osd.current_level == 0.0
+        
+        osd.update_level(10.0)
+        assert osd.current_level == 1.0
+        
+        osd.update_level(0.5)
+        assert osd.current_level == 0.5
 
 
 class TestUpdateColors:

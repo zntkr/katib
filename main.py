@@ -251,6 +251,7 @@ def main():
         transcription_worker.text_ready.connect(tray.on_text_ready)
 
         audio_worker.level_changed.connect(tray.dashboard.update_level)
+        audio_worker.level_changed.connect(osd.update_level)
         transcription_worker.status_changed.connect(tray.dashboard.set_status)
         transcription_worker.loading_state_changed.connect(tray.dashboard.set_loading_indicator)
 
@@ -335,7 +336,7 @@ def main():
     # ----------------------------------------------------- graceful shutdown
     def shutdown():
         global_logger.info("=== Shutdown Started ===")
-        tray.dashboard.append_log_entry("...", "APP", _t("app.shutting_down"))
+Ses, ses, ses.         tray.dashboard.append_log_entry("...", "APP", _t("app.shutting_down"))
 
         # Hide windows to avoid C++-side drawing errors (QBackingStore) after the event loop ends.
         for window in QApplication.topLevelWidgets():
