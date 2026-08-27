@@ -49,6 +49,31 @@ class AudioWorker(BaseWorker):
         self._silence_timer = QElapsedTimer()
         self._silence_notified = False
 
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(100, self._init_media_devices)
+
+    def _init_media_devices(self):
+        from PySide6.QtMultimedia import QMediaDevices
+        from PySide6.QtCore import QTimer
+        self._media_devices = QMediaDevices(self)
+        self._media_devices.audioInputsChanged.connect(self._on_audio_inputs_changed)
+        
+        # Debounce: hardware events (plug/unplug) can fire dozens of times per second.
+        self._device_refresh_timer = QTimer(self)
+        self._device_refresh_timer.setSingleShot(True)
+        self._device_refresh_timer.setInterval(500)
+        self._device_refresh_timer.timeout.connect(self._do_audio_inputs_changed)
+
+    def _on_audio_inputs_changed(self) -> None:
+        if hasattr(self, "_device_refresh_timer"):
+            self._device_refresh_timer.start()
+        else:
+            self._do_audio_inputs_changed()
+
+    def _do_audio_inputs_changed(self) -> None:
+        self.log_entry.emit("...", "MIC", "Hardware change detected, refreshing devices...")
+        self.refresh_devices()
+
     # ------------------------------------------------------------------ QThread
     def run(self):
         """Keeps the thread alive; recording is managed externally via start/stop."""

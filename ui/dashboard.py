@@ -82,30 +82,6 @@ class DashboardWindow(QWidget):
 
         self._build_ui()
 
-        # Listen for OS hardware events (deferred to avoid blocking __init__).
-        QTimer.singleShot(100, self._init_media_devices)
-
-    def _init_media_devices(self):
-        from PySide6.QtMultimedia import QMediaDevices
-        self._media_devices = QMediaDevices(self)
-        self._media_devices.audioInputsChanged.connect(self._on_audio_inputs_changed)
-        
-        # Debounce: hardware events (plug/unplug) can fire dozens of times per second.
-        self._device_refresh_timer = QTimer(self)
-        self._device_refresh_timer.setSingleShot(True)
-        self._device_refresh_timer.setInterval(500)  # wait 500 ms for the signal storm to settle
-        self._device_refresh_timer.timeout.connect(self._do_audio_inputs_changed)
-
-    def _on_audio_inputs_changed(self) -> None:
-        # In test environments this method may be called before the timer is initialised.
-        if hasattr(self, "_device_refresh_timer"):
-            self._device_refresh_timer.start()  # restart the timer on every new signal
-        else:
-            self._do_audio_inputs_changed()
-
-    def _do_audio_inputs_changed(self) -> None:
-        self.append_log_entry("...", "MIC", "", "dashboard.device_refreshed")
-        self._populate_devices()
 
     # ------------------------------------------------------------------ build
     def _build_ui(self):

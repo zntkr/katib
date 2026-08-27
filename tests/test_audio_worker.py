@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from workers.audio_worker import AudioWorker, SAMPLE_RATE
 from core.audio_source import AudioSource, AudioDeviceError, AudioDisconnectedError
@@ -100,3 +100,19 @@ class TestCallbacks:
         
         assert not worker._is_recording
         assert "osd.mic_disconnected" in errors
+
+class TestHardwareEvents:
+    def test_hardware_event_triggers_refresh(self, qapp, mock_settings, mock_audio_source):
+        with patch("PySide6.QtCore.QTimer.singleShot") as mock_timer:
+            worker = AudioWorker(mock_settings, mock_audio_source)
+            mock_timer.assert_called_once()
+            assert mock_timer.call_args[0][1] == worker._init_media_devices
+
+    def test_debounce_timer_calls_refresh(self, qapp, mock_settings, mock_audio_source):
+        worker = AudioWorker(mock_settings, mock_audio_source)
+        worker._init_media_devices()
+        with patch.object(worker, "refresh_devices") as mock_refresh:
+            worker._on_audio_inputs_changed()
+            assert worker._device_refresh_timer.isActive()
+            worker._do_audio_inputs_changed()
+            mock_refresh.assert_called_once()

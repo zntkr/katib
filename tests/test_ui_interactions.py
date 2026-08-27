@@ -31,13 +31,6 @@ class TestDashboardMethods:
             w = DashboardWindow(mock_settings, ModelProvider("."), icon_idle=_make_icon("#ffffff"))
         assert w is not None
 
-    # _on_audio_inputs_changed
-
-    def test_audio_inputs_changed_emits_refresh(self, dashboard):
-        from PySide6.QtTest import QSignalSpy
-        spy = QSignalSpy(dashboard.refresh_devices_requested)
-        dashboard._on_audio_inputs_changed()
-        assert spy.count() == 1
 
     # setup_icon_button fallback (no SVG)
 

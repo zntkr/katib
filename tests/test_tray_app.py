@@ -433,10 +433,6 @@ class TestDashboardExtras:
             w = DashboardWindow(mock_settings, ModelProvider("."), icon_idle=_make_icon())
             assert w is not None
 
-    def test_on_audio_inputs_changed(self, dashboard):
-        with patch.object(dashboard, "_populate_devices") as mock_pop:
-            dashboard._on_audio_inputs_changed()
-            mock_pop.assert_called_once()
 
     def test_populate_devices_early_return(self, dashboard):
         items = [("A", 1, True)]
