@@ -146,17 +146,20 @@ class TrayApp(QObject):
             self.tray.setToolTip(f"{APP_NAME} — {t(STATE_LISTENING)}")
             self.dashboard.set_status(STATE_LISTENING, "ERR")
         else:
-            self.tray.setIcon(self._icon_idle)
-            if self._mic_unavailable:
-                self.tray.setToolTip(f"{APP_NAME} — {t(MSG_MIC_UNAVAILABLE)}")
-                self.dashboard.set_status(MSG_MIC_UNAVAILABLE, "ERR")
-            elif self.transcription_worker and not self.transcription_worker.is_ready:
-                self.tray.setToolTip(f"{APP_NAME} — {t(MSG_MODEL_NOT_FOUND)}")
-                self.dashboard.set_status(MSG_MODEL_NOT_FOUND, "WARN")
-            else:
-                self.tray.setToolTip(f"{APP_NAME} — {t(STATE_READY)}")
-                self.dashboard.set_status(STATE_READY, "OK")
+            self._resolve_idle_status()
             self.dashboard.update_level(0.0)
+
+    def _resolve_idle_status(self) -> None:
+        self.tray.setIcon(self._icon_idle)
+        if self._mic_unavailable:
+            self.tray.setToolTip(f"{APP_NAME} — {t(MSG_MIC_UNAVAILABLE)}")
+            self.dashboard.set_status(MSG_MIC_UNAVAILABLE, "ERR")
+        elif self.transcription_worker and not self.transcription_worker.is_ready:
+            self.tray.setToolTip(f"{APP_NAME} — {t(MSG_MODEL_NOT_FOUND)}")
+            self.dashboard.set_status(MSG_MODEL_NOT_FOUND, "WARN")
+        else:
+            self.tray.setToolTip(f"{APP_NAME} — {t(STATE_READY)}")
+            self.dashboard.set_status(STATE_READY, "OK")
 
     @Slot()
     def on_mic_unavailable(self) -> None:
@@ -166,7 +169,4 @@ class TrayApp(QObject):
     @Slot()
     def on_mic_available(self) -> None:
         self._mic_unavailable = False
-        if self.transcription_worker and not self.transcription_worker.is_ready:
-            self.dashboard.set_status(MSG_MODEL_NOT_FOUND, "WARN")
-        else:
-            self.dashboard.set_status(STATE_READY, "OK")
+        self._resolve_idle_status()

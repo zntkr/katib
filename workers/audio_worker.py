@@ -146,7 +146,7 @@ class AudioWorker(BaseWorker):
                 self.audio_failed.emit()
                 return
                 
-            from core.transcription_filter import analyse_vad, is_silent
+            from core.audio_analysis import analyse_vad, is_silent
             chunk_duration = len(audio) / SAMPLE_RATE / len(self._rms_history) if self._rms_history else 0.1
             stats = analyse_vad(self._rms_history, chunk_duration)
             
@@ -174,7 +174,7 @@ class AudioWorker(BaseWorker):
                 if not np.isfinite(rms):
                     return
                 
-                from core.transcription_filter import to_db
+                from core.audio_analysis import to_db
                 chunk_db = to_db(rms)
                 
                 if self._running_noise_floor == -120.0 or chunk_db < self._running_noise_floor:

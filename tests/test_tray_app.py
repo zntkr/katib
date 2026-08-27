@@ -344,6 +344,54 @@ class TestTrayApp:
         tray.tray.hide()
         tray.dashboard.close()
 
+    def test_resolve_idle_status_mic_unavailable(self, qapp, mock_settings):
+        from ui.tray_app import TrayApp
+        from core.settings import MSG_MIC_UNAVAILABLE
+        from core.i18n import t
+        tray = TrayApp(mock_settings, ModelProvider("."))
+        tray._mic_unavailable = True
+        tray._resolve_idle_status()
+        assert t(MSG_MIC_UNAVAILABLE) in tray.dashboard.status_label.text()
+        assert t(MSG_MIC_UNAVAILABLE) in tray.tray.toolTip()
+        tray.tray.hide()
+        tray.dashboard.close()
+
+    def test_resolve_idle_status_model_not_ready(self, qapp, mock_settings):
+        from ui.tray_app import TrayApp
+        from core.settings import MSG_MODEL_NOT_FOUND
+        from core.i18n import t
+        tray = TrayApp(mock_settings, ModelProvider("."))
+        tray.transcription_worker = MagicMock()
+        tray.transcription_worker.is_ready = False
+        tray._resolve_idle_status()
+        assert t(MSG_MODEL_NOT_FOUND) in tray.dashboard.status_label.text()
+        assert t(MSG_MODEL_NOT_FOUND) in tray.tray.toolTip()
+        tray.tray.hide()
+        tray.dashboard.close()
+
+    def test_resolve_idle_status_ready(self, qapp, mock_settings):
+        from ui.tray_app import TrayApp
+        from core.settings import STATE_READY
+        from core.i18n import t
+        tray = TrayApp(mock_settings, ModelProvider("."))
+        tray.transcription_worker = MagicMock()
+        tray.transcription_worker.is_ready = True
+        tray._resolve_idle_status()
+        assert t(STATE_READY) in tray.dashboard.status_label.text()
+        assert t(STATE_READY) in tray.tray.toolTip()
+        tray.tray.hide()
+        tray.dashboard.close()
+
+    def test_on_mic_available_calls_resolve(self, qapp, mock_settings):
+        from ui.tray_app import TrayApp
+        tray = TrayApp(mock_settings, ModelProvider("."))
+        with patch.object(tray, "_resolve_idle_status") as mock_resolve:
+            tray.on_mic_available()
+            assert tray._mic_unavailable is False
+            mock_resolve.assert_called_once()
+        tray.tray.hide()
+        tray.dashboard.close()
+
 
 
 class TestDashboardKeyPress:
