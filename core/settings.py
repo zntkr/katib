@@ -66,16 +66,16 @@ class SettingDef:
 
 SETTINGS_SCHEMA = [
     SettingDef("hotkey", str, "F9", "General", "settings.hotkey_label", "custom"),
-    SettingDef("app_language", str, "", "General", "settings.app_language_label", "custom"),
+    SettingDef("app_language", str, "tr", "General", "settings.app_language_label", "custom"),
     SettingDef("theme", str, "system", "General", "settings.theme_label", "custom"),
-    SettingDef("model_dir", str, "", "Model", "Model Path", "custom"),
+    SettingDef("model_dir", str, str(DEFAULT_DOWNLOAD_PARENT), "Model", "Model Path", "custom"),
     SettingDef("device_index", int, None, "Audio", "Microphone", "custom"),
-    SettingDef("selected_model_repo", str, "", "Model", "Selected Model", "custom"),
+    SettingDef("selected_model_repo", str, "Systran/faster-whisper-small", "Model", "Selected Model", "custom"),
     SettingDef("injection_method", str, "clipboard", "General", "settings.injection_method_label", "combobox",
                {"options": [("Clipboard (Fast)", "clipboard"), ("Keystroke (Safe)", "keystroke")], "full_width": True}),
 
     # Auto-generated UI settings:
-    SettingDef("language", str, "auto", "Processing", "schema.language.label", "combobox",
+    SettingDef("language", str, "tr", "Processing", "schema.language.label", "combobox",
                {"options": [("Auto Detect", "auto"), ("Arabic", "ar"), ("Chinese", "zh"), ("English", "en"), ("French", "fr"), ("German", "de"), ("Greek", "el"), ("Hindi", "hi"), ("Indonesian", "id"), ("Italian", "it"), ("Japanese", "ja"), ("Korean", "ko"), ("Persian", "fa"), ("Portuguese", "pt"), ("Russian", "ru"), ("Spanish", "es"), ("Turkish", "tr"), ("Urdu", "ur")], "full_width": True}),
     SettingDef("compute_type", str, "int8", "Processing", "schema.compute_type.label", "custom",
                {"full_width": True}, tooltip="schema.compute_type.tooltip"),

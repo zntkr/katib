@@ -336,7 +336,7 @@ def main():
     # ----------------------------------------------------- graceful shutdown
     def shutdown():
         global_logger.info("=== Shutdown Started ===")
-Ses, ses, ses.         tray.dashboard.append_log_entry("...", "APP", _t("app.shutting_down"))
+        tray.dashboard.append_log_entry("...", "APP", _t("app.shutting_down"))
 
         # Hide windows to avoid C++-side drawing errors (QBackingStore) after the event loop ends.
         for window in QApplication.topLevelWidgets():
