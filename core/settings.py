@@ -34,6 +34,7 @@ MSG_MIC_UNAVAILABLE  = "status.no_mic"
 STATE_PROCESSING    = "status.writing"
 STATE_LISTENING     = "status.listening"
 STATE_READY         = "status.ready"
+STATE_LOADING       = "status.loading_model"
 
 
 WHISPER_MODELS = {

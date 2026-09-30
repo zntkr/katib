@@ -13,7 +13,7 @@ from workers.transcription_worker import (
     _RELOAD,
     _ReloadCommand,
 )
-from core.settings import MSG_MODEL_NOT_FOUND
+from core.settings import MSG_MODEL_NOT_FOUND, STATE_LOADING
 
 AUDIO = np.zeros(1600, dtype="float32")
 
@@ -57,21 +57,57 @@ class TestAddAudioMissingModel:
         worker.add_audio(AUDIO)
         assert worker._queue.qsize() == 0
 
-    def test_add_audio_emits_no_error_when_not_ready(self, qapp, mock_settings):
-        """If the model is missing, _load_model already emitted a signal; add_audio should return silently."""
-        worker = TranscriptionWorker(mock_settings, MagicMock())  # is_ready = False
+    def test_add_audio_while_loading_reports_loading(self, qapp, mock_settings):
+        """Audio dropped because a (re)load is running must be reported, or the OSD stays on 'Listening'."""
+        worker = TranscriptionWorker(mock_settings, MagicMock())
+        worker.is_loading = True
         errors = []
         worker.error_occurred.connect(errors.append)
         worker.add_audio(AUDIO)
-        assert errors == []
+        assert errors == [STATE_LOADING]
+
+    def test_add_audio_without_model_reports_missing_model(self, qapp, mock_settings):
+        worker = TranscriptionWorker(mock_settings, MagicMock())
+        worker.is_loading = False
+        errors = []
+        worker.error_occurred.connect(errors.append)
+        worker.add_audio(AUDIO)
+        assert errors == [MSG_MODEL_NOT_FOUND]
 
     def test_add_audio_emits_no_status_when_not_ready(self, qapp, mock_settings):
-        """If the model is missing, add_audio should not emit status_changed — _load_model already did."""
+        """add_audio should not emit status_changed — _load_model already did."""
         worker = TranscriptionWorker(mock_settings, MagicMock())  # is_ready = False
         statuses = []
         worker.status_changed.connect(lambda t, c: statuses.append((t, c)))
         worker.add_audio(AUDIO)
         assert statuses == []
+
+
+class TestIsLoading:
+    """is_loading separates 'model is loading' from 'no model' for the UI."""
+
+    def test_loading_until_first_load_finishes(self, qapp, mock_settings):
+        assert TranscriptionWorker(mock_settings, MagicMock()).is_loading is True
+
+    def test_true_while_model_loads(self, qapp, mock_settings):
+        worker = TranscriptionWorker(mock_settings, MagicMock())
+        seen = []
+        with patch.object(worker.model_provider, "get_active_model_path", return_value="/fake/dir"), \
+             patch(_PATCH_MODEL_CLS, side_effect=lambda *a, **k: seen.append(worker.is_loading)):
+            worker._load_model()
+        assert seen == [True]
+
+    @pytest.mark.parametrize("model_path, side_effect", [
+        ("/fake/dir", None),                 # success
+        ("/fake/dir", Exception("corrupt")), # failure
+        (None, None),                        # no model
+    ])
+    def test_false_after_load_attempt(self, qapp, mock_settings, model_path, side_effect):
+        worker = TranscriptionWorker(mock_settings, MagicMock())
+        with patch.object(worker.model_provider, "get_active_model_path", return_value=model_path), \
+             patch(_PATCH_MODEL_CLS, side_effect=side_effect):
+            worker._load_model()
+        assert worker.is_loading is False
 
 
 # stop

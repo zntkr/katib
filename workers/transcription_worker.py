@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 from workers.base_worker import BaseWorker, measure_time
 from core.transcription_filter import TranscriptionFilter
-from core.settings import MSG_MODEL_NOT_FOUND, STATE_READY, STATE_PROCESSING
+from core.settings import MSG_MODEL_NOT_FOUND, STATE_READY, STATE_PROCESSING, STATE_LOADING
 
 
 DEVICE        = "cpu"
@@ -39,6 +39,7 @@ class TranscriptionWorker(BaseWorker):
         self._queue: queue.Queue = queue.Queue(maxsize=QUEUE_MAXSIZE)
         self._model: "WhisperModel | None" = None
         self.is_ready: bool = False
+        self.is_loading: bool = True  # run() loads the model first; False once an attempt ends
         self._current_model_dir: str | None = None
         self._filter = TranscriptionFilter()
 
@@ -65,6 +66,13 @@ class TranscriptionWorker(BaseWorker):
             
     def _load_model(self):
         self.is_ready = False
+        self.is_loading = True
+        try:
+            self._load_model_inner()
+        finally:
+            self.is_loading = False
+
+    def _load_model_inner(self):
         original_dir = self.settings.get("model_dir")
         valid_dir = self.model_provider.get_active_model_path()
 
@@ -79,7 +87,7 @@ class TranscriptionWorker(BaseWorker):
         device       = "cpu"
         compute_type = self.settings.get("compute_type")
 
-        self.status_changed.emit("status.loading_model", "IDLE")
+        self.status_changed.emit(STATE_LOADING, "IDLE")
         self.log_entry.emit("...", "STT", f"Loading ({device}/{compute_type})")
         self.loading_state_changed.emit(True)
 
@@ -132,6 +140,10 @@ class TranscriptionWorker(BaseWorker):
     def add_audio(self, audio) -> None:
         """Enqueues the numpy array from AudioWorker; rejects it if the queue is full."""
         if not self.is_ready:
+            # The model was reloaded or lost between key press and release. Report it,
+            # otherwise the OSD would stay on "Listening" forever.
+            self.log_entry.emit("WRN", "STT", "Model not ready, recording discarded")
+            self.error_occurred.emit(STATE_LOADING if self.is_loading else MSG_MODEL_NOT_FOUND)
             return
         try:
             self._queue.put_nowait(audio)

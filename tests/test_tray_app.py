@@ -306,6 +306,7 @@ class TestTrayApp:
         tray.audio_worker = MagicMock()
         tray.transcription_worker = MagicMock()
         tray.transcription_worker.is_ready = False
+        tray.transcription_worker.is_loading = False
         tray.on_hotkey_pressed()
         tray.audio_worker.start_recording.assert_not_called()
         tray.tray.hide()
@@ -317,6 +318,7 @@ class TestTrayApp:
         tray = TrayApp(mock_settings, ModelProvider("."))
         tray.transcription_worker = MagicMock()
         tray.transcription_worker.is_ready = False
+        tray.transcription_worker.is_loading = False
         tray.osd = MagicMock()
         tray.on_hotkey_pressed()
         tray.osd.setStateError.assert_called_once_with("status.no_model")
@@ -329,6 +331,7 @@ class TestTrayApp:
         tray = TrayApp(mock_settings, ModelProvider("."))
         tray.transcription_worker = MagicMock()
         tray.transcription_worker.is_ready = False
+        tray.transcription_worker.is_loading = False
         tray.on_hotkey_pressed()
         from core.settings import STATE_LISTENING
         assert STATE_LISTENING not in tray.dashboard.status_label.text()
@@ -363,6 +366,7 @@ class TestTrayApp:
         tray = TrayApp(mock_settings, ModelProvider("."))
         tray.transcription_worker = MagicMock()
         tray.transcription_worker.is_ready = False
+        tray.transcription_worker.is_loading = False
         tray._resolve_idle_status()
         assert t(MSG_MODEL_NOT_FOUND) in tray.dashboard.status_label.text()
         assert t(MSG_MODEL_NOT_FOUND) in tray.tray.toolTip()
@@ -499,3 +503,29 @@ class TestTrayAppWithoutSystemTray:
     def test_apply_language_without_tray(self, tray):
         tray.apply_language("en")
         tray.set_recording(True)
+
+
+class TestTrayAppModelLoading:
+    @pytest.fixture
+    def tray(self, qapp, mock_settings):
+        from ui.tray_app import TrayApp
+        t = TrayApp(mock_settings, ModelProvider("."))
+        t.audio_worker = MagicMock()
+        t.osd = MagicMock()
+        t.transcription_worker = MagicMock(is_ready=False, is_loading=True)
+        yield t
+        t.tray.hide()
+        t.dashboard.close()
+
+    def test_hotkey_while_loading_says_loading_not_missing(self, tray):
+        from core.settings import STATE_LOADING
+        tray.on_hotkey_pressed()
+        tray.osd.setStateError.assert_called_once_with(STATE_LOADING)
+        tray.audio_worker.start_recording.assert_not_called()
+
+    def test_idle_status_while_loading(self, tray):
+        from core.settings import STATE_LOADING
+        from core.i18n import t
+        tray._resolve_idle_status()
+        assert t(STATE_LOADING) in tray.dashboard.status_label.text()
+        assert t(STATE_LOADING) in tray.tray.toolTip()

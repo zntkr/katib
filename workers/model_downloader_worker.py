@@ -3,7 +3,7 @@ import shutil
 from pathlib import Path
 from PySide6.QtCore import Signal
 from workers.base_worker import BaseWorker
-from core.settings import DEFAULT_DOWNLOAD_PARENT, WHISPER_MODELS
+from core.settings import DEFAULT_DOWNLOAD_PARENT, WHISPER_MODELS, STATE_LOADING
 
 
 class ModelDownloaderWorker(BaseWorker):
@@ -93,7 +93,7 @@ class ModelDownloaderWorker(BaseWorker):
                 os.rename(str(temp_dir), str(final_dir))
 
             self.log_entry.emit("OK", "DL", f"Download complete → {final_dir}")
-            self.status_changed.emit("status.loading_model", "OK")
+            self.status_changed.emit(STATE_LOADING, "OK")
             self.download_state_changed.emit(False)
             self.download_finished.emit(str(final_dir))
 

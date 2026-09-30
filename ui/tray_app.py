@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QPushButton, QVBoxLayout
 from PySide6.QtCore import QObject, Slot, QTimer
 
-from core.settings import APP_NAME, MSG_MIC_UNAVAILABLE, MSG_MODEL_NOT_FOUND, STATE_LISTENING, STATE_READY
+from core.settings import APP_NAME, MSG_MIC_UNAVAILABLE, MSG_MODEL_NOT_FOUND, STATE_LISTENING, STATE_READY, STATE_LOADING
 from core.i18n import t
 from PySide6.QtGui import QIcon
 from ui.utils import colorize_svg_icon
@@ -147,7 +147,7 @@ class TrayApp(QObject):
     def on_hotkey_pressed(self):
         if self.transcription_worker and not self.transcription_worker.is_ready:
             if self.osd:
-                self.osd.setStateError(MSG_MODEL_NOT_FOUND)
+                self.osd.setStateError(STATE_LOADING if self.transcription_worker.is_loading else MSG_MODEL_NOT_FOUND)
             return
         if self.osd:
             self.osd.setStateRecording()
@@ -177,8 +177,10 @@ class TrayApp(QObject):
             self.tray.setToolTip(f"{APP_NAME} — {t(MSG_MIC_UNAVAILABLE)}")
             self.dashboard.set_status(MSG_MIC_UNAVAILABLE, "ERR")
         elif self.transcription_worker and not self.transcription_worker.is_ready:
-            self.tray.setToolTip(f"{APP_NAME} — {t(MSG_MODEL_NOT_FOUND)}")
-            self.dashboard.set_status(MSG_MODEL_NOT_FOUND, "WARN")
+            key, level = ((STATE_LOADING, "IDLE") if self.transcription_worker.is_loading
+                          else (MSG_MODEL_NOT_FOUND, "WARN"))
+            self.tray.setToolTip(f"{APP_NAME} — {t(key)}")
+            self.dashboard.set_status(key, level)
         else:
             self.tray.setToolTip(f"{APP_NAME} — {t(STATE_READY)}")
             self.dashboard.set_status(STATE_READY, "OK")
