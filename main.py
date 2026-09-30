@@ -224,7 +224,7 @@ def main():
         # Binary Armor: signal exactly 0.0 for > 1.5 s while recording → the mic is muted
         audio_worker.muted_detected.connect(lambda: osd.setStateError("osd.mic_muted"))
 
-        # All worker errors → OSD + tray balloon
+        # All worker errors → OSD
         audio_worker.error_occurred.connect(lambda msg: osd.setStateError(msg))
         hotkey_worker.error_occurred.connect(lambda msg: osd.setStateError(msg))
         transcription_worker.error_occurred.connect(lambda msg: osd.setStateError(msg))
