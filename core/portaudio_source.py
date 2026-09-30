@@ -25,6 +25,7 @@ class PortAudioSource(AudioSource):
         
         self._device_index: int | None = None
         self._stream: sd.InputStream | None = None
+        self._dead_stream: sd.InputStream | None = None  # ended on its own, not yet closed
         self._intentional_close = False
         self._native_sr = sample_rate
         
@@ -46,6 +47,7 @@ class PortAudioSource(AudioSource):
             raise AudioDeviceError(f"Device query failed: {e}")
 
     def refresh_devices(self) -> list[tuple[str, Any, bool]]:
+        self._close_dead_stream()
         try:
             if self._stream is None:
                 sd._terminate()
@@ -76,7 +78,8 @@ class PortAudioSource(AudioSource):
               
         if self._stream is not None:
             return
-            
+        self._close_dead_stream()
+
         if self._device_index is None:
             raise AudioDeviceError("No device selected.")
             
@@ -130,6 +133,7 @@ class PortAudioSource(AudioSource):
             raise AudioDeviceError(f"Microphone could not be opened: {e}")
 
     def stop(self) -> None:
+        self._close_dead_stream()
         if self._stream is not None:
             self._intentional_close = True
             try:
@@ -150,12 +154,24 @@ class PortAudioSource(AudioSource):
             if indata is not None:
                 self._audio_callback(indata.copy(), status_msg)
 
+    def _close_dead_stream(self) -> None:
+        """Closes a stream that ended on its own. PortAudio forbids closing a stream
+        from its own callback, so this runs on the next call from the owning thread."""
+        if self._dead_stream is not None:
+            try:
+                self._dead_stream.close()
+            except Exception:
+                pass
+            self._dead_stream = None
+
     def _sd_finished_callback(self) -> None:
+        # Runs on PortAudio's thread: only record state and notify here.
         if self._intentional_close:
             err = None
         else:
             err = AudioDisconnectedError("Stream closed unexpectedly.")
-        
+            self._dead_stream = self._stream
+
         self._stream = None
         if self._finished_callback:
             self._finished_callback(err)

@@ -24,3 +24,4 @@ Gerekçe:
 - Kullanıcı mic'i çıkardıktan sonra kayıt tuşuna basmadan Dashboard "Hazır" göstermeye devam eder. Bu beklenen davranıştır, hata değildir.
 - `_on_stream_finished()` hâlâ aktif kayıt sırasında fiziksel kopuşu anında yakalar — yalnızca pasif bekleme durumunda gecikme yaşanır.
 - Bu limitasyonu "düzeltmeye" çalışan bir sonraki ajan bu ADR'ye bakmalıdır.
+- `_on_stream_finished()` PortAudio'nun callback thread'inde çalışır. Buradan PortAudio'yu yeniden başlatan hiçbir çağrı (`refresh_devices()`, `stream.close()`) doğrudan yapılmaz: cihaz yenilemesi kuyruklu (`QueuedConnection`) `_stream_lost` sinyaliyle ana thread'e ertelenir, kopan stream ise `PortAudioSource`'un bir sonraki çağrısında kapatılır. PortAudio, stream callback'i içinden `Pa_Terminate`/`Pa_CloseStream` çağrılmasını yasaklar; aksi halde mikrofon koptuğu anda uygulama kilitlenebilir.

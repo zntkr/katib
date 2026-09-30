@@ -1,4 +1,6 @@
+import threading
 import pytest
+from PySide6.QtCore import QCoreApplication
 from unittest.mock import MagicMock, patch
 from workers.audio_worker import AudioWorker
 
@@ -27,6 +29,31 @@ def test_audio_worker_handles_unexpected_disconnect(mock_settings):
     error_spy.assert_called_once()
     # - Audio level must be reset to 0
     level_spy.assert_any_call(0.0)
-    # - Device list must be refreshed (this signal comes from inside refresh_devices)
-    # In the current code refresh_devices is NOT called. This will fail (RED).
+    # - Device list must be refreshed, but only after the callback has returned
+    #   (it re-initialises PortAudio, which is forbidden inside a stream callback)
+    refresh_spy.assert_not_called()
+    QCoreApplication.processEvents()
     refresh_spy.assert_called()
+
+
+def test_disconnect_from_portaudio_thread_refreshes_on_main_thread(mock_settings):
+    source = MagicMock()
+    source.refresh_devices.side_effect = lambda: refresh_threads.append(threading.current_thread()) or []
+    refresh_threads = []
+    worker = AudioWorker(settings=mock_settings, audio_source=source)
+
+    t = threading.Thread(target=worker._on_stream_finished, args=(Exception("disconnect"),))
+    t.start()
+    t.join()
+    assert refresh_threads == []  # nothing ran on the callback thread
+
+    QCoreApplication.processEvents()
+    assert refresh_threads == [threading.main_thread()]
+
+
+def test_intentional_close_does_not_refresh(mock_settings):
+    source = MagicMock()
+    worker = AudioWorker(settings=mock_settings, audio_source=source)
+    worker._on_stream_finished(None)
+    QCoreApplication.processEvents()
+    source.refresh_devices.assert_not_called()

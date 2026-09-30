@@ -1,7 +1,7 @@
 import threading
 import sys
 import numpy as np
-from PySide6.QtCore import Signal, QElapsedTimer
+from PySide6.QtCore import Qt, Signal, QElapsedTimer
 
 from workers.base_worker import BaseWorker
 from core.audio_source import AudioSource, AudioDeviceError, AudioDisconnectedError
@@ -29,6 +29,7 @@ class AudioWorker(BaseWorker):
     recording_finished = Signal()        # emitted when recording stops (in all cases)
     audio_failed       = Signal()        # recording too short or silent
     mic_unavailable    = Signal()        # hardware unreachable (not found / failed to open / disconnected)
+    _stream_lost       = Signal()        # private: hop from the PortAudio thread to this object's thread
 
     def __init__(self, settings, audio_source: AudioSource, parent=None):
         super().__init__(parent)
@@ -48,6 +49,10 @@ class AudioWorker(BaseWorker):
         self._stop_event = threading.Event()
         self._silence_timer = QElapsedTimer()
         self._silence_notified = False
+
+        # refresh_devices() re-initialises PortAudio, which must not happen inside a
+        # PortAudio callback; the queued connection defers it until the callback returns.
+        self._stream_lost.connect(self.refresh_devices, Qt.ConnectionType.QueuedConnection)
 
         from PySide6.QtCore import QTimer
         QTimer.singleShot(100, self._init_media_devices)
@@ -252,6 +257,6 @@ class AudioWorker(BaseWorker):
             self.error_occurred.emit("osd.mic_disconnected")
             self.mic_unavailable.emit()
             self.level_changed.emit(0.0)
-            self.refresh_devices()  # auto-refresh the device list
+            self._stream_lost.emit()  # auto-refresh the device list on the main thread
         except Exception:
             self.log_entry.emit("ERR", "MIC", "Stream close error")
