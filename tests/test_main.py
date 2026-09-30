@@ -60,11 +60,11 @@ class TestSetupLogging:
         assert isinstance(logger, logging.Logger)
 
     def test_creates_log_directory(self, tmp_path):
-        log_base = tmp_path / "AppData" / "Local"
-        with patch.dict("os.environ", {"LOCALAPPDATA": str(log_base)}):
+        log_dir = tmp_path / "Katib" / "Logs"
+        with patch("main.get_log_dir", return_value=log_dir):
             from main import setup_logging
             setup_logging()
-        assert (log_base / "Katib" / "Logs").is_dir()
+        assert log_dir.is_dir()
 
     def test_fallback_on_mkdir_error(self, tmp_path):
         """If directory creation fails, the fallback basicConfig must run."""

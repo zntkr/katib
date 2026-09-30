@@ -90,7 +90,7 @@ Katib, ağdan yalıtılmış ortamlara uygun şekilde tasarlanmıştır:
 
 - Çalışma zamanında dışarıya bağlantı yok
 - Kullanım istatistiği, hata raporlama veya güncelleme kontrolü yok
-- Ayarlar ve günlükler `%LOCALAPPDATA%\Katib` dizininde yerel olarak saklanır
+- Ayarlar, modeller ve günlükler `%LOCALAPPDATA%\Katib` dizininde yerel olarak saklanır
 - Tek ağ etkinliği, isteğe bağlı tek seferlik model indirme işlemidir
 
 ---

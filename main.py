@@ -19,7 +19,7 @@ from pathlib import Path
 from PySide6.QtWidgets import QApplication
 from core.settings import (
     APP_NAME, MSG_MODEL_NOT_FOUND, MSG_MIC_UNAVAILABLE,
-    STATE_PROCESSING, STATE_LISTENING, STATE_READY,
+    STATE_PROCESSING, STATE_LISTENING, STATE_READY, get_log_dir,
 )
 import PySide6.QtSvg  # required for SVG plugin registration
 import warnings
@@ -48,13 +48,7 @@ class StreamToLogger(io.TextIOBase):
         pass
 
 def setup_logging():
-    if sys.platform == "win32":
-        local_app_data = os.environ.get("LOCALAPPDATA")
-        base_dir = Path(local_app_data) if local_app_data else Path.home()
-    else:
-        xdg_data = os.environ.get("XDG_DATA_HOME")
-        base_dir = Path(xdg_data) if xdg_data else Path.home() / ".local" / "share"
-    log_dir = base_dir / APP_NAME / "Logs"
+    log_dir = get_log_dir()
     log_file = log_dir / "katib.log"
 
     # Prevent a Fatal Error crash if directory creation is blocked by strict system permissions.
@@ -160,9 +154,10 @@ def main():
     # The Fusion style can override CSS colors; we leave it disabled.
 
     from ui.theme import theme_manager
-    from core.settings import SettingsManager, DEFAULT_DOWNLOAD_PARENT
+    from core.settings import SettingsManager, DEFAULT_DOWNLOAD_PARENT, migrate_legacy_data
     from core.models import ModelProvider
 
+    migrate_legacy_data()  # must run before SettingsManager reads settings.json
     settings_manager = SettingsManager()
     model_provider = ModelProvider(base_download_dir=DEFAULT_DOWNLOAD_PARENT, active_model_path=settings_manager.get("model_dir"))
     from core.i18n import set_language as _i18n_set_language, t as _t, available_languages

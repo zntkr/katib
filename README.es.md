@@ -90,7 +90,7 @@ Katib está diseñado para funcionar en entornos sin acceso a internet:
 
 - Sin conexiones salientes en tiempo de ejecución
 - Sin estadísticas de uso, informes de errores ni comprobaciones de actualizaciones
-- La configuración y los registros se almacenan localmente en `%LOCALAPPDATA%\Katib`
+- La configuración, los modelos y los registros se almacenan localmente en `%LOCALAPPDATA%\Katib`
 - La única actividad de red es la descarga opcional del modelo, que se realiza una sola vez
 
 ---

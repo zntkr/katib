@@ -90,7 +90,7 @@ O Katib foi projetado para ser amigável a ambientes isolados:
 
 - Sem conexões de saída durante a execução
 - Sem estatísticas de uso, relatórios de erros ou verificações de atualização
-- Configurações e logs armazenados localmente em `%LOCALAPPDATA%\Katib`
+- Configurações, modelos e logs armazenados localmente em `%LOCALAPPDATA%\Katib`
 - A única atividade de rede é o download único e opcional do modelo
 
 ---

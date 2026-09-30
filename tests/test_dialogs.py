@@ -52,9 +52,8 @@ class TestSettingsDialog:
         d.deleteLater()
 
     def test_open_log_folder_exists_calls_startfile(self, dialog):
-        import os
-        expected_dir = os.path.join(os.environ.get(
-            "LOCALAPPDATA", os.path.expanduser("~")), "Katib", "Logs")
+        from core.settings import get_log_dir
+        expected_dir = str(get_log_dir())
 
         # Simulate folder exists and capture os.startfile call
         with patch("os.path.exists", return_value=True), \

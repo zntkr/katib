@@ -91,6 +91,15 @@ Katib, Windows üzerinde çalışan, tamamen çevrimdışı (offline) bir ses-me
 - `ui/osd.py`: Operasyonel geri bildirim için kullanılan minimalist gösterge katmanı.
 - `tests/`: Uygulamanın stabilitesini ölçen birim ve entegrasyon testleri.
 
+## Dosya Konumları (Çalışma Zamanı Verisi)
+Tüm uygulama verisi tek bir kökte tutulur (ADR-0009). Kök yalnızca `core/settings.py::get_app_data_dir()` içinde hesaplanır:
+
+- Kök: `%LOCALAPPDATA%\Katib` (Linux: `$XDG_DATA_HOME/Katib`, varsayılan `~/.local/share/Katib`)
+- Ayarlar: `<kök>\settings.json` — `get_settings_path()`
+- Modeller: `<kök>\Models\<model-klasörü>` — `DEFAULT_DOWNLOAD_PARENT`. Klasör adı `repo_id`'nin son parçasıdır (örn. `faster-whisper-small`).
+- Loglar: `<kök>\Logs\katib.log` — `get_log_dir()`
+- Eski konum `~/.katib_app`, açılışta `migrate_legacy_data()` ile taşınır.
+
 ## Geliştirici Notları
 - Yeni bir ayar eklenirken `core/settings.py` üzerinden geçilmeli ve varsayılan değeri tanımlanmalıdır.
 - Kullanıcıya gösterilecek tüm hatalar hem `TrayApp.show_error` (tray balonu) hem de OSD üzerinden bildirilir. OSD tek operasyonel görünürlük kanalıdır; dashboard kapalıyken bile kullanıcı kritik hatayı görür.

@@ -90,7 +90,7 @@ Katib ist für den Betrieb ohne Netzwerkverbindung ausgelegt:
 
 - Keine ausgehenden Verbindungen zur Laufzeit
 - Keine Nutzungsstatistiken, Fehlerberichte oder Update-Abfragen
-- Einstellungen und Protokolle werden lokal unter `%LOCALAPPDATA%\Katib` gespeichert
+- Einstellungen, Modelle und Protokolle werden lokal unter `%LOCALAPPDATA%\Katib` gespeichert
 - Die einzige Netzwerkaktivität ist der optionale einmalige Modell-Download
 
 ---

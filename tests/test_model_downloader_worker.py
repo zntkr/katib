@@ -483,8 +483,9 @@ class TestConstants:
     def test_default_download_parent_is_absolute(self, mock_settings):
         assert DEFAULT_DOWNLOAD_PARENT.is_absolute()
 
-    def test_default_download_parent_under_home(self, mock_settings):
-        assert DEFAULT_DOWNLOAD_PARENT.is_relative_to(Path.home())
+    def test_default_download_parent_under_app_data_dir(self, mock_settings):
+        from core.settings import get_app_data_dir
+        assert DEFAULT_DOWNLOAD_PARENT == get_app_data_dir() / "Models"
 
 
 # pre-flight disk check

@@ -90,7 +90,7 @@ Katib est conçu pour fonctionner sans accès à internet :
 
 - Aucune connexion sortante à l'exécution
 - Aucune statistique d'utilisation, rapport d'erreur ou vérification de mise à jour
-- Les paramètres et journaux sont stockés localement dans `%LOCALAPPDATA%\Katib`
+- Les paramètres, modèles et journaux sont stockés localement dans `%LOCALAPPDATA%\Katib`
 - La seule activité réseau est le téléchargement optionnel du modèle, effectué une seule fois
 
 ---

@@ -12,7 +12,7 @@ from ui.utils import qt_key_to_keyboard
 from core.settings import (
     APP_NAME, WHISPER_MODELS,
     DEFAULT_DOWNLOAD_PARENT, COMPUTE_TYPE_OPTIONS_CPU,
-    SETTINGS_SCHEMA
+    SETTINGS_SCHEMA, get_log_dir,
 )
 from ui.theme import G_1, G_2, G_4, G_6, FONT_SIZE_SM, SETTINGS_WIDTH, SETTINGS_HEIGHT, theme_manager
 from ui.components import NoScrollComboBox, DynamicIconButton
@@ -402,7 +402,7 @@ class SettingsDialog(QDialog):
     def _open_log_folder(self) -> None:
         import os
         import sys
-        log_dir = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), APP_NAME, "Logs")
+        log_dir = str(get_log_dir())
         if os.path.exists(log_dir):
             if sys.platform == "win32":
                 os.startfile(log_dir)

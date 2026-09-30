@@ -23,12 +23,12 @@ Katib, açılışta modelleri otomatik olarak tarar ve bulduğu an kullanıma ha
 ### Adım 2.1: Model Dosyalarını Hazırlama
 Öncelikle ağ kısıtlaması olmayan bir bilgisayarda (veya kişisel cihazınızda) Katib'in kullanacağı modeli indirin.
 Katib'in modelleri varsayılan olarak şu klasörde saklanır:
-`C:\Users\<KullaniciAdi>\Katib\Models`
+`%LOCALAPPDATA%\Katib\Models` (örn. `C:\Users\<KullaniciAdi>\AppData\Local\Katib\Models`)
 
 İndirdiğiniz modelin klasör yapısı şu şekilde görünmelidir:
 ```text
 Katib\Models\
-└── systran-faster-whisper-small\
+└── faster-whisper-small\
     ├── config.json
     ├── model.bin
     ├── preprocessor_config.json
@@ -36,9 +36,19 @@ Katib\Models\
     └── vocabulary.txt
 ```
 
+Model klasörünün adı birebir aşağıdakilerden biri olmalıdır; Katib yalnızca bu adları tarar:
+
+| Model | Klasör adı |
+|-------|------------|
+| tiny | `faster-whisper-tiny` |
+| base | `faster-whisper-base` |
+| small | `faster-whisper-small` |
+| medium | `faster-whisper-medium` |
+| large-v3 | `faster-whisper-large-v3` |
+
 ### Adım 2.2: Kullanıcılara Dağıtım (Push)
 SCCM, MECM veya Group Policy (GPO) kullanarak hazırladığınız bu model klasörünü şirket içi cihazlardaki aynı hedef yola kopyalayan bir dağıtım kuralı oluşturun:
-`%USERPROFILE%\Katib\Models\`
+`%LOCALAPPDATA%\Katib\Models\`
 
 *Not: Uygulama açılışta bu dizini otomatik tarayacaktır. Kullanıcının arayüzden ek bir ayar yapmasına gerek yoktur.*
 

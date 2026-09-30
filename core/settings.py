@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import logging
 from pathlib import Path
@@ -7,8 +8,26 @@ from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
 
-APP_NAME                = "Katib"
-DEFAULT_DOWNLOAD_PARENT = Path.home() / ".katib_app" / "models"
+APP_NAME = "Katib"
+
+
+def get_app_data_dir() -> Path:
+    """Single root for all Katib data: settings.json, Models/ and Logs/ (ADR-0009)."""
+    if sys.platform == "win32":
+        local_app_data = os.environ.get("LOCALAPPDATA")
+        base_dir = Path(local_app_data) if local_app_data else Path.home() / "AppData" / "Local"
+    else:
+        xdg_data = os.environ.get("XDG_DATA_HOME")
+        base_dir = Path(xdg_data) if xdg_data else Path.home() / ".local" / "share"
+    return base_dir / APP_NAME
+
+
+def get_log_dir() -> Path:
+    return get_app_data_dir() / "Logs"
+
+
+DEFAULT_DOWNLOAD_PARENT = get_app_data_dir() / "Models"
+LEGACY_DATA_DIR         = Path.home() / ".katib_app"  # used by builds before ADR-0009
 
 MSG_MODEL_NOT_FOUND  = "status.no_model"
 MSG_MIC_UNAVAILABLE  = "status.no_mic"
@@ -87,9 +106,87 @@ SETTINGS_SCHEMA = [
 
 
 def get_settings_path() -> Path:
-    settings_dir = Path.home() / ".katib_app"
+    settings_dir = get_app_data_dir()
     settings_dir.mkdir(parents=True, exist_ok=True)
     return settings_dir / "settings.json"
+
+
+def migrate_legacy_data(legacy_dir: Path | None = None, app_dir: Path | None = None) -> None:
+    """Moves settings and models written by builds before ADR-0009 from ~/.katib_app
+    into the app data dir. Runs on every startup; a no-op once nothing is left to move.
+
+    Never raises: on any failure the legacy data stays where it is and keeps working.
+    """
+    legacy_dir = legacy_dir or LEGACY_DATA_DIR
+    app_dir = app_dir or get_app_data_dir()
+    if not legacy_dir.is_dir():
+        return
+    try:
+        logger.info("Migrating legacy data: %s -> %s", legacy_dir, app_dir)
+        app_dir.mkdir(parents=True, exist_ok=True)
+        legacy_models, new_models = legacy_dir / "models", app_dir / "Models"
+        _move_legacy_models(legacy_models, new_models)
+        _move_legacy_settings(legacy_dir / "settings.json", app_dir / "settings.json",
+                              legacy_models, new_models)
+        legacy_dir.rmdir()  # only succeeds once everything has been moved
+    except OSError as e:
+        logger.warning("Legacy data migration incomplete, leftovers stay in %s: %s", legacy_dir, e)
+    except Exception:
+        logger.exception("Legacy data migration failed")
+
+
+def _move_legacy_models(legacy_models: Path, new_models: Path) -> None:
+    if not legacy_models.is_dir():
+        return
+    new_models.mkdir(parents=True, exist_ok=True)
+    for child in legacy_models.iterdir():
+        target = new_models / child.name
+        if target.exists():
+            logger.info("Keeping %s, already present in %s", child.name, new_models)
+            continue
+        try:
+            os.rename(child, target)  # same profile volume: instant, even for GBs
+        except OSError as e:
+            logger.warning("Could not move %s: %s", child, e)
+    try:
+        legacy_models.rmdir()
+    except OSError:
+        pass
+
+
+def _move_legacy_settings(legacy_settings: Path, new_settings: Path,
+                          legacy_models: Path, new_models: Path) -> None:
+    if not legacy_settings.is_file() or new_settings.exists():
+        return
+    try:
+        data = json.loads(legacy_settings.read_text(encoding="utf-8"))
+    except ValueError:
+        data = None
+    if not isinstance(data, dict):
+        os.replace(legacy_settings, new_settings)  # SettingsManager falls back to defaults
+        return
+    if data.get("model_dir"):
+        data["model_dir"] = _migrate_model_dir(data["model_dir"], legacy_models, new_models)
+    new_settings.write_text(json.dumps(data, indent=4), encoding="utf-8")
+    legacy_settings.unlink()
+
+
+def _migrate_model_dir(model_dir: str, legacy_models: Path, new_models: Path) -> str:
+    path = Path(model_dir)
+    if not path.is_relative_to(legacy_models):
+        return model_dir  # user picked a folder elsewhere
+    if path != legacy_models:
+        # A specific model: follow it if it moved, otherwise keep using it in place.
+        return model_dir if path.exists() else str(new_models / path.relative_to(legacy_models))
+
+    # The old default (the models root itself). ModelProvider only scans the new
+    # root, so name a concrete model if the new root has none but one was left behind.
+    from core.models import ModelProvider
+    if ModelProvider(new_models).get_active_model_path() is None:
+        left_behind = ModelProvider(legacy_models).resolve_model_dir(legacy_models)
+        if left_behind:
+            return left_behind
+    return str(new_models)
 
 
 class SettingsManager:
