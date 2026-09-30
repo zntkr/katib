@@ -180,7 +180,7 @@ def main():
 
     global_logger.info("Building UI (Tray/Dashboard)...")
     tray = TrayApp(settings=settings_manager, model_provider=model_provider)
-    app.setWindowIcon(tray._icon_idle)
+    app.setWindowIcon(tray.icon_idle)
 
     _workers = {}
 
@@ -205,11 +205,7 @@ def main():
         _workers.update(hw=hotkey_worker, aw=audio_worker,
                         tw=transcription_worker, dw=downloader_worker)
 
-        # Give TrayApp references to the workers so UI manipulations
-        # are safely routed to the main thread via QueuedConnection.
-        tray.transcription_worker = transcription_worker
-        tray.audio_worker = audio_worker
-        tray.osd = osd
+        tray.attach_workers(audio_worker=audio_worker, transcription_worker=transcription_worker, osd=osd)
 
         # ---------------------------------------------------- signal wiring
         global_logger.info("Wiring signals...")
@@ -304,8 +300,6 @@ def main():
         def _on_theme_changed(theme: str) -> None:
             theme_manager.apply_theme(app, theme)
             tray.dashboard.refresh_theme()
-            if tray.dashboard._settings_dialog is not None:
-                tray.dashboard._settings_dialog.refresh_theme()
 
         tray.dashboard.theme_changed.connect(_on_theme_changed)
         app.styleHints().colorSchemeChanged.connect(

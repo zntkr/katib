@@ -32,10 +32,10 @@ class TrayApp(QObject):
         self._mic_unavailable: bool = False
 
         p = theme_manager.palette
-        self._icon_idle = colorize_svg_icon(ICN_MIC, p["CLR_TEXT_MUTED"], size=64)
+        self.icon_idle = colorize_svg_icon(ICN_MIC, p["CLR_TEXT_MUTED"], size=64)
         self._icon_rec  = colorize_svg_icon(ICN_MIC, p["CLR_ERR"], size=64)
 
-        self.dashboard = DashboardWindow(settings=self.settings, model_provider=self.model_provider, icon_idle=self._icon_idle)
+        self.dashboard = DashboardWindow(settings=self.settings, model_provider=self.model_provider, icon_idle=self.icon_idle)
 
         # The tray icon object always exists so icon/tooltip updates never need a
         # guard; it is only shown once the OS actually provides a system tray.
@@ -67,22 +67,13 @@ class TrayApp(QObject):
         self.tray.hide()
         self.tray.deleteLater()
         self._build_tray()
-        self.dashboard._refresh_language_tooltips()
+        self.dashboard.refresh_language()
         if self.osd:
             self.osd.refresh_language()
-        QTimer.singleShot(0, self._reopen_settings_after_language_change)
-
-    def _reopen_settings_after_language_change(self) -> None:
-        dlg = self.dashboard._settings_dialog
-        was_visible = dlg is not None and dlg.isVisible()
-        if dlg is not None:
-            dlg.close()
-            self.dashboard._settings_dialog = None
-        if was_visible:
-            self.dashboard._open_settings_dialog()
+        QTimer.singleShot(0, self.dashboard.reopen_settings)
 
     def _build_tray(self):
-        self.tray = QSystemTrayIcon(self._icon_idle)
+        self.tray = QSystemTrayIcon(self.icon_idle)
         self.tray.setToolTip(f"{APP_NAME} — {t(STATE_READY)}")
 
         menu = QMenu()
@@ -93,7 +84,7 @@ class TrayApp(QObject):
         act_quit  = menu.addAction(t("tray.menu.quit"))
 
         act_panel.triggered.connect(self._show_dashboard)
-        act_settings.triggered.connect(self.dashboard._open_settings_dialog)
+        act_settings.triggered.connect(self.dashboard.toggle_settings)
         act_help.triggered.connect(self.dashboard.show_help)
         app = QApplication.instance()
         if app:
@@ -162,6 +153,13 @@ class TrayApp(QObject):
             self.audio_worker.stop_recording()
 
     # ----------------------------------------------------------------- public
+    def attach_workers(self, audio_worker: 'AudioWorker', transcription_worker: 'TranscriptionWorker',
+                       osd: 'MinimalOSD') -> None:
+        """Workers are created after TrayApp (deferred init), so they are attached here."""
+        self.audio_worker = audio_worker
+        self.transcription_worker = transcription_worker
+        self.osd = osd
+
     def set_recording(self, active: bool):
         if active:
             self.tray.setIcon(self._icon_rec)
@@ -172,7 +170,7 @@ class TrayApp(QObject):
             self.dashboard.update_level(0.0)
 
     def _resolve_idle_status(self) -> None:
-        self.tray.setIcon(self._icon_idle)
+        self.tray.setIcon(self.icon_idle)
         if self._mic_unavailable:
             self.tray.setToolTip(f"{APP_NAME} — {t(MSG_MIC_UNAVAILABLE)}")
             self.dashboard.set_status(MSG_MIC_UNAVAILABLE, "ERR")

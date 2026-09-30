@@ -529,3 +529,14 @@ class TestTrayAppModelLoading:
         tray._resolve_idle_status()
         assert t(STATE_LOADING) in tray.dashboard.status_label.text()
         assert t(STATE_LOADING) in tray.tray.toolTip()
+
+
+class TestTrayAppAttachWorkers:
+    def test_attach_workers_sets_references(self, qapp, mock_settings):
+        from ui.tray_app import TrayApp
+        tray = TrayApp(mock_settings, ModelProvider("."))
+        aw, tw, osd = MagicMock(), MagicMock(), MagicMock()
+        tray.attach_workers(audio_worker=aw, transcription_worker=tw, osd=osd)
+        assert (tray.audio_worker, tray.transcription_worker, tray.osd) == (aw, tw, osd)
+        tray.tray.hide()
+        tray.dashboard.close()

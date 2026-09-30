@@ -233,7 +233,7 @@ class TestDashboardMethods:
 
     def test_status_label_click_after_guidance_opens_settings(self, dashboard):
         dashboard.show_model_missing_guidance()
-        with patch.object(dashboard, "_open_settings_dialog") as mock_open:
+        with patch.object(dashboard, "toggle_settings") as mock_open:
             from PySide6.QtGui import QMouseEvent
             from PySide6.QtCore import QEvent, QPointF
             event = QMouseEvent(
@@ -247,7 +247,7 @@ class TestDashboardMethods:
     def test_status_label_click_after_clear_does_not_open_settings(self, dashboard):
         dashboard.show_model_missing_guidance()
         dashboard.clear_model_missing_guidance()
-        with patch.object(dashboard, "_open_settings_dialog") as mock_open:
+        with patch.object(dashboard, "toggle_settings") as mock_open:
             from PySide6.QtGui import QMouseEvent
             from PySide6.QtCore import QEvent, QPointF
             event = QMouseEvent(
@@ -287,7 +287,7 @@ class TestDashboardMethods:
         assert dashboard.level_bar.maximum() == 0
 
     def test_set_download_state_with_dialog(self, dashboard, mock_settings):
-        dashboard._open_settings_dialog()
+        dashboard.toggle_settings()
         dashboard.set_download_state(True)
         assert not dashboard._settings_dialog.btn_download.isEnabled()
 
@@ -300,7 +300,7 @@ class TestDashboardMethods:
         assert spy.count() == 1
 
     def test_on_download_complete_with_dialog(self, dashboard, tmp_path):
-        dashboard._open_settings_dialog()
+        dashboard.toggle_settings()
         dashboard.on_download_complete(str(tmp_path))
         assert str(tmp_path) in dashboard._settings_dialog.lbl_model_path.toolTip()
 
@@ -316,15 +316,15 @@ class TestDashboardMethods:
         dashboard.show_help()
         assert dashboard._help_window is w1
 
-    # _open_settings_dialog overflow
+    # toggle_settings overflow
 
-    def test_open_settings_dialog_overflow_x(self, dashboard):
+    def testtoggle_settings_overflow_x(self, dashboard):
         with patch.object(dashboard, "frameGeometry") as mock_geo:
             mock_geo.return_value.x.return_value = 0
             mock_geo.return_value.y.return_value = 100
             mock_geo.return_value.width.return_value = 320
             mock_geo.return_value.height.return_value = 200
-            dashboard._open_settings_dialog()
+            dashboard.toggle_settings()
 
     # _on_hotkey_from_dialog
 
@@ -339,7 +339,7 @@ class TestDashboardMethods:
 class TestDashboardUIInteractions:
     def test_open_settings_creates_dialog(self, dashboard):
         """Tests that clicking the Settings button opens the dialog window."""
-        dashboard._open_settings_dialog()
+        dashboard.toggle_settings()
         assert dashboard._settings_dialog is not None
         # isVisible() might be False in headless CI, but let's check if it's created
         assert dashboard._settings_dialog.windowTitle() != ""
@@ -773,7 +773,7 @@ class TestDashboardCoverage:
             dashboard._position_help_beside_dashboard()
 
     def test_position_settings_with_bounds(self, dashboard):
-        dashboard._open_settings_dialog()
+        dashboard.toggle_settings()
         with patch("ui.utils_win.get_dwm_visual_bounds", return_value=(0, 0, 100, 100)):
             dashboard._position_settings_beside_dashboard()
 
@@ -787,7 +787,7 @@ class TestDashboardCoverage:
 
     def test_position_settings_x_less_than_left(self, dashboard):
         from PySide6.QtCore import QRect
-        dashboard._open_settings_dialog()
+        dashboard.toggle_settings()
         with patch.object(dashboard, "frameGeometry", return_value=QRect(0, 0, 300, 300)), \
              patch("PySide6.QtWidgets.QApplication.primaryScreen") as mock_screen:
             mock_screen.return_value.availableGeometry.return_value = QRect(10000, 0, 1920, 1080)
@@ -807,3 +807,31 @@ class TestDashboardCoverage:
             dashboard._toggle_logs()
             mock_pos.assert_not_called()
             mock_move.assert_called_once()
+
+
+class TestDashboardSettingsDialogApi:
+    """Public API that TrayApp and main.py use instead of dashboard internals."""
+
+    def test_refresh_theme_also_refreshes_open_settings_dialog(self, dashboard):
+        dashboard.toggle_settings()
+        with patch.object(dashboard._settings_dialog, "refresh_theme") as mock_refresh:
+            dashboard.refresh_theme()
+        mock_refresh.assert_called_once()
+
+    def test_refresh_theme_without_settings_dialog(self, dashboard):
+        dashboard._settings_dialog = None
+        dashboard.refresh_theme()  # must not raise
+
+    def test_reopen_settings_rebuilds_visible_dialog(self, dashboard):
+        dashboard.toggle_settings()
+        old = dashboard._settings_dialog
+        dashboard.reopen_settings()
+        assert dashboard._settings_dialog is not None
+        assert dashboard._settings_dialog is not old
+        assert dashboard._settings_dialog.isVisible()
+
+    def test_reopen_settings_discards_hidden_dialog(self, dashboard):
+        dashboard.toggle_settings()
+        dashboard.toggle_settings()  # close it
+        dashboard.reopen_settings()
+        assert dashboard._settings_dialog is None

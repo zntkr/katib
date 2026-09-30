@@ -174,7 +174,7 @@ class DashboardWindow(QWidget):
         self.btn_settings.setObjectName("btn_settings")
         self.btn_settings.setFixedSize(G_4, G_4)
         self.btn_settings.setToolTip(t("dashboard.settings_tooltip"))
-        self.btn_settings.clicked.connect(self._open_settings_dialog)
+        self.btn_settings.clicked.connect(self.toggle_settings)
         mic_row.addWidget(self.btn_settings)
         
         root.addLayout(mic_row)
@@ -434,7 +434,7 @@ class DashboardWindow(QWidget):
 
     def _on_status_label_click(self, _event) -> None:
         if self._status_clickable:
-            self._open_settings_dialog()
+            self.toggle_settings()
             if self._settings_dialog:
                 self._settings_dialog.focus_model()
 
@@ -446,7 +446,7 @@ class DashboardWindow(QWidget):
         self.status_label.setCursor(Qt.CursorShape.PointingHandCursor)
         self.status_icon_label.setCursor(Qt.CursorShape.PointingHandCursor)
         def _auto_open():
-            self._open_settings_dialog()
+            self.toggle_settings()
             if self._settings_dialog:
                 self._settings_dialog.focus_model()
         QTimer.singleShot(50, _auto_open)
@@ -520,7 +520,7 @@ class DashboardWindow(QWidget):
 
         self._help_window.move(x, y)
 
-    def _open_settings_dialog(self) -> None:
+    def toggle_settings(self) -> None:
         from ui.settings_dialog import SettingsDialog
         if self._settings_dialog is not None and self._settings_dialog.isVisible():
             self._settings_dialog.close()
@@ -554,8 +554,20 @@ class DashboardWindow(QWidget):
         self.btn_toggle_log.recolor(p["CLR_YELLOW"], idle_color=p["CLR_FG3"])
         self.btn_settings.recolor(p["CLR_YELLOW"], idle_color=p["CLR_FG3"])
         self._update_log_stylesheet()
+        if self._settings_dialog is not None:
+            self._settings_dialog.refresh_theme()
 
-    def _refresh_language_tooltips(self) -> None:
+    def reopen_settings(self) -> None:
+        """Rebuilds the settings dialog (e.g. after a language change); reopens it only if it was open."""
+        dlg = self._settings_dialog
+        was_visible = dlg is not None and dlg.isVisible()
+        if dlg is not None:
+            dlg.close()
+            self._settings_dialog = None
+        if was_visible:
+            self.toggle_settings()
+
+    def refresh_language(self) -> None:
         self.setWindowTitle(APP_NAME)
         self.btn_copy_transcript.setToolTip(t("dashboard.copy_tooltip"))
         self.btn_toggle_log.setToolTip(t("dashboard.console_tooltip"))

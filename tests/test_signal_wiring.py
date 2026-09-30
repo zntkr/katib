@@ -37,3 +37,12 @@ def test_worker_signal_is_wired_in_main(var, signal):
         f"{var}.{signal} is emitted but never connected in main.py; "
         "wire it or delete the signal"
     )
+
+
+@pytest.mark.parametrize("path", ["main.py", "ui/tray_app.py"])
+def test_no_access_to_dashboard_internals(path):
+    """main.py and TrayApp talk to the dashboard only through its public methods."""
+    import re
+    source = (Path(__file__).resolve().parent.parent / path).read_text(encoding="utf-8")
+    hits = re.findall(r"dashboard\._\w+", source)
+    assert hits == [], f"{path} reaches into dashboard internals: {sorted(set(hits))}"
