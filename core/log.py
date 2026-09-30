@@ -15,6 +15,8 @@ ROOT = "Katib"
 OK = 25  # between INFO and WARNING: a step that completed successfully
 logging.addLevelName(OK, "OK")
 
+logging.getLogger(ROOT).setLevel(logging.INFO)  # independent of how the root logger is configured
+
 
 def get_logger(component: str) -> logging.Logger:
     return logging.getLogger(f"{ROOT}.{component}")
@@ -61,9 +63,6 @@ def mask_text(value, depth: int = 3):
     if isinstance(value, (list, set, frozenset)):
         return [mask_text(v, depth - 1) for v in value]
     return value
-
-
-logging.getLogger(ROOT).setLevel(logging.INFO)  # independent of how the root logger is configured
 
 
 def _dashboard_tag(levelno: int) -> str:
