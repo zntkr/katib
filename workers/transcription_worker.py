@@ -1,4 +1,3 @@
-import os
 import time
 import queue
 import numpy as np
@@ -129,14 +128,6 @@ class TranscriptionWorker(BaseWorker):
             self._queue.put_nowait(_RELOAD)
         except queue.Full:
             self.log_entry.emit("WRN", "STT", "Model reload skipped")
-
-    def check_model_exists(self) -> bool:
-        if not self._current_model_dir or not os.path.exists(self._current_model_dir):
-            self.error_occurred.emit("osd.model_inaccessible")
-            self.log_entry.emit("ERR", "STT", "Model folder not found.")
-            self.status_changed.emit("status.folder_error", "ERR")
-            return False
-        return True
 
     def add_audio(self, audio) -> None:
         """Enqueues the numpy array from AudioWorker; rejects it if the queue is full."""

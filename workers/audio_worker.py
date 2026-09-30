@@ -24,9 +24,7 @@ class AudioWorker(BaseWorker):
     audio_ready        = Signal(object)  # numpy array (float32, 16kHz, mono)
     level_changed      = Signal(float)   # 0.0 – 1.0
     devices_ready      = Signal(list)    # list of (label: str, index: int, is_default: bool)
-    speech_detected    = Signal(bool)    # dynamic VAD state for UI
     muted_detected     = Signal()        # mathematical 0.0 (muted) detected
-    recording_finished = Signal()        # emitted when recording stops (in all cases)
     audio_failed       = Signal()        # recording too short or silent
     mic_unavailable    = Signal()        # hardware unreachable (not found / failed to open / disconnected)
     _stream_lost       = Signal()        # private: hop from the PortAudio thread to this object's thread
@@ -39,7 +37,6 @@ class AudioWorker(BaseWorker):
         self._device_index: int | None = None
         self._chunks: list = []
         self._rms_history: list = []
-        self._running_noise_floor: float = -120.0
         self._chunks_lock              = threading.Lock()
         
         # Keep track if we are actively recording.
@@ -120,7 +117,6 @@ class AudioWorker(BaseWorker):
         with self._chunks_lock:
             self._chunks.clear()
             self._rms_history.clear()
-            self._running_noise_floor = -120.0
 
         try:
             self.audio_source.start(self._audio_callback, self._on_stream_finished)
@@ -146,14 +142,12 @@ class AudioWorker(BaseWorker):
 
     def stop_recording(self):
         if not self._is_recording:
-            self.recording_finished.emit()  # count as finished even if there was no stream
             return
 
         self.audio_source.stop()
         self._is_recording = False
         
         self.level_changed.emit(0.0)
-        self.recording_finished.emit()
 
         with self._chunks_lock:
             chunks_snapshot = list(self._chunks)
@@ -204,17 +198,6 @@ class AudioWorker(BaseWorker):
                 if not np.isfinite(rms):
                     return
                 
-                from core.audio_analysis import to_db
-                chunk_db = to_db(rms)
-                
-                if self._running_noise_floor == -120.0 or chunk_db < self._running_noise_floor:
-                    self._running_noise_floor = chunk_db
-                else:
-                    self._running_noise_floor += 0.02  # slowly creep up to adapt to changing environments
-                
-                is_speech = chunk_db > self._running_noise_floor + 10.0
-                self.speech_detected.emit(is_speech)
-                
                 with self._chunks_lock:
                     self._chunks.append(indata.copy())
                     self._rms_history.append(rms)
@@ -227,6 +210,7 @@ class AudioWorker(BaseWorker):
                         self._silence_timer.start()
                     elif self._silence_timer.elapsed() > 1500 and not self._silence_notified:
                         self._silence_notified = True
+                        self.log_entry.emit("ERR", "MIC", "Microphone muted (signal is exactly zero)")
                         self.muted_detected.emit()
                         # Short beep on a separate thread so the audio callback is not blocked.
                         def _beep():

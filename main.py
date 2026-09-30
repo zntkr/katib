@@ -225,6 +225,8 @@ def main():
 
         # Microphone hardware error → persistent dashboard status + transient OSD error
         audio_worker.mic_unavailable.connect(tray.on_mic_unavailable)
+        # Binary Armor: signal exactly 0.0 for > 1.5 s while recording → the mic is muted
+        audio_worker.muted_detected.connect(lambda: osd.setStateError("osd.mic_muted"))
 
         # All worker errors → OSD + tray balloon
         audio_worker.error_occurred.connect(lambda msg: osd.setStateError(msg))

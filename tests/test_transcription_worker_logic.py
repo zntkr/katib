@@ -1,5 +1,5 @@
 """
-TranscriptionWorker business logic tests: check_model_exists, reload_model,
+TranscriptionWorker business logic tests: reload_model,
 _load_model, _transcribe. WhisperModel is mocked; no real model file is needed.
 """
 import numpy as np
@@ -48,68 +48,7 @@ def _make_worker_with_model(qapp, mock_settings, segments_text: list[str] | None
     return worker
 
 
-# check_model_exists
-
-class TestCheckModelExists:
-
-    def test_returns_false_when_no_current_dir(self, qapp, mock_settings):
-        worker = TranscriptionWorker(mock_settings, MagicMock())
-        assert worker.check_model_exists() is False
-
-    def test_returns_false_when_dir_not_on_filesystem(self, qapp, mock_settings):
-        worker = TranscriptionWorker(mock_settings, MagicMock())
-        worker._current_model_dir = "/nonexistent/path/xyz"
-        assert worker.check_model_exists() is False
-
-    def test_returns_true_when_dir_exists(self, qapp, tmp_path, mock_settings):
-        worker = TranscriptionWorker(mock_settings, MagicMock())
-        worker._current_model_dir = str(tmp_path)
-        assert worker.check_model_exists() is True
-
-    def test_does_not_mutate_is_ready_when_dir_missing(self, qapp, mock_settings):
-        worker = TranscriptionWorker(mock_settings, MagicMock())
-        worker.is_ready = True
-        worker.check_model_exists()
-        assert worker.is_ready is True
-
-    def test_does_not_change_is_ready_when_dir_exists(self, qapp, tmp_path, mock_settings):
-        worker = TranscriptionWorker(mock_settings, MagicMock())
-        worker._current_model_dir = str(tmp_path)
-        worker.is_ready = True
-        worker.check_model_exists()
-        assert worker.is_ready is True
-
-    def test_emits_error_occurred_when_dir_missing(self, qapp, mock_settings):
-        worker = TranscriptionWorker(mock_settings, MagicMock())
-        errors = []
-        worker.error_occurred.connect(errors.append)
-        worker.check_model_exists()
-        assert len(errors) == 1
-
-    def test_emits_err_log_when_dir_missing(self, qapp, mock_settings):
-        worker = TranscriptionWorker(mock_settings, MagicMock())
-        logs = []
-        worker.log_entry.connect(lambda l, c, m: logs.append(l))
-        worker.check_model_exists()
-        assert "ERR" in logs
-
-    def test_emits_status_changed_when_dir_missing(self, qapp, mock_settings):
-        worker = TranscriptionWorker(mock_settings, MagicMock())
-        statuses = []
-        worker.status_changed.connect(lambda t, c: statuses.append((t, c)))
-        worker.check_model_exists()
-        assert statuses
-
-    def test_no_signals_when_dir_exists(self, qapp, tmp_path, mock_settings):
-        worker = TranscriptionWorker(mock_settings, MagicMock())
-        worker._current_model_dir = str(tmp_path)
-        errors = []
-        worker.error_occurred.connect(errors.append)
-        worker.check_model_exists()
-        assert errors == []
-
-
-# add_audio → check_model_exists False
+# add_audio while the model is not ready
 
 class TestAddAudioMissingModel:
 
