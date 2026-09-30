@@ -160,17 +160,11 @@ def main():
     migrate_legacy_data()  # must run before SettingsManager reads settings.json
     settings_manager = SettingsManager()
     model_provider = ModelProvider(base_download_dir=DEFAULT_DOWNLOAD_PARENT, active_model_path=settings_manager.get("model_dir"))
-    from core.i18n import set_language as _i18n_set_language, t as _t, available_languages
-    _lang = settings_manager.get("app_language") or ""
-    if not _lang:
-        import locale
-        try:
-            _sys_code = (locale.getdefaultlocale()[0] or "")[:2]
-        except Exception:
-            _sys_code = ""
-        _available = {code for _, code in available_languages()}
-        _lang = _sys_code if _sys_code in _available else "en"
-        settings_manager.set("app_language", _lang)
+    from core.i18n import set_language as _i18n_set_language, t as _t, available_languages, resolve_app_language
+    _saved_lang = settings_manager.get("app_language") or ""
+    _lang = resolve_app_language(_saved_lang, {code for _, code in available_languages()})
+    if _lang != _saved_lang:
+        settings_manager.set("app_language", _lang)  # the settings dialog shows the stored value
     _i18n_set_language(_lang)
     if _lang in {"ar", "fa", "ur"}:
         from PySide6.QtCore import Qt

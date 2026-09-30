@@ -73,6 +73,22 @@ def try_t(key: str) -> str:
     return key
 
 
+def system_language_code() -> str:
+    import locale
+    try:
+        return (locale.getdefaultlocale()[0] or "")[:2].lower()
+    except Exception:
+        return ""
+
+
+def resolve_app_language(saved: str | None, available: set[str], system_code: str | None = None) -> str:
+    """UI language to use: the saved choice if still available, else the OS language, else English."""
+    if saved in available:
+        return saved
+    code = system_language_code() if system_code is None else system_code
+    return code if code in available else "en"
+
+
 def available_languages() -> list[tuple[str, str]]:
     _NAMES = {
         "en": "English", "tr": "Türkçe", "es": "Español", "fr": "Français",
@@ -86,11 +102,7 @@ def available_languages() -> list[tuple[str, str]]:
             (_NAMES.get(p.stem, p.stem), p.stem)
             for p in sorted(_translations_dir().glob("*.json"))
         ]
-        import locale
-        try:
-            sys_code = (locale.getdefaultlocale()[0] or "")[:2].lower()
-        except Exception:
-            sys_code = ""
+        sys_code = system_language_code()
 
         sys_item = None
         for item in langs:

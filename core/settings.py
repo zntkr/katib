@@ -85,7 +85,7 @@ class SettingDef:
 
 SETTINGS_SCHEMA = [
     SettingDef("hotkey", str, "F9", "General", "settings.hotkey_label", "custom"),
-    SettingDef("app_language", str, "tr", "General", "settings.app_language_label", "custom"),
+    SettingDef("app_language", str, "", "General", "settings.app_language_label", "custom"),
     SettingDef("theme", str, "system", "General", "settings.theme_label", "custom"),
     SettingDef("model_dir", str, str(DEFAULT_DOWNLOAD_PARENT), "Model", "Model Path", "custom"),
     SettingDef("device_index", int, None, "Audio", "Microphone", "custom"),
@@ -94,7 +94,7 @@ SETTINGS_SCHEMA = [
                {"options": [("Clipboard (Fast)", "clipboard"), ("Keystroke (Safe)", "keystroke")], "full_width": True}),
 
     # Auto-generated UI settings:
-    SettingDef("language", str, "tr", "Processing", "schema.language.label", "combobox",
+    SettingDef("language", str, "auto", "Processing", "schema.language.label", "combobox",
                {"options": [("Auto Detect", "auto"), ("Arabic", "ar"), ("Chinese", "zh"), ("English", "en"), ("French", "fr"), ("German", "de"), ("Greek", "el"), ("Hindi", "hi"), ("Indonesian", "id"), ("Italian", "it"), ("Japanese", "ja"), ("Korean", "ko"), ("Persian", "fa"), ("Portuguese", "pt"), ("Russian", "ru"), ("Spanish", "es"), ("Turkish", "tr"), ("Urdu", "ur")], "full_width": True}),
     SettingDef("compute_type", str, "int8", "Processing", "schema.compute_type.label", "custom",
                {"full_width": True}, tooltip="schema.compute_type.tooltip"),
@@ -220,10 +220,14 @@ class SettingsManager:
     def save(self):
         if self.in_memory:
             return
+        # Only values that differ from the schema default are written, so a default
+        # changed in a later version still reaches existing users.
+        defaults = {s.key: s.default for s in SETTINGS_SCHEMA}
+        data = {k: v for k, v in self._cache.items() if k not in defaults or v != defaults[k]}
         path = get_settings_path()
         try:
             with open(path, "w", encoding="utf-8") as f:
-                json.dump(self._cache, f, indent=4)
+                json.dump(data, f, indent=4)
         except OSError as e:
             logger.error("Settings could not be saved: %s", e)
             

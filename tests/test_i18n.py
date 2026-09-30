@@ -1,7 +1,7 @@
 import json
 import pytest
 from pathlib import Path
-from core.i18n import available_languages, _translations_dir
+from core.i18n import available_languages, _translations_dir, resolve_app_language
 
 def test_available_languages_includes_korean():
     """Verify that available languages contains Korean mapped to 한국어."""
@@ -53,3 +53,22 @@ def test_translation_files_integrity_and_key_parity():
         
         assert not missing_keys, f"{json_file.name} is missing keys: {missing_keys}"
         assert not extra_keys, f"{json_file.name} has extra keys: {extra_keys}"
+
+
+class TestResolveAppLanguage:
+    AVAILABLE = {"en", "tr", "de"}
+
+    def test_saved_language_wins(self):
+        assert resolve_app_language("tr", self.AVAILABLE, system_code="de") == "tr"
+
+    def test_empty_uses_system_language(self):
+        assert resolve_app_language("", self.AVAILABLE, system_code="de") == "de"
+
+    def test_unsupported_system_language_falls_back_to_english(self):
+        assert resolve_app_language("", self.AVAILABLE, system_code="xx") == "en"
+
+    def test_unknown_saved_language_uses_system_language(self):
+        assert resolve_app_language("xx", self.AVAILABLE, system_code="tr") == "tr"
+
+    def test_none_saved_uses_system_language(self):
+        assert resolve_app_language(None, self.AVAILABLE, system_code="de") == "de"

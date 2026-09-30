@@ -43,10 +43,11 @@ class TestSettingsManager:
 
     def test_language_auto_conversion(self, settings_file):
         sm = SettingsManager()
+        sm.set("language", "en")
         sm.set("language", None)
         assert sm.get("language") is None
         data = json.loads(settings_file.read_text(encoding="utf-8"))
-        assert data["language"] == "auto"
+        assert data.get("language", "auto") == "auto"  # never persisted as null
 
     def test_compute_type_valid(self, settings_file):
         sm = SettingsManager()
@@ -65,6 +66,41 @@ class TestSettingsManager:
         assert sm.get("language") is None  # resets to default (auto), get() produces None
 
 
+class TestDefaults:
+    def test_transcription_language_defaults_to_auto(self):
+        assert SettingsManager(in_memory=True).get("language") is None  # "auto"
+
+    def test_app_language_defaults_to_system_detection(self):
+        assert SettingsManager(in_memory=True).get("app_language") == ""
+
+    def test_only_non_default_values_are_persisted(self, settings_file):
+        sm = SettingsManager()
+        sm.set("hotkey", "f10")
+        data = json.loads(settings_file.read_text(encoding="utf-8"))
+        assert data == {"hotkey": "f10"}
+
+    def test_value_reset_to_default_is_dropped_from_file(self, settings_file):
+        sm = SettingsManager()
+        sm.set("hotkey", "f10")
+        sm.set("hotkey", "F9")
+        assert json.loads(settings_file.read_text(encoding="utf-8")) == {}
+
+    def test_unknown_keys_are_kept(self, settings_file):
+        settings_file.write_text(json.dumps({"device_name": "USB Mic"}), encoding="utf-8")
+        sm = SettingsManager()
+        sm.set("hotkey", "f10")
+        data = json.loads(settings_file.read_text(encoding="utf-8"))
+        assert data["device_name"] == "USB Mic"
+
+    def test_changed_default_reaches_existing_users(self, settings_file):
+        from core import settings as settings_mod
+        SettingsManager().set("hotkey", "f10")
+        schema = [s for s in settings_mod.SETTINGS_SCHEMA]
+        patched = [settings_mod.SettingDef(s.key, s.type_, "new-default" if s.key == "theme" else s.default,
+                                           s.ui_group, s.ui_label, s.ui_widget, s.ui_kwargs, s.tooltip)
+                   for s in schema]
+        with patch.object(settings_mod, "SETTINGS_SCHEMA", patched):
+            assert SettingsManager().get("theme") == "new-default"
 
 
 # set_many
@@ -86,9 +122,10 @@ class TestSetMany:
 
     def test_language_none_stored_as_auto(self, settings_file):
         sm = SettingsManager()
+        sm.set_many({"language": "en"})
         sm.set_many({"language": None})
         data = json.loads(settings_file.read_text(encoding="utf-8"))
-        assert data["language"] == "auto"
+        assert data.get("language", "auto") == "auto"  # never persisted as null
 
     def test_single_save_call_for_multiple_keys(self, settings_file):
         """set_many() calls save() exactly once regardless of how many keys it contains."""
