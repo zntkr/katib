@@ -28,7 +28,9 @@ venv/
 .idea/
 
 # AI Ajanları ve İç Geliştirme Araçları
-.claude/
+# Proje ayarları (ör. etkin Claude Code eklentileri) paylaşılır, geri kalanı yerel kalır.
+.claude/*
+!.claude/settings.json
 .agents/
 enchanted-waddling-trinket.md
 skills-lock.json
