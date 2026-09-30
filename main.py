@@ -330,8 +330,7 @@ def main():
         # Hide windows to avoid C++-side drawing errors (QBackingStore) after the event loop ends.
         for window in QApplication.topLevelWidgets():
             window.hide()
-        if hasattr(tray, 'tray'):
-            tray.tray.hide()
+        tray.tray.hide()
 
         # Send only a soft stop signal to worker threads — no wait() — to avoid
         # freezing the UI or triggering a GIL deadlock.

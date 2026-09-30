@@ -1,5 +1,5 @@
 from typing import TYPE_CHECKING
-from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
+from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QPushButton, QVBoxLayout
 from PySide6.QtCore import QObject, Slot, QTimer
 
 from core.settings import APP_NAME, MSG_MIC_UNAVAILABLE, MSG_MODEL_NOT_FOUND, STATE_LISTENING, STATE_READY
@@ -36,12 +36,23 @@ class TrayApp(QObject):
         self._icon_rec  = colorize_svg_icon(ICN_MIC, p["CLR_ERR"], size=64)
 
         self.dashboard = DashboardWindow(settings=self.settings, model_provider=self.model_provider, icon_idle=self._icon_idle)
-        if QSystemTrayIcon.isSystemTrayAvailable():
-            self._build_tray()
-        else:
+
+        # The tray icon object always exists so icon/tooltip updates never need a
+        # guard; it is only shown once the OS actually provides a system tray.
+        self._build_tray()
+        self._no_tray_quit_btn: QPushButton | None = None
+        self._tray_retry_count = 0
+        self._tray_retry_timer = QTimer(self)
+        self._tray_retry_timer.setInterval(self.TRAY_RETRY_INTERVAL_MS)
+        self._tray_retry_timer.timeout.connect(self._retry_tray)
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            # e.g. autostart at login before Explorer has created the taskbar
             self._build_no_tray_quit_button()
+            self._tray_retry_timer.start()
 
     _RTL_LANGS = {"ar", "fa", "ur"}
+    TRAY_RETRY_INTERVAL_MS = 5000
+    TRAY_RETRY_LIMIT       = 60  # give up after 5 minutes
 
     # ------------------------------------------------------------------ tray
     @Slot(str)
@@ -53,11 +64,9 @@ class TrayApp(QObject):
         app = QApplication.instance()
         if isinstance(app, QApplication):
             app.setLayoutDirection(direction)
-        if hasattr(self, 'tray'):
-            self.tray.hide()
-            self.tray.deleteLater()
-        if QSystemTrayIcon.isSystemTrayAvailable():
-            self._build_tray()
+        self.tray.hide()
+        self.tray.deleteLater()
+        self._build_tray()
         self.dashboard._refresh_language_tooltips()
         if self.osd:
             self.osd.refresh_language()
@@ -92,11 +101,11 @@ class TrayApp(QObject):
 
         self.tray.setContextMenu(menu)
         self.tray.activated.connect(self._on_tray_activated)
-        self.tray.show()
+        if QSystemTrayIcon.isSystemTrayAvailable():
+            self.tray.show()
 
     def _build_no_tray_quit_button(self) -> None:
-        """Adds a Quit button directly to the dashboard when no system tray is available."""
-        from PySide6.QtWidgets import QPushButton, QVBoxLayout
+        """Adds a Quit button directly to the dashboard while no system tray is available."""
         btn = QPushButton(t("tray.menu.quit"))
         app = QApplication.instance()
         if app:
@@ -104,6 +113,19 @@ class TrayApp(QObject):
         layout = self.dashboard.layout()
         if isinstance(layout, QVBoxLayout):
             layout.addWidget(btn)
+            self._no_tray_quit_btn = btn
+
+    def _retry_tray(self) -> None:
+        if QSystemTrayIcon.isSystemTrayAvailable():
+            self._tray_retry_timer.stop()
+            self.tray.show()
+            if self._no_tray_quit_btn is not None:
+                self._no_tray_quit_btn.deleteLater()
+                self._no_tray_quit_btn = None
+            return
+        self._tray_retry_count += 1
+        if self._tray_retry_count >= self.TRAY_RETRY_LIMIT:
+            self._tray_retry_timer.stop()
 
     def _on_tray_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
         if reason == QSystemTrayIcon.ActivationReason.DoubleClick:

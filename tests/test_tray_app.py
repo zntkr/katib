@@ -450,3 +450,52 @@ class TestDashboardExtras:
         dashboard._on_hotkey_from_dialog("F12")
         assert len(received_hotkeys) == 1
         assert received_hotkeys[0] == "F12"
+
+class TestTrayAppWithoutSystemTray:
+    """No system tray at startup, e.g. autostart before Explorer is ready."""
+
+    @pytest.fixture
+    def tray(self, qapp, mock_settings):
+        from ui.tray_app import TrayApp
+        with patch("ui.tray_app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+            t = TrayApp(mock_settings, ModelProvider("."))
+        yield t
+        t.tray.hide()
+        t.dashboard.close()
+
+    def test_hotkey_starts_recording(self, tray):
+        tray.audio_worker = MagicMock()
+        tray.on_hotkey_pressed()
+        tray.audio_worker.start_recording.assert_called_once()
+
+    def test_hotkey_release_stops_recording(self, tray):
+        tray.audio_worker = MagicMock()
+        tray.on_hotkey_released()
+        tray.audio_worker.stop_recording.assert_called_once()
+
+    def test_mic_status_updates_do_not_crash(self, tray):
+        tray.on_mic_unavailable()
+        tray.on_mic_available()
+
+    def test_quit_button_added_and_retry_scheduled(self, tray):
+        assert tray._no_tray_quit_btn is not None
+        assert tray._tray_retry_timer.isActive()
+
+    def test_tray_appears_when_it_becomes_available(self, tray):
+        with patch("ui.tray_app.QSystemTrayIcon.isSystemTrayAvailable", return_value=True), \
+             patch.object(tray.tray, "show") as mock_show:
+            tray._retry_tray()
+        mock_show.assert_called_once()
+        assert tray._no_tray_quit_btn is None
+        assert not tray._tray_retry_timer.isActive()
+
+    def test_retry_gives_up_after_limit(self, tray):
+        with patch("ui.tray_app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
+            for _ in range(tray.TRAY_RETRY_LIMIT):
+                tray._retry_tray()
+        assert not tray._tray_retry_timer.isActive()
+        assert tray._no_tray_quit_btn is not None  # still the only way to quit
+
+    def test_apply_language_without_tray(self, tray):
+        tray.apply_language("en")
+        tray.set_recording(True)
