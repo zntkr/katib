@@ -116,3 +116,17 @@ class TestHardwareEvents:
             assert worker._device_refresh_timer.isActive()
             worker._do_audio_inputs_changed()
             mock_refresh.assert_called_once()
+
+
+class TestMainThreadTimings:
+    """refresh_devices/stop_recording run on the UI thread; their duration is logged
+    so real Windows numbers decide whether they must move off it (CONTEXT.md rule 2)."""
+
+    @pytest.mark.parametrize("method", ["refresh_devices", "stop_recording"])
+    def test_duration_is_logged(self, mock_settings, mock_audio_source, method):
+        mock_audio_source.refresh_devices.return_value = []
+        worker = AudioWorker(mock_settings, mock_audio_source)
+        logs = []
+        worker.log_entry.connect(lambda lvl, comp, msg: logs.append(msg))
+        getattr(worker, method)()
+        assert any("completed:" in m and "ms" in m for m in logs)

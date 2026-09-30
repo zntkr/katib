@@ -3,7 +3,7 @@ import sys
 import numpy as np
 from PySide6.QtCore import Qt, Signal, QElapsedTimer
 
-from workers.base_worker import BaseWorker
+from workers.base_worker import BaseWorker, measure_time
 from core.audio_source import AudioSource, AudioDeviceError, AudioDisconnectedError
 
 SAMPLE_RATE              = 16000
@@ -98,6 +98,7 @@ class AudioWorker(BaseWorker):
             self.log_entry.emit("ERR", "MIC", f"Device error: {e}")
             self._device_index = None
 
+    @measure_time("MIC", "Device refresh (UI thread)")
     def refresh_devices(self) -> None:
         """Queries available microphones and reports them via the devices_ready signal."""
         items = self.audio_source.refresh_devices()
@@ -140,6 +141,7 @@ class AudioWorker(BaseWorker):
             self.mic_unavailable.emit()
             self._is_recording = False
 
+    @measure_time("MIC", "Stop recording (UI thread)")
     def stop_recording(self):
         if not self._is_recording:
             return

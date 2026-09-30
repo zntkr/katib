@@ -77,7 +77,9 @@ Katib, Windows üzerinde çalışan, tamamen çevrimdışı (offline) bir ses-me
 ## Mimari Kurallar
 1. **Thread Güvenliği**: UI bileşenlerine doğrudan diğer thread'lerden erişilemez. Tüm iletişim Qt Sinyalleri (Signals) üzerinden yapılmalıdır.
 2. **Heavy Operations**: Model yükleme, ses işleme ve disk işlemleri asla ana thread'de (UI thread) yapılmaz.
-3. **Single Instance**: Uygulama aynı anda sadece bir kez çalışabilir (Windows Mutex ile kontrol edilir).
+   - **Bilinen istisna:** Worker'lar `QThread` alt sınıfıdır ve nesneleri ana thread'de yaşar; bu yüzden `AudioWorker`'ın slot'ları (`start_recording`, `stop_recording`, `refresh_devices`) ana thread'de çalışır. Süreleri `@measure_time` ile loglanır ("UI thread" etiketiyle). Windows ölçümleri 100 ms'yi aşarsa `AudioWorker` gerçek bir worker thread'e taşınmalıdır; tüm PortAudio çağrıları o zaman tek bir thread'de toplanmalıdır.
+   - PortAudio callback'lerinin (`_audio_callback`, `_on_stream_finished`) içinden PortAudio'yu yeniden başlatan veya stream kapatan hiçbir çağrı yapılmaz (bkz. ADR-0007).
+3. **Single Instance**: Uygulama aynı anda sadece bir kez çalışabilir (`QSharedMemory("Katib_SingleInstance_Mutex")` ile kontrol edilir).
 4. **Graceful Shutdown**: Uygulama kapanırken worker'lar belirli bir sırayla (Hotkey -> Audio -> Transcription) durdurulur ve OS seviyesinde `os._exit(0)` ile temiz kapanış yapılır.
 5. **Event Debouncing (Olay Susturma)**: İşletim sistemi kaynaklı donanım sinyalleri (ör. `QMediaDevices` mikrofon tak-çıkar uyarıları) bazen saniyede onlarca kez tetiklenerek bir "Event Storm" (sinyal fırtınası) yaratabilir. Bu tarz donanımsal veya yoğun GUI sinyallerini yakalarken doğrudan Worker'ları veya ağır işlemleri tetiklemek yerine, mutlaka `QTimer` kullanılarak **Debounce** (geciktirme/filtreleme) mantığı kurulmalıdır. Sinyaller yatışana kadar (ör. 500ms) beklenmeli ve işlem sadece 1 kez yapılmalıdır.
 6. **Live UI ve State Yönetimi**: Ayarlar ekranındaki etkileşimler anında (Live) uygulanmalıdır. Uzun metin girişleri (örn. QLineEdit) için I/O spamını önlemek adına "Kaydet" butonu eklenebilir, ancak pencere kapanırken "Kaydetmeden Çıkıyorsunuz" gibi kullanıcıyı bloke eden (blocking modal) uyarılar **kesinlikle yasaktır**. Değişiklik yokken "Kaydet" butonunun pasif (disabled) yapılması, durum yönetimi (State) için yeterli ve doğru geri bildirimdir.
@@ -102,7 +104,9 @@ Tüm uygulama verisi tek bir kökte tutulur (ADR-0009). Kök yalnızca `core/set
 
 ## Geliştirici Notları
 - Yeni bir ayar eklenirken `core/settings.py` üzerinden geçilmeli ve varsayılan değeri tanımlanmalıdır.
-- Kullanıcıya gösterilecek tüm hatalar hem `TrayApp.show_error` (tray balonu) hem de OSD üzerinden bildirilir. OSD tek operasyonel görünürlük kanalıdır; dashboard kapalıyken bile kullanıcı kritik hatayı görür.
+- Kullanıcıya gösterilecek operasyonel hatalar OSD üzerinden bildirilir (worker'ların `error_occurred` sinyali `main.py`'de `osd.setStateError`'a bağlıdır). OSD tek operasyonel görünürlük kanalıdır; dashboard kapalıyken bile kullanıcı kritik hatayı görür.
+- Worker'ların her public sinyali `main.py`'de bağlanmalıdır; `tests/test_signal_wiring.py` bağlanmamış bir sinyali yakalar. Kullanılmayan bir sinyal eklemek yerine silinmelidir.
+- `main.py` ve `TrayApp` dashboard'un `_` ile başlayan üyelerine erişmez; yalnızca public metotlarını kullanır (test ile korunur).
 - Uygulama mimarisi iki ana role ayrılmıştır:
     1. **Monitoring (Gözlem)**: Dashboard üzerinden detaylı log takibi ve ayarların yapılması.
     2. **Operation (Operasyon)**: OSD üzerinden kayıt/işleme durumu ve kritik hataların takibi.
