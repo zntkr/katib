@@ -16,7 +16,6 @@ installer/
 
 # Build araçları ve script'leri
 analyze_build.py
-Katib.iss
 hooks/
 
 
