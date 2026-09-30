@@ -4,7 +4,10 @@ import numpy as np
 from PySide6.QtCore import Qt, Signal, QElapsedTimer
 
 from workers.base_worker import BaseWorker, measure_time
+from core.log import get_logger, OK
 from core.audio_source import AudioSource, AudioDeviceError, AudioDisconnectedError
+
+_log = get_logger("MIC")
 
 SAMPLE_RATE              = 16000
 MIN_RECORDING_DURATION   = 0.5    # seconds — shorter recordings are discarded
@@ -73,7 +76,7 @@ class AudioWorker(BaseWorker):
             self._do_audio_inputs_changed()
 
     def _do_audio_inputs_changed(self) -> None:
-        self.log_entry.emit("...", "MIC", "Hardware change detected, refreshing devices...")
+        _log.info("Hardware change detected, refreshing devices...")
         self.refresh_devices()
 
     # ------------------------------------------------------------------ QThread
@@ -93,9 +96,9 @@ class AudioWorker(BaseWorker):
         self._device_index = device_index
         try:
             label = self.audio_source.set_device(device_index)
-            self.log_entry.emit("OK", "MIC", f"Device → {label}")
+            _log.log(OK, f"Device → {label}")
         except AudioDeviceError as e:
-            self.log_entry.emit("ERR", "MIC", f"Device error: {e}")
+            _log.error(f"Device error: {e}")
             self._device_index = None
 
     @measure_time("MIC", "Device refresh (UI thread)")
@@ -111,7 +114,7 @@ class AudioWorker(BaseWorker):
             return  # already recording
 
         if self._device_index is None:
-            self.log_entry.emit("ERR", "MIC", "No microphone selected.")
+            _log.error("No microphone selected.")
             self.error_occurred.emit("osd.mic_no_device")
             return
 
@@ -124,19 +127,19 @@ class AudioWorker(BaseWorker):
             self._is_recording = True
             self._silence_timer.invalidate()
             self._silence_notified = False
-            self.log_entry.emit("OK", "MIC", "Recording started")
+            _log.log(OK, "Recording started")
         except AudioDeviceError as e:
             msg = str(e)
             if "not connected" in msg.lower():
-                self.log_entry.emit("ERR", "MIC", "Microphone not connected")
+                _log.error("Microphone not connected")
                 self.error_occurred.emit("osd.mic_not_connected")
             else:
-                self.log_entry.emit("ERR", "MIC", f"Microphone could not be opened: {e}")
+                _log.error(f"Microphone could not be opened: {e}")
                 self.error_occurred.emit("osd.mic_open_failed")
             self.mic_unavailable.emit()
             self._is_recording = False
         except Exception as e:
-            self.log_entry.emit("ERR", "MIC", f"Microphone could not be opened: {e}")
+            _log.error(f"Microphone could not be opened: {e}")
             self.error_occurred.emit("osd.mic_open_failed")
             self.mic_unavailable.emit()
             self._is_recording = False
@@ -156,7 +159,7 @@ class AudioWorker(BaseWorker):
             self._chunks.clear()
 
         if not chunks_snapshot:
-            self.log_entry.emit("WRN", "MIC", "Recording is empty")
+            _log.warning("Recording is empty")
             self.audio_failed.emit()
             return
 
@@ -168,7 +171,7 @@ class AudioWorker(BaseWorker):
                 
             duration = len(audio) / SAMPLE_RATE
             if duration < MIN_RECORDING_DURATION:
-                self.log_entry.emit("WRN", "MIC", "Recording too short, skipped")
+                _log.warning("Recording too short, skipped")
                 self.audio_failed.emit()
                 return
                 
@@ -177,15 +180,15 @@ class AudioWorker(BaseWorker):
             stats = analyse_vad(self._rms_history, chunk_duration)
             
             if is_silent(stats):
-                self.log_entry.emit("WRN", "MIC", f"Audio discarded as silence/noise (Noise floor: {stats['noise_db']:.1f} dB, Speech peak: {stats['speech_db']:.1f} dB, Voiced: {stats['voiced_seconds']:.2f}s)")
+                _log.warning(f"Audio discarded as silence/noise (Noise floor: {stats['noise_db']:.1f} dB, Speech peak: {stats['speech_db']:.1f} dB, Voiced: {stats['voiced_seconds']:.2f}s)")
                 self.error_occurred.emit("osd.audio_too_quiet")
                 self.audio_failed.emit()
                 return
                 
-            self.log_entry.emit("OK", "MIC", f"Recording complete ({duration:.1f}s)")
+            _log.log(OK, f"Recording complete ({duration:.1f}s)")
             self.audio_ready.emit(audio)
         except Exception as e:
-            self.log_entry.emit("ERR", "MIC", f"Audio merge error: {e}")
+            _log.error(f"Audio merge error: {e}")
             self.error_occurred.emit("osd.audio_merge_error")
 
     # ----------------------------------------------------------------- private
@@ -193,7 +196,7 @@ class AudioWorker(BaseWorker):
     def _audio_callback(self, indata: np.ndarray, status_msg: str | None):
         try:
             if status_msg:
-                self.log_entry.emit("WRN", "MIC", f"Status: {status_msg}")
+                _log.warning(f"Status: {status_msg}")
 
             if indata is not None:
                 rms = float(np.sqrt(np.mean(indata ** 2)))
@@ -212,7 +215,7 @@ class AudioWorker(BaseWorker):
                         self._silence_timer.start()
                     elif self._silence_timer.elapsed() > 1500 and not self._silence_notified:
                         self._silence_notified = True
-                        self.log_entry.emit("ERR", "MIC", "Microphone muted (signal is exactly zero)")
+                        _log.error("Microphone muted (signal is exactly zero)")
                         self.muted_detected.emit()
                         # Short beep on a separate thread so the audio callback is not blocked.
                         def _beep():
@@ -230,7 +233,7 @@ class AudioWorker(BaseWorker):
                     self._silence_timer.invalidate()
                     self._silence_notified = False
         except Exception:
-            self.log_entry.emit("ERR", "MIC", "Audio stream interrupted")
+            _log.error("Audio stream interrupted")
 
     def _on_stream_finished(self, err: Exception | None) -> None:
         """Called when the stream closes. If err is not None, it closed unexpectedly."""
@@ -239,10 +242,10 @@ class AudioWorker(BaseWorker):
             if err is None:
                 return # Intentional close
                 
-            self.log_entry.emit("ERR", "MIC", "Connection lost")
+            _log.error("Connection lost")
             self.error_occurred.emit("osd.mic_disconnected")
             self.mic_unavailable.emit()
             self.level_changed.emit(0.0)
             self._stream_lost.emit()  # auto-refresh the device list on the main thread
         except Exception:
-            self.log_entry.emit("ERR", "MIC", "Stream close error")
+            _log.error("Stream close error")

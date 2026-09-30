@@ -3,8 +3,11 @@ import shutil
 from pathlib import Path
 from PySide6.QtCore import Signal
 from workers.base_worker import BaseWorker
+from core.log import get_logger, OK
 from core.settings import DEFAULT_DOWNLOAD_PARENT, WHISPER_MODELS, STATE_LOADING
 
+
+_log = get_logger("DL")
 
 class ModelDownloaderWorker(BaseWorker):
     download_finished      = Signal(str)        # final model dir path (on success)
@@ -23,7 +26,7 @@ class ModelDownloaderWorker(BaseWorker):
     # ---------------------------------------------------------- public control
     def start_download(self, target_parent: str, repo_id: str) -> None:
         if self.isRunning():
-            self.log_entry.emit("WRN", "DL", "Download already in progress.")
+            _log.warning("Download already in progress.")
             return
         self._target_parent = Path(target_parent)
         self._repo_id = repo_id
@@ -52,7 +55,7 @@ class ModelDownloaderWorker(BaseWorker):
             
             user_msg = f"Not enough disk space! (Required: {req_gb:.1f} GB, Free: {free_gb:.1f} GB)"
 
-            self.log_entry.emit("ERR", "DL", user_msg)
+            _log.error(user_msg)
             self.error_occurred.emit("osd.dl_no_space")
             self.status_changed.emit("status.disk_full", "ERR")
             self.download_state_changed.emit(False)
@@ -65,13 +68,13 @@ class ModelDownloaderWorker(BaseWorker):
 
         # Clean up any leftover temp directory from a previous incomplete download.
         if temp_dir.exists():
-            self.log_entry.emit("...", "DL", "Cleaning up previous incomplete download...")
+            _log.info("Cleaning up previous incomplete download...")
             shutil.rmtree(temp_dir, ignore_errors=True)
 
         self.download_state_changed.emit(True)
         self.status_changed.emit("status.downloading_model", "INFO")
-        self.log_entry.emit("...", "DL", f"Source: {self._repo_id}")
-        self.log_entry.emit("...", "DL", "Download started, please wait...")
+        _log.info(f"Source: {self._repo_id}")
+        _log.info("Download started, please wait...")
 
         try:
             snapshot_download(
@@ -92,22 +95,21 @@ class ModelDownloaderWorker(BaseWorker):
             else:
                 os.rename(str(temp_dir), str(final_dir))
 
-            self.log_entry.emit("OK", "DL", f"Download complete → {final_dir}")
+            _log.log(OK, f"Download complete → {final_dir}")
             self.status_changed.emit(STATE_LOADING, "OK")
             self.download_state_changed.emit(False)
             self.download_finished.emit(str(final_dir))
 
         except Exception as e:
-            import logging
-            logging.getLogger("Katib").exception("Model downloader encountered an error:")
+            _log.exception("Model downloader encountered an error:")
 
             # Rollback: delete the incomplete temp directory.
             if temp_dir.exists():
                 try:
                     shutil.rmtree(temp_dir)
-                    self.log_entry.emit("...", "DL", "Rollback: temporary files cleaned up.")
+                    _log.info("Rollback: temporary files cleaned up.")
                 except Exception:
-                    self.log_entry.emit("WRN", "DL", "Temporary files could not be deleted")
+                    _log.warning("Temporary files could not be deleted")
 
             err_msg = str(e)
             if "No space left" in err_msg or "Disk full" in err_msg:
@@ -122,9 +124,9 @@ class ModelDownloaderWorker(BaseWorker):
             else:
                 user_msg = "Download failed. Please try again."
                 osd_key = "osd.dl_failed"
-                self.log_entry.emit("ERR", "DL", f"Detailed Error: {err_msg}")
+                _log.error(f"Detailed Error: {err_msg}")
 
-            self.log_entry.emit("ERR", "DL", user_msg)
+            _log.error(user_msg)
             self.error_occurred.emit(osd_key)
             self.status_changed.emit("status.download_error", "ERR")
             self.download_state_changed.emit(False)

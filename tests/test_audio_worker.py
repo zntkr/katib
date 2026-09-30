@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 
 from workers.audio_worker import AudioWorker, SAMPLE_RATE
 from core.audio_source import AudioSource, AudioDeviceError, AudioDisconnectedError
+from tests.log_helpers import on_log_entry
 
 @pytest.fixture
 def mock_audio_source():
@@ -127,6 +128,6 @@ class TestMainThreadTimings:
         mock_audio_source.refresh_devices.return_value = []
         worker = AudioWorker(mock_settings, mock_audio_source)
         logs = []
-        worker.log_entry.connect(lambda lvl, comp, msg: logs.append(msg))
+        on_log_entry(lambda lvl, comp, msg: logs.append(msg))
         getattr(worker, method)()
         assert any("completed:" in m and "ms" in m for m in logs)

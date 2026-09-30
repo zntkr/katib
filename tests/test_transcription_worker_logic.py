@@ -19,6 +19,7 @@ AUDIO = np.zeros(1600, dtype="float32")
 
 
 import sys
+from tests.log_helpers import on_log_entry
 sys.modules['faster_whisper'] = MagicMock()
 
 _PATCH_MODEL_CLS = "faster_whisper.WhisperModel"
@@ -27,7 +28,7 @@ _PATCH_MODEL_CLS = "faster_whisper.WhisperModel"
 def _capture(worker: TranscriptionWorker) -> dict:
     s: dict = {"logs": [], "errors": [], "status": [], "loading": [], "text": [],
                "missing": [], "loaded": []}
-    worker.log_entry.connect(lambda l, c, m: s["logs"].append((l, c, m)))
+    on_log_entry(lambda l, c, m: s["logs"].append((l, c, m)))
     worker.error_occurred.connect(s["errors"].append)
     worker.status_changed.connect(lambda t, c: s["status"].append((t, c)))
     worker.loading_state_changed.connect(s["loading"].append)
@@ -136,7 +137,7 @@ class TestAddAudioFullQueue:
         worker = TranscriptionWorker(mock_settings, MagicMock())
         worker.is_ready = True
         logs = []
-        worker.log_entry.connect(lambda l, c, m: logs.append((l, m)))
+        on_log_entry(lambda l, c, m: logs.append((l, m)))
         for _ in range(QUEUE_MAXSIZE):
             worker._queue.put_nowait(AUDIO)
         worker.add_audio(AUDIO)
@@ -165,7 +166,7 @@ class TestReloadModel:
     def test_full_queue_emits_warning_log(self, qapp, mock_settings):
         worker = TranscriptionWorker(mock_settings, MagicMock())
         logs = []
-        worker.log_entry.connect(lambda l, c, m: logs.append((l, m)))
+        on_log_entry(lambda l, c, m: logs.append((l, m)))
         for _ in range(QUEUE_MAXSIZE):
             worker._queue.put_nowait(AUDIO)
         worker.reload_model()
@@ -386,7 +387,7 @@ class TestTranscribeModelNone:
     def test_emits_err_log(self, qapp, mock_settings):
         worker = TranscriptionWorker(mock_settings, MagicMock())  # _model = None
         logs = []
-        worker.log_entry.connect(lambda l, c, m: logs.append(l))
+        on_log_entry(lambda l, c, m: logs.append(l))
         worker._transcribe(AUDIO)
         assert "ERR" in logs
 

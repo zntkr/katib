@@ -6,11 +6,11 @@ import pytest
 from unittest.mock import patch
 from PySide6.QtCore import QObject, Signal
 from workers.base_worker import measure_time, BaseWorker
+from tests.log_helpers import on_log_entry
 
 
 class DummyWorker(QObject):
     """Dummy worker class for testing the measure_time decorator."""
-    log_entry = Signal(str, str, str)
 
     @measure_time("TST", "Sample Operation")
     def do_work(self, return_value="Success"):
@@ -26,7 +26,7 @@ class TestMeasureTimeDecorator:
     def test_emits_prf_log_with_correct_format(self, qapp):
         worker = DummyWorker()
         logs = []
-        worker.log_entry.connect(lambda l, c, m: logs.append((l, c, m)))
+        on_log_entry(lambda l, c, m: logs.append((l, c, m)))
         
         worker.do_work()
         
@@ -39,7 +39,7 @@ class TestMeasureTimeDecorator:
     def test_measures_elapsed_time_accurately(self, qapp):
         worker = DummyWorker()
         logs = []
-        worker.log_entry.connect(lambda l, c, m: logs.append((l, c, m)))
+        on_log_entry(lambda l, c, m: logs.append((l, c, m)))
 
         # Mock time.perf_counter() to return 1.000 and then 1.150 on successive calls
         # (simulating exactly 150 ms elapsed).
@@ -60,7 +60,7 @@ class TestMeasureTimeDecorator:
     def test_emits_time_even_on_exception(self, qapp):
         worker = DummyWorker()
         logs = []
-        worker.log_entry.connect(lambda l, c, m: logs.append(m))
+        on_log_entry(lambda l, c, m: logs.append(m))
 
         # Test that elapsed time is logged via the finally block even when the function raises
         with patch("workers.base_worker.time.perf_counter", side_effect=[2.000, 2.050]):

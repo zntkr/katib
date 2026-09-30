@@ -21,6 +21,7 @@ from core.settings import (
     APP_NAME, MSG_MODEL_NOT_FOUND, MSG_MIC_UNAVAILABLE,
     STATE_PROCESSING, STATE_LISTENING, STATE_READY, get_log_dir,
 )
+from core.log import PrivacyFormatter, DashboardLogHandler, get_logger, mask_text, OK
 import PySide6.QtSvg  # required for SVG plugin registration
 import warnings
 import signal
@@ -47,31 +48,37 @@ class StreamToLogger(io.TextIOBase):
     def flush(self):
         pass
 
+_LOG_FORMAT      = "%(asctime)s.%(msecs)03d | %(levelname)-8s | PID:%(process)-5d | %(threadName)-22s | %(name)s | %(filename)s:%(lineno)-4d | %(message)s"
+_LOG_DATEFMT     = "%Y-%m-%d %H:%M:%S"
+_owned_handlers: list[logging.Handler] = []  # installed by setup_logging(); replaced on a re-run
+
+
 def setup_logging():
     log_dir = get_log_dir()
     log_file = log_dir / "katib.log"
 
+    root = logging.getLogger()
+    for h in _owned_handlers:
+        root.removeHandler(h)
+        h.close()
+    _owned_handlers.clear()
+
+    handlers_list: list[logging.Handler] = []
     # Prevent a Fatal Error crash if directory creation is blocked by strict system permissions.
     try:
         log_dir.mkdir(parents=True, exist_ok=True)
-
-        handlers_list: list[logging.Handler] = [RotatingFileHandler(str(log_file), maxBytes=5*1024*1024, backupCount=3, encoding='utf-8')]
-        if sys.stdout is not None:
-            handlers_list.append(logging.StreamHandler(sys.stdout))
-
-        logging.basicConfig(
-            handlers=handlers_list,
-            level=logging.INFO,
-            format="%(asctime)s.%(msecs)03d | %(levelname)-8s | PID:%(process)-5d | %(threadName)-22s | %(filename)s:%(lineno)-4d | %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S"
-        )
+        handlers_list.append(RotatingFileHandler(str(log_file), maxBytes=5*1024*1024, backupCount=3, encoding='utf-8'))
     except Exception:
-        # Fallback to stream-only logging if the filesystem is not writable.
-        logging.basicConfig(
-            level=logging.INFO,
-            format="%(asctime)s | %(levelname)-8s | %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S"
-        )
+        pass  # fall back to console-only logging if the filesystem is not writable
+    if sys.stdout is not None:
+        handlers_list.append(logging.StreamHandler(sys.stdout))
+
+    formatter = PrivacyFormatter(_LOG_FORMAT, datefmt=_LOG_DATEFMT)
+    for h in handlers_list:
+        h.setFormatter(formatter)
+        root.addHandler(h)
+        _owned_handlers.append(h)
+    root.setLevel(logging.INFO)
     logger = logging.getLogger(APP_NAME)
 
     # In --noconsole mode stdout/stderr are None. Route them to the logger instead of
@@ -106,7 +113,8 @@ def setup_logging():
             )
             try:
                 # Limit depth and total size to keep log entries readable.
-                locals_str = pprint.pformat(frame.f_locals, indent=2, width=120, depth=3, compact=True)
+                # Strings are masked: they may hold dictated text (ADR-0004).
+                locals_str = pprint.pformat(mask_text(frame.f_locals), indent=2, width=120, depth=3, compact=True)
                 if len(locals_str) > 4096:
                     locals_str = locals_str[:4096] + "\n... (truncated)"
                 log_message.append(locals_str)
@@ -182,6 +190,13 @@ def main():
     tray = TrayApp(settings=settings_manager, model_provider=model_provider)
     app.setWindowIcon(tray.icon_idle)
 
+    # ADR-0004: every "Katib.<COMPONENT>" logger also feeds the dashboard log box
+    # (setup_logging() already writes them to the file, without transcript text).
+    dashboard_log = DashboardLogHandler()
+    dashboard_log.bridge.entry.connect(tray.dashboard.append_log_entry)
+    logging.getLogger(APP_NAME).addHandler(dashboard_log)
+    app_log = get_logger("APP")
+
     _workers = {}
 
     def _deferred_init():
@@ -242,25 +257,6 @@ def main():
         transcription_worker.status_changed.connect(tray.dashboard.set_status)
         transcription_worker.loading_state_changed.connect(tray.dashboard.set_loading_indicator)
 
-        audio_worker.log_entry.connect(tray.dashboard.append_log_entry)
-        transcription_worker.log_entry.connect(tray.dashboard.append_log_entry)
-        hotkey_worker.log_entry.connect(tray.dashboard.append_log_entry)
-
-        # Bridge UI log entries to the disk log as well.
-        def _file_log_bridge(lvl, cat, msg):
-            log_str = f"[{cat}] {msg}"
-            if lvl in ("ERR", "WRN"):
-                global_logger.error(log_str)
-            else:
-                global_logger.info(log_str)
-
-        audio_worker.log_entry.connect(_file_log_bridge)
-        transcription_worker.log_entry.connect(_file_log_bridge)
-        hotkey_worker.log_entry.connect(_file_log_bridge)
-        downloader_worker.log_entry.connect(_file_log_bridge)
-
-
-
         # Microphone change → update audio worker + clear error flag
         tray.dashboard.device_changed.connect(audio_worker.set_device)
         tray.dashboard.device_changed.connect(lambda _: tray.on_mic_available())
@@ -288,7 +284,6 @@ def main():
 
         # Model downloader: UI → downloader → dashboard + transcription
         tray.dashboard.download_model_requested.connect(downloader_worker.start_download)
-        downloader_worker.log_entry.connect(tray.dashboard.append_log_entry)
         downloader_worker.error_occurred.connect(lambda _: tray.dashboard.set_loading_indicator(False))
         downloader_worker.error_occurred.connect(lambda _: tray.dashboard.set_download_state(False))
         downloader_worker.status_changed.connect(tray.dashboard.set_status)
@@ -315,13 +310,13 @@ def main():
 
         tray.dashboard.show()
         tray.dashboard.raise_()
-        tray.dashboard.append_log_entry("OK", "APP", _t("app.started").format(key=settings_manager.get('hotkey', 'F9').upper()))
+        app_log.log(OK, _t("app.started").format(key=settings_manager.get('hotkey', 'F9').upper()))
         global_logger.info("System ready.")
 
     # ----------------------------------------------------- graceful shutdown
     def shutdown():
         global_logger.info("=== Shutdown Started ===")
-        tray.dashboard.append_log_entry("...", "APP", _t("app.shutting_down"))
+        app_log.info(_t("app.shutting_down"))
 
         # Hide windows to avoid C++-side drawing errors (QBackingStore) after the event loop ends.
         for window in QApplication.topLevelWidgets():

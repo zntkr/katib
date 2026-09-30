@@ -152,6 +152,24 @@ class TestHandleException:
         logged = mock_err.call_args[0][0]
         assert "LOCALS" in logged or "sentinel_value" in logged
 
+    def test_crash_dump_masks_string_locals(self, tmp_path):
+        """ADR-0004 privacy: dictated text in a local variable must not reach the log file."""
+        hook = self._get_hook(tmp_path)
+        logger = logging.getLogger("Katib")
+        with patch.object(logger, "error") as mock_err:
+            try:
+                transcript = "yarın saat onda doktor randevusu"  # noqa: F841
+                segments = ["gizli", "cümle"]  # noqa: F841
+                count = 42  # noqa: F841
+                raise RuntimeError("crash while injecting")
+            except RuntimeError as exc:
+                hook(type(exc), exc, exc.__traceback__)
+        logged = mock_err.call_args[0][0]
+        assert "doktor randevusu" not in logged
+        assert "gizli" not in logged
+        assert "<str len=32>" in logged
+        assert "42" in logged  # non-text locals stay useful for diagnosis
+
     def test_locals_pformat_error_handled(self, tmp_path):
         """handle_exception must not crash when pprint.pformat raises."""
         hook = self._get_hook(tmp_path)

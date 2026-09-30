@@ -16,6 +16,7 @@ FINAL_MODEL_DIR_NAME = "faster-whisper-small"
 
 import sys
 from unittest.mock import MagicMock
+from tests.log_helpers import on_log_entry
 sys.modules['huggingface_hub'] = MagicMock()
 
 
@@ -43,7 +44,7 @@ class TestInitialState:
 
     def test_required_signals_exist(self, qapp, mock_settings):
         worker = ModelDownloaderWorker(mock_settings)
-        for attr in ("log_entry", "error_occurred", "download_finished",
+        for attr in ("error_occurred", "download_finished",
                      "status_changed", "download_state_changed"):
             assert hasattr(worker, attr)
 
@@ -82,7 +83,7 @@ class TestStartDownload:
     def test_double_call_while_running_emits_warning(self, qapp, tmp_path, mock_settings):
         worker = ModelDownloaderWorker(mock_settings)
         logs = []
-        worker.log_entry.connect(lambda l, c, m: logs.append((l, m)))
+        on_log_entry(lambda l, c, m: logs.append((l, m)))
         with patch.object(worker, "isRunning", return_value=True):
             worker.start_download(str(tmp_path), MODEL_REPO_ID)
         assert any(lvl == "WRN" for lvl, _ in logs)
@@ -108,7 +109,7 @@ class TestRunSuccess:
         signals = {"state": [], "status": [], "logs": [], "finished": [], "errors": []}
         worker.download_state_changed.connect(signals["state"].append)
         worker.status_changed.connect(lambda t, c: signals["status"].append((t, c)))
-        worker.log_entry.connect(lambda l, c, m: signals["logs"].append((l, c, m)))
+        on_log_entry(lambda l, c, m: signals["logs"].append((l, c, m)))
         worker.download_finished.connect(signals["finished"].append)
         worker.error_occurred.connect(signals["errors"].append)
 
@@ -215,7 +216,7 @@ class TestRunFailure:
         worker.download_state_changed.connect(signals["state"].append)
         worker.error_occurred.connect(signals["errors"].append)
         worker.download_finished.connect(signals["finished"].append)
-        worker.log_entry.connect(lambda l, c, m: signals["logs"].append((l, c, m)))
+        on_log_entry(lambda l, c, m: signals["logs"].append((l, c, m)))
         worker.status_changed.connect(lambda t, c: signals["status"].append((t, c)))
 
         with patch("huggingface_hub.snapshot_download", side_effect=exc):
@@ -274,7 +275,7 @@ class TestRunFailure:
         worker._target_parent = tmp_path
         worker._repo_id = MODEL_REPO_ID
         logs = []
-        worker.log_entry.connect(lambda l, c, m: logs.append(m))
+        on_log_entry(lambda l, c, m: logs.append(m))
 
         with patch("huggingface_hub.snapshot_download", side_effect=partial_download):
             worker.run()
@@ -331,7 +332,7 @@ class TestRunFailure:
         worker._target_parent = tmp_path
         worker._repo_id = MODEL_REPO_ID
         logs = []
-        worker.log_entry.connect(lambda l, c, m: logs.append((l, m)))
+        on_log_entry(lambda l, c, m: logs.append((l, m)))
 
         with patch("huggingface_hub.snapshot_download", side_effect=partial_download):
             with patch("workers.model_downloader_worker.shutil.rmtree",
@@ -448,7 +449,7 @@ class TestPreexistingTempDir:
         worker._target_parent = tmp_path
         worker._repo_id = MODEL_REPO_ID
         logs = []
-        worker.log_entry.connect(lambda l, c, m: logs.append(m))
+        on_log_entry(lambda l, c, m: logs.append(m))
 
         with patch("huggingface_hub.snapshot_download", side_effect=_fake_download):
             worker.run()

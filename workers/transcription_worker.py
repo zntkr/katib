@@ -11,9 +11,12 @@ if TYPE_CHECKING:
     from faster_whisper import WhisperModel
 
 from workers.base_worker import BaseWorker, measure_time
+from core.log import get_logger, OK
 from core.transcription_filter import TranscriptionFilter
 from core.settings import MSG_MODEL_NOT_FOUND, STATE_READY, STATE_PROCESSING, STATE_LOADING
 
+
+_log = get_logger("STT")
 
 DEVICE        = "cpu"
 QUEUE_MAXSIZE = 5
@@ -61,7 +64,7 @@ class TranscriptionWorker(BaseWorker):
                 self._transcribe(audio)
             except Exception as e:
                 detail = str(e) or "unknown error"
-                self.log_entry.emit("ERR", "STT", f"Transcription crashed: {detail}")
+                _log.error(f"Transcription crashed: {detail}")
                 self.error_occurred.emit("osd.stt_crashed")
             
     def _load_model(self):
@@ -82,13 +85,13 @@ class TranscriptionWorker(BaseWorker):
             return
 
         if original_dir and valid_dir != original_dir:
-            self.log_entry.emit("WRN", "STT", f"Selected folder invalid, using: {valid_dir}")
+            _log.warning(f"Selected folder invalid, using: {valid_dir}")
 
         device       = "cpu"
         compute_type = self.settings.get("compute_type")
 
         self.status_changed.emit(STATE_LOADING, "IDLE")
-        self.log_entry.emit("...", "STT", f"Loading ({device}/{compute_type})")
+        _log.info(f"Loading ({device}/{compute_type})")
         self.loading_state_changed.emit(True)
 
         try:
@@ -109,14 +112,14 @@ class TranscriptionWorker(BaseWorker):
             self._current_model_dir = valid_dir
             elapsed = time.time() - start_time
             hotkey = self.settings.get("hotkey", "F9").upper()
-            self.log_entry.emit("OK", "STT", f"Model ready ({elapsed:.1f}s) — hold {hotkey} to speak")
+            _log.log(OK, f"Model ready ({elapsed:.1f}s) — hold {hotkey} to speak")
             self.status_changed.emit(STATE_READY, "OK")
             self.is_ready = True
             self.model_loaded.emit()
             self.loading_state_changed.emit(False)
         except Exception as e:
             detail = str(e) or "unknown error"
-            self.log_entry.emit("ERR", "STT", f"Model failed to load: {detail}")
+            _log.error(f"Model failed to load: {detail}")
             self.error_occurred.emit("osd.model_load_failed")
             self.status_changed.emit("status.model_error", "ERR")
             self.loading_state_changed.emit(False)
@@ -135,35 +138,35 @@ class TranscriptionWorker(BaseWorker):
         try:
             self._queue.put_nowait(_RELOAD)
         except queue.Full:
-            self.log_entry.emit("WRN", "STT", "Model reload skipped")
+            _log.warning("Model reload skipped")
 
     def add_audio(self, audio) -> None:
         """Enqueues the numpy array from AudioWorker; rejects it if the queue is full."""
         if not self.is_ready:
             # The model was reloaded or lost between key press and release. Report it,
             # otherwise the OSD would stay on "Listening" forever.
-            self.log_entry.emit("WRN", "STT", "Model not ready, recording discarded")
+            _log.warning("Model not ready, recording discarded")
             self.error_occurred.emit(STATE_LOADING if self.is_loading else MSG_MODEL_NOT_FOUND)
             return
         try:
             self._queue.put_nowait(audio)
         except queue.Full:
-            self.log_entry.emit("WRN", "STT", "Transcription in progress, skipped")
+            _log.warning("Transcription in progress, skipped")
             self.error_occurred.emit("osd.stt_busy")
 
     # ----------------------------------------------------------------- private
     @measure_time("STT", "Whisper Transcription")
     def _transcribe(self, audio):
         if self._model is None:
-            self.log_entry.emit("ERR", "STT", "Model not loaded, cannot transcribe.")
+            _log.error("Model not loaded, cannot transcribe.")
             return
 
-        self.log_entry.emit("...", "STT", "Transcription started")
+        _log.info("Transcription started")
         self.transcription_started.emit()
         self.status_changed.emit(STATE_PROCESSING, "INFO")
         try:
             rms = float(np.sqrt(np.mean(audio ** 2)))
-            self.log_entry.emit("...", "STT", f"Audio RMS={rms:.4f}, duration={len(audio)/16000:.1f}s")
+            _log.info(f"Audio RMS={rms:.4f}, duration={len(audio)/16000:.1f}s")
 
             lang_setting = self.settings.get("language", "auto")
             target_lang = lang_setting if lang_setting != "auto" else None
@@ -190,15 +193,15 @@ class TranscriptionWorker(BaseWorker):
             final_text = self._filter.clean(raw_text)
             
             if final_text is None:
-                self.log_entry.emit("WRN", "STT", "No speech detected")
+                _log.warning("No speech detected")
                 self.error_occurred.emit("osd.no_speech")
                 return
 
-            self.log_entry.emit("OK", "STT", f"Transcript: {final_text!r}")
+            _log.log(OK, "Transcript", extra={"transcript": final_text})
             self.text_ready.emit(final_text)
 
         except Exception as e:
-            self.log_entry.emit("ERR", "STT", f"Transcription error: {e}")
+            _log.error(f"Transcription error: {e}")
             self.error_occurred.emit("osd.stt_error")
         finally:
             self.transcription_finished.emit()

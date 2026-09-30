@@ -84,3 +84,14 @@ def _cleanup_qthreads():
         except (ReferenceError, RuntimeError):
             # Ignore errors if the C++ object has already been deleted
             pass
+
+
+
+@pytest.fixture(autouse=True)
+def _detach_log_handlers():
+    """Removes dashboard log handlers that tests attached via tests.log_helpers.on_log_entry."""
+    yield
+    from core.log import DashboardLogHandler
+    katib = logging.getLogger("Katib")
+    for h in [h for h in katib.handlers if isinstance(h, DashboardLogHandler)]:
+        katib.removeHandler(h)

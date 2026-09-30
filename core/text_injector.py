@@ -1,4 +1,10 @@
-def inject_text(text: str, log_callback=None, injection_method: str = "clipboard") -> None:
+from core.log import get_logger, OK
+
+_log_stt = get_logger("STT")
+_log_sys = get_logger("SYS")
+
+
+def inject_text(text: str, injection_method: str = "clipboard") -> None:
     """Injects text into the active window.
     
     If injection_method == 'clipboard', backs up current clipboard contents,
@@ -19,11 +25,9 @@ def inject_text(text: str, log_callback=None, injection_method: str = "clipboard
                 _kb = Controller()
                 _kb.type(text + " ")
                 
-            if log_callback:
-                log_callback("OK", "STT", f'Written (Keystroke): "{text.strip()}"')
+            _log_stt.log(OK, "Written (Keystroke)", extra={"transcript": text.strip()})
         except Exception as e:
-            if log_callback:
-                log_callback("ERR", "SYS", f"Keystroke operation failed: {e}")
+            _log_sys.error(f"Keystroke operation failed: {e}")
         return
 
     # Default to clipboard injection
@@ -62,13 +66,10 @@ def inject_text(text: str, log_callback=None, injection_method: str = "clipboard
                 try:
                     clipboard.setMimeData(old_mime_data)
                 except Exception as e:
-                    if log_callback:
-                        log_callback("WRN", "SYS", f"Clipboard restore failed: {e}")
+                    _log_sys.warning(f"Clipboard restore failed: {e}")
             QTimer.singleShot(150, _restore)
 
-        if log_callback:
-            log_callback("OK", "STT", f'Written (Clipboard): "{text.strip()}"')
+        _log_stt.log(OK, "Written (Clipboard)", extra={"transcript": text.strip()})
 
     except Exception as e:
-        if log_callback:
-            log_callback("ERR", "SYS", f"Clipboard operation failed: {e}")
+        _log_sys.error(f"Clipboard operation failed: {e}")

@@ -6,6 +6,7 @@ from unittest.mock import patch, MagicMock, call
 sys.modules["keyboard"] = MagicMock()
 
 from core.text_injector import inject_text
+from tests.log_helpers import on_log_entry
 
 class TestClipboardInjectText:
 
@@ -34,8 +35,9 @@ class TestClipboardInjectText:
         mock_qmimedata_cls.side_effect = [mock_backup_mime, mock_new_text_mime]
 
         mock_log_callback = MagicMock()
+        on_log_entry(mock_log_callback)
 
-        inject_text("Test text", log_callback=mock_log_callback)
+        inject_text("Test text")
 
         # Was the clipboard accessed?
         mock_qgui.clipboard.assert_called_once()
@@ -66,7 +68,7 @@ class TestClipboardInjectText:
         mock_clipboard.setMimeData.assert_called_with(mock_backup_mime)
 
         # Was the log callback called with a success message?
-        mock_log_callback.assert_called_once_with("OK", "STT", 'Written (Clipboard): "Test text"')
+        mock_log_callback.assert_called_once_with("OK", "STT", "Written (Clipboard): 'Test text'")
 
     @patch("PySide6.QtGui.QGuiApplication")
     @patch("PySide6.QtCore.QTimer")
@@ -86,15 +88,16 @@ class TestClipboardInjectText:
         mock_new_text_mime = MagicMock()
         mock_qmimedata_cls.return_value = mock_new_text_mime
         mock_log_callback = MagicMock()
+        on_log_entry(mock_log_callback)
 
-        inject_text("Text only", log_callback=mock_log_callback)
+        inject_text("Text only")
 
         # Clipboard restore (timer) must not be triggered because the clipboard was already empty
         mock_qtimer.singleShot.assert_not_called()
 
         # Text must have been pasted and logged successfully
         mock_keyboard_send.assert_called_once_with("ctrl+v")
-        mock_log_callback.assert_called_once_with("OK", "STT", 'Written (Clipboard): "Text only"')
+        mock_log_callback.assert_called_once_with("OK", "STT", "Written (Clipboard): 'Text only'")
 
     @patch("PySide6.QtGui.QGuiApplication")
     @patch("PySide6.QtCore.QTimer")
@@ -117,7 +120,8 @@ class TestClipboardInjectText:
         mock_qmimedata_cls.side_effect = [mock_backup_mime, mock_new_text_mime]
 
         mock_log_callback = MagicMock()
-        inject_text("Test", log_callback=mock_log_callback)
+        on_log_entry(mock_log_callback)
+        inject_text("Test")
 
         args, kwargs = mock_qtimer.singleShot.call_args
         restore_callback = args[1]
@@ -136,9 +140,10 @@ class TestClipboardInjectText:
         mock_qgui.clipboard.side_effect = Exception("Access Denied")
 
         mock_log_callback = MagicMock()
+        on_log_entry(mock_log_callback)
 
         # Must not crash (try-except block must run)
-        inject_text("Text", log_callback=mock_log_callback)
+        inject_text("Text")
 
         # Was an error log sent?
         mock_log_callback.assert_called_once()
@@ -152,6 +157,7 @@ class TestClipboardInjectText:
     def test_inject_text_keystroke_win32(self, mock_keyboard_write):
         """Test typing text via keystroke simulation."""
         mock_log_callback = MagicMock()
-        inject_text("Hello", log_callback=mock_log_callback, injection_method="keystroke")
+        on_log_entry(mock_log_callback)
+        inject_text("Hello", injection_method="keystroke")
         mock_keyboard_write.assert_called_once_with("Hello ")
-        mock_log_callback.assert_called_once_with("OK", "STT", 'Written (Keystroke): "Hello"')
+        mock_log_callback.assert_called_once_with("OK", "STT", "Written (Keystroke): 'Hello'")

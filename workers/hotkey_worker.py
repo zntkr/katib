@@ -2,7 +2,10 @@ import sys
 import time
 from PySide6.QtCore import Signal
 from workers.base_worker import BaseWorker
+from core.log import get_logger
 
+
+_log = get_logger("KEY")
 
 class HotkeyWorker(BaseWorker):
     hotkey_pressed  = Signal()
@@ -41,7 +44,7 @@ class HotkeyWorker(BaseWorker):
                 try:
                     currently_down = keyboard.is_pressed(self._key)
                 except Exception:
-                    self.log_entry.emit("ERR", "KEY", "Keyboard read error")
+                    _log.error("Keyboard read error")
                     self.error_occurred.emit("osd.keyboard_error")
                     time.sleep(1.0)
                     continue
@@ -60,7 +63,7 @@ class HotkeyWorker(BaseWorker):
 
                 time.sleep(0.05)
         except Exception:
-            self.log_entry.emit("ERR", "KEY", "Hotkey crashed")
+            _log.error("Hotkey crashed")
             self.error_occurred.emit("osd.hotkey_failed")
 
     def _run_linux(self):
@@ -95,7 +98,7 @@ class HotkeyWorker(BaseWorker):
                 time.sleep(0.1)
             listener.stop()
         except Exception:
-            self.log_entry.emit("ERR", "KEY", "Hotkey crashed")
+            _log.error("Hotkey crashed")
             self.error_occurred.emit("osd.hotkey_failed")
 
     def set_key(self, key: str):

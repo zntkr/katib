@@ -6,6 +6,7 @@ import time
 import pytest
 from unittest.mock import patch
 from workers.hotkey_worker import HotkeyWorker
+from tests.log_helpers import on_log_entry
 
 
 class TestInitialState:
@@ -198,7 +199,7 @@ class TestRunKeyboardError:
     def test_keyboard_error_emits_err_log(self, qapp, mock_settings):
         worker = HotkeyWorker(mock_settings, key="f9")
         logs = []
-        worker.log_entry.connect(lambda l, c, m: logs.append((l, c, m)))
+        on_log_entry(lambda l, c, m: logs.append((l, c, m)))
         self._run_with_keyboard_error(worker)
         assert any(l == "ERR" and "Keyboard read error" in m for l, _, m in logs)
 
@@ -212,7 +213,7 @@ class TestRunKeyboardError:
     def test_keyboard_error_component_is_key(self, qapp, mock_settings):
         worker = HotkeyWorker(mock_settings, key="f9")
         logs = []
-        worker.log_entry.connect(lambda l, c, m: logs.append((l, c, m)))
+        on_log_entry(lambda l, c, m: logs.append((l, c, m)))
         self._run_with_keyboard_error(worker)
         assert any(c == "KEY" for _, c, _ in logs)
 
@@ -318,7 +319,7 @@ class TestRunOuterCrash:
     def test_outer_crash_emits_err_log(self, qapp, mock_settings):
         worker = HotkeyWorker(mock_settings, key="f9")
         logs = []
-        worker.log_entry.connect(lambda l, c, m: logs.append((l, c, m)))
+        on_log_entry(lambda l, c, m: logs.append((l, c, m)))
         self._run_with_outer_crash(worker)
         assert any(l == "ERR" and "Hotkey crashed" in m for l, _, m in logs)
 
@@ -337,7 +338,7 @@ class TestRunOuterCrash:
     def test_outer_crash_component_is_key(self, qapp, mock_settings):
         worker = HotkeyWorker(mock_settings, key="f9")
         logs = []
-        worker.log_entry.connect(lambda l, c, m: logs.append((l, c, m)))
+        on_log_entry(lambda l, c, m: logs.append((l, c, m)))
         self._run_with_outer_crash(worker)
         assert any(c == "KEY" for _, c, _ in logs)
 
