@@ -31,6 +31,9 @@ class PortAudioSource(AudioSource):
         self._dead_stream: sd.InputStream | None = None  # ended on its own, not yet closed
         self._intentional_close = False
         self._native_sr = sample_rate
+        # (rate, extra_settings) that last opened this device; tried first on the next
+        # key press so it opens in one attempt. Memory only, reset on device change.
+        self._working: tuple[int, Any] | None = None
         
         self._audio_callback: Callable[[np.ndarray, str | None], None] | None = None
         self._finished_callback: Callable[[Exception | None], None] | None = None
@@ -39,7 +42,10 @@ class PortAudioSource(AudioSource):
         if device_id is None:
             raise AudioDeviceError("No device provided.")
             
-        self._device_index = int(device_id)
+        new_index = int(device_id)
+        if new_index != self._device_index:
+            self._working = None
+        self._device_index = new_index
         try:
             name = sd.query_devices(self._device_index)["name"]
             label = name[:30] + ("…" if len(name) > 30 else "")
@@ -96,44 +102,61 @@ class PortAudioSource(AudioSource):
         self._audio_callback = audio_callback
         self._finished_callback = finished_callback
         self._intentional_close = False
-        self._native_sr = self._target_sample_rate
-        
-        try:
-            self._stream = sd.InputStream(
-                samplerate       = self._target_sample_rate,
-                channels         = self._channels,
-                dtype            = self._dtype,
-                blocksize        = self._block_size,
-                device           = self._device_index,
-                callback         = self._sd_audio_callback,
-                finished_callback= self._sd_finished_callback,
-            )
-            self._stream.start()
-        except _PortAudioError as e:
-            if "-9996" in str(e) or "Invalid device" in str(e):
-                self._stream = None
-                raise AudioDeviceError("Microphone not connected")
-                
-            # Fallback to native sample rate
+
+        attempts = self._open_attempts(int(device["default_samplerate"]))
+        last_error: Exception | None = None
+        for rate, extra in attempts:
+            stream = None
             try:
-                dev_info = sd.query_devices(self._device_index)
-                self._native_sr = int(dev_info["default_samplerate"])
-                self._stream = sd.InputStream(
-                    samplerate       = self._native_sr,
+                stream = sd.InputStream(
+                    samplerate       = rate,
                     channels         = self._channels,
                     dtype            = self._dtype,
                     blocksize        = self._block_size,
                     device           = self._device_index,
                     callback         = self._sd_audio_callback,
                     finished_callback= self._sd_finished_callback,
+                    extra_settings   = extra,
                 )
-                self._stream.start()
-            except Exception as inner_e:
+                self._stream = stream
+                stream.start()
+            except Exception as e:
                 self._stream = None
-                raise AudioDeviceError(f"Microphone could not be opened: {inner_e}")
-        except Exception as e:
-            self._stream = None
-            raise AudioDeviceError(f"Microphone could not be opened: {e}")
+                if stream is not None:
+                    try:
+                        stream.close()  # created but failed to start: do not leak it
+                    except Exception:
+                        pass
+                if isinstance(e, _PortAudioError) and ("-9996" in str(e) or "Invalid device" in str(e)):
+                    raise AudioDeviceError("Microphone not connected")
+                last_error = e
+                continue
+            self._native_sr = rate
+            if (rate, extra) != attempts[0]:
+                _log.info(f"Microphone opened at {rate} Hz")
+            self._working = (rate, extra)
+            return
+        raise AudioDeviceError(f"Microphone could not be opened: {last_error}")
+
+    def _open_attempts(self, native_rate: int) -> list[tuple[int, Any]]:
+        """Open settings to try, best first (plan 0006). WASAPI shared mode rejects 16 kHz
+        unless asked to convert; a remembered working setting skips the failed tries."""
+        attempts: list[tuple[int, Any]] = []
+        if self._working is not None:
+            attempts.append(self._working)
+        if sys.platform == "win32":
+            try:
+                attempts.append((self._target_sample_rate, sd.WasapiSettings(auto_convert=True)))
+            except Exception:
+                pass  # older sounddevice without auto_convert: fall through to the plain tries
+        attempts.append((self._target_sample_rate, None))
+        if native_rate != self._target_sample_rate:
+            attempts.append((native_rate, None))
+        unique: list[tuple[int, Any]] = []
+        for attempt in attempts:
+            if attempt not in unique:
+                unique.append(attempt)
+        return unique
 
     def stop(self) -> None:
         self._close_dead_stream()
