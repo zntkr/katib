@@ -4,7 +4,7 @@
 > her plan kendi kendine yeten bir devir belgesidir. Bir sayıya ya da karara
 > ihtiyacın varsa planı aç, buradan alıntılama.
 
-**Son güncelleme:** 2026-10-01 · **5 plan, 4 kapalı, 1 açık.** (0001–0004 aynı gün kapandı.)
+**Son güncelleme:** 2026-10-01 · **7 plan, 4 kapalı, 3 açık.** (0006–0007 hız/doğruluk incelemesinden açıldı.)
 
 ⚠️ Bu tablo elle tutuluyor ve bayatlayabilir. Şüphelendiğinde depodan doğrula:
 
@@ -32,9 +32,12 @@ planı açık gösterebilir; `katla()` bunun içindir.
 
 | Plan | Konu | Öncelik | Bağımlılık |
 |---|---|---|---|
+| [0006](0006-kayit-baslangici-gecikmesi.md) | Kayıt başlangıcı: gecikme ve kesilen ilk hece | 🟠 Orta-yüksek | Faz 4: kullanıcı kararı |
+| [0007](0007-sessizlik-katmanlarini-sadelestirme.md) | Sessizlik katmanlarını sadeleştirme (önce ölç) | 🟠 Orta-yüksek | Faz 1b: kullanıcının kayıtları |
 | [0005](0005-ses-islerinin-ui-thread-olcumu.md) | Ses işlerinin UI thread'de çalışması | ⏸️ Veri bekliyor | Kullanıcının Windows ölçümü |
 
-0001–0004 2026-10-01'de kapandı (aşağıda "Kapalı planlar").
+0001–0004 2026-10-01'de kapandı (aşağıda "Kapalı planlar"). 0006–0007
+`docs/hiz-dogruluk-incelemesi-2026-10-01.md`'nin bulgularıdır.
 
 ---
 
@@ -45,6 +48,10 @@ planı açık gösterebilir; `katla()` bunun içindir.
 *Şu an yok.*
 
 ### ⚖️ YUMUŞAK — yalnız öncelik, güvenlik değil
+
+- **0006 Faz 1–3 → 0007 Faz 1b.** Tuş ve mikrofon gecikmesi düşmeden alınan
+  ölçüm, kısa kayıtları olduğundan kısa gösterir ve 0007'nin asgari süre
+  kararını yanıltır. Ters sıra zararsızdır ama ölçüm tekrarlanmalıdır.
 
 - **0002 → 0004 Faz 1.** İkisi de ses yolunun log/kaynak davranışına dokunur;
   önce 0002 yapılırsa 0004'ün ses testleri tek seferde yazılır. Ters sıra
@@ -59,8 +66,13 @@ planı açık gösterebilir; `katla()` bunun içindir.
 
 ```
 0001 ✅ ──► 0002 ✅ ──► 0003 ✅ ──► 0004 ✅   (2026-10-01'de kapandı)
+0006 Faz 1–3 ──► 0007 Faz 1a ──► (kullanıcı ölçümleri) ──► 0006 Faz 4 kararı, 0007 Faz 2
 0005  (kullanıcı ölçümü gelince, bağımsız)
 ```
+
+⚖️ **Gerekçe:** 0006 Faz 1–3 ölçüm beklemeden yapılabilir ve kısa kayıtları
+uzatır; 0007'nin ölçümü bu yüzden 0006'dan **sonra** alınırsa "0,5 sn altı"
+katmanı adil tartılır.
 
 🛑 **Bu sıra bir yasak değildir.** Kullanıcı başka bir sırayı söylerse o geçerlidir.
 

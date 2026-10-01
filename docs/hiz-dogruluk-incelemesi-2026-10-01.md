@@ -46,7 +46,7 @@ en sık uydurduğu çıktılar bunlar. Bu ödünleşim §3 ölçülürken yenide
 
 ## Plana dönüşecek adaylar *(kod okuması, ölçülmedi)*
 
-### 2. 🟠 İlk heceler kesilebilir, başlangıç gecikmeli
+### 2. 🟠 İlk heceler kesilebilir, başlangıç gecikmeli → [plan 0006](plans/0006-kayit-baslangici-gecikmesi.md)
 
 - Mikrofon her tuş basışında sıfırdan açılıyor (`PortAudioSource.start`); önce
   16 kHz deneniyor, Windows'un ortak ses modu (WASAPI) bunu genelde reddeder ve
@@ -56,7 +56,7 @@ en sık uydurduğu çıktılar bunlar. Bu ödünleşim §3 ölçülürken yenide
   (tuşa basılmadan önceki ses de kayda girer). Bedeli: Windows'ta "mikrofon
   kullanımda" simgesi Katib açıkken sürekli görünür → **kullanıcı kararı**.
 
-### 3. 🟠 Dört katmanlı sessizlik kontrolü fazla agresif
+### 3. 🟠 Dört katmanlı sessizlik kontrolü fazla agresif → [plan 0007](plans/0007-sessizlik-katmanlarini-sadelestirme.md)
 
 0,5 sn altı kayıt atılıyor (`MIN_RECORDING_DURATION`); kendi seviye analizimiz
 (`core/audio_analysis.is_silent`: konuşma tepesi -55 dB altı ya da 0,3 sn'den az
