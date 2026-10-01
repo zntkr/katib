@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 from workers.base_worker import BaseWorker, measure_time
 from core.log import get_logger, OK
 from core.transcription_filter import TranscriptionFilter
-from core.settings import MSG_MODEL_NOT_FOUND, STATE_READY, STATE_PROCESSING, STATE_LOADING
+from core.settings import MSG_MODEL_NOT_FOUND, STATE_READY, STATE_LOADING
 
 
 _log = get_logger("STT")
@@ -28,7 +28,7 @@ _RELOAD = _ReloadCommand()
 
 class TranscriptionWorker(BaseWorker):
     text_ready            = Signal(str)
-    status_changed        = Signal(str, str)  # text, level — "OK"|"ERR"|"WARN"|"IDLE"
+    status_changed        = Signal(str, str)  # model status key, level — no model / loading / ready / error
     loading_state_changed = Signal(bool)
     model_missing         = Signal()  # no valid model directory → show download button
     model_loaded          = Signal()  # model loaded successfully → hide download button
@@ -163,7 +163,6 @@ class TranscriptionWorker(BaseWorker):
 
         _log.info("Transcription started")
         self.transcription_started.emit()
-        self.status_changed.emit(STATE_PROCESSING, "INFO")
         try:
             rms = float(np.sqrt(np.mean(audio ** 2)))
             _log.info(f"Audio RMS={rms:.4f}, duration={len(audio)/16000:.1f}s")
@@ -205,5 +204,3 @@ class TranscriptionWorker(BaseWorker):
             self.error_occurred.emit("osd.stt_error")
         finally:
             self.transcription_finished.emit()
-            if self.is_ready:
-                self.status_changed.emit(STATE_READY, "OK")

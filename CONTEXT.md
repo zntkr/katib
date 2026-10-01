@@ -107,6 +107,7 @@ Tüm uygulama verisi tek bir kökte tutulur (ADR-0009). Kök yalnızca `core/set
 - Kullanıcıya gösterilecek operasyonel hatalar OSD üzerinden bildirilir (worker'ların `error_occurred` sinyali `main.py`'de `osd.setStateError`'a bağlıdır). OSD tek operasyonel görünürlük kanalıdır; dashboard kapalıyken bile kullanıcı kritik hatayı görür.
 - Worker'ların her public sinyali `main.py`'de bağlanmalıdır; `tests/test_signal_wiring.py` bağlanmamış bir sinyali yakalar. Kullanılmayan bir sinyal eklemek yerine silinmelidir.
 - `main.py` ve `TrayApp` dashboard'un `_` ile başlayan üyelerine erişmez; yalnızca public metotlarını kullanır (test ile korunur).
+- Dashboard durum satırını ve tray ipucunu yalnızca `TrayApp._resolve_status()` yazar. Worker'lar olgu bildirir (`status_changed`, `transcription_started/finished`, `mic_unavailable`), `TrayApp` tek öncelik kuralıyla karar verir: kayıt > işleme > indirme bildirimi > mikrofon yok > model durumu. `main.py` worker sinyallerini `dashboard.set_status`'a doğrudan bağlamaz (test ile korunur).
 - Uygulama mimarisi iki ana role ayrılmıştır:
     1. **Monitoring (Gözlem)**: Dashboard üzerinden detaylı log takibi ve ayarların yapılması.
     2. **Operation (Operasyon)**: OSD üzerinden kayıt/işleme durumu ve kritik hataların takibi.

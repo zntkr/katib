@@ -2,7 +2,10 @@ from typing import TYPE_CHECKING
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QPushButton, QVBoxLayout
 from PySide6.QtCore import QObject, Slot, QTimer
 
-from core.settings import APP_NAME, MSG_MIC_UNAVAILABLE, MSG_MODEL_NOT_FOUND, STATE_LISTENING, STATE_READY, STATE_LOADING
+from core.settings import (
+    APP_NAME, MSG_MIC_UNAVAILABLE, MSG_MODEL_NOT_FOUND, STATE_LISTENING, STATE_READY, STATE_LOADING,
+    STATE_PROCESSING,
+)
 from core.i18n import t
 from PySide6.QtGui import QIcon
 from ui.utils import colorize_svg_icon
@@ -29,7 +32,12 @@ class TrayApp(QObject):
         self.audio_worker: 'AudioWorker | None' = None
         self.transcription_worker: 'TranscriptionWorker | None' = None
         self.osd: 'MinimalOSD | None' = None
+        # Facts the status line is derived from; only _resolve_status() writes it.
+        self._recording: bool = False
+        self._processing: bool = False
         self._mic_unavailable: bool = False
+        self._download_notice: tuple[str, str] | None = None
+        self._model_status: tuple[str, str] = (STATE_LOADING, "IDLE")
 
         p = theme_manager.palette
         self.icon_idle = colorize_svg_icon(ICN_MIC, p["CLR_TEXT_MUTED"], size=64)
@@ -49,6 +57,7 @@ class TrayApp(QObject):
             # e.g. autostart at login before Explorer has created the taskbar
             self._build_no_tray_quit_button()
             self._tray_retry_timer.start()
+        self._resolve_status()
 
     _RTL_LANGS = {"ar", "fa", "ur"}
     TRAY_RETRY_INTERVAL_MS = 5000
@@ -161,34 +170,59 @@ class TrayApp(QObject):
         self.osd = osd
 
     def set_recording(self, active: bool):
+        self._recording = active
         if active:
-            self.tray.setIcon(self._icon_rec)
-            self.tray.setToolTip(f"{APP_NAME} — {t(STATE_LISTENING)}")
-            self.dashboard.set_status(STATE_LISTENING, "ERR")
+            self._download_notice = None
         else:
-            self._resolve_idle_status()
             self.dashboard.update_level(0.0)
+        self._resolve_status()
 
-    def _resolve_idle_status(self) -> None:
-        self.tray.setIcon(self.icon_idle)
-        if self._mic_unavailable:
-            self.tray.setToolTip(f"{APP_NAME} — {t(MSG_MIC_UNAVAILABLE)}")
-            self.dashboard.set_status(MSG_MIC_UNAVAILABLE, "ERR")
-        elif self.transcription_worker and not self.transcription_worker.is_ready:
-            key, level = ((STATE_LOADING, "IDLE") if self.transcription_worker.is_loading
-                          else (MSG_MODEL_NOT_FOUND, "WARN"))
-            self.tray.setToolTip(f"{APP_NAME} — {t(key)}")
-            self.dashboard.set_status(key, level)
+    def _resolve_status(self) -> None:
+        """The single writer of the status line and tray tooltip. First match wins."""
+        if self._recording:
+            key, level = STATE_LISTENING, "ERR"
+        elif self._processing:
+            key, level = STATE_PROCESSING, "INFO"
+        elif self._download_notice is not None:
+            key, level = self._download_notice
+        elif self._mic_unavailable:
+            key, level = MSG_MIC_UNAVAILABLE, "ERR"
         else:
-            self.tray.setToolTip(f"{APP_NAME} — {t(STATE_READY)}")
-            self.dashboard.set_status(STATE_READY, "OK")
+            key, level = self._model_status
+        self.tray.setIcon(self._icon_rec if self._recording else self.icon_idle)
+        self.tray.setToolTip(f"{APP_NAME} — {t(key)}")
+        self.dashboard.set_status(key, level)
+
+    @Slot(str, str)
+    def on_model_status(self, key: str, level: str) -> None:
+        """TranscriptionWorker.status_changed: no model / loading / ready / model error."""
+        self._model_status = (key, level)
+        self._download_notice = None  # newer than any download outcome
+        self._resolve_status()
+
+    @Slot(str, str)
+    def on_download_status(self, key: str, level: str) -> None:
+        """ModelDownloaderWorker.status_changed: progress and outcome of a model download."""
+        self._download_notice = (key, level)
+        self._resolve_status()
+
+    @Slot()
+    def on_transcription_started(self) -> None:
+        self._processing = True
+        self._resolve_status()
+
+    @Slot()
+    def on_transcription_finished(self) -> None:
+        self._processing = False
+        self._resolve_status()
 
     @Slot()
     def on_mic_unavailable(self) -> None:
         self._mic_unavailable = True
-        self.dashboard.set_status(MSG_MIC_UNAVAILABLE, "ERR")
+        self._recording = False  # a recording cannot start or continue without a microphone
+        self._resolve_status()
 
     @Slot()
     def on_mic_available(self) -> None:
         self._mic_unavailable = False
-        self._resolve_idle_status()
+        self._resolve_status()

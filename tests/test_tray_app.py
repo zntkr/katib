@@ -263,8 +263,10 @@ class TestTrayApp:
     def test_set_recording_false(self, qapp, mock_settings):
         from ui.tray_app import TrayApp
         tray = TrayApp(mock_settings, ModelProvider("."))
-        tray.set_recording(False)
         from core.settings import STATE_READY
+        tray.on_model_status(STATE_READY, "OK")
+        tray.set_recording(True)
+        tray.set_recording(False)
         from core.i18n import t
         assert t(STATE_READY) in tray.dashboard.status_label.text()
         tray.tray.hide()
@@ -347,52 +349,48 @@ class TestTrayApp:
         tray.tray.hide()
         tray.dashboard.close()
 
-    def test_resolve_idle_status_mic_unavailable(self, qapp, mock_settings):
+    def test_status_mic_unavailable(self, qapp, mock_settings):
         from ui.tray_app import TrayApp
         from core.settings import MSG_MIC_UNAVAILABLE
         from core.i18n import t
         tray = TrayApp(mock_settings, ModelProvider("."))
-        tray._mic_unavailable = True
-        tray._resolve_idle_status()
+        tray.on_mic_unavailable()
         assert t(MSG_MIC_UNAVAILABLE) in tray.dashboard.status_label.text()
         assert t(MSG_MIC_UNAVAILABLE) in tray.tray.toolTip()
         tray.tray.hide()
         tray.dashboard.close()
 
-    def test_resolve_idle_status_model_not_ready(self, qapp, mock_settings):
+    def test_status_model_not_found(self, qapp, mock_settings):
         from ui.tray_app import TrayApp
         from core.settings import MSG_MODEL_NOT_FOUND
         from core.i18n import t
         tray = TrayApp(mock_settings, ModelProvider("."))
-        tray.transcription_worker = MagicMock()
-        tray.transcription_worker.is_ready = False
-        tray.transcription_worker.is_loading = False
-        tray._resolve_idle_status()
+        tray.on_model_status(MSG_MODEL_NOT_FOUND, "WARN")
         assert t(MSG_MODEL_NOT_FOUND) in tray.dashboard.status_label.text()
         assert t(MSG_MODEL_NOT_FOUND) in tray.tray.toolTip()
         tray.tray.hide()
         tray.dashboard.close()
 
-    def test_resolve_idle_status_ready(self, qapp, mock_settings):
+    def test_status_ready(self, qapp, mock_settings):
         from ui.tray_app import TrayApp
         from core.settings import STATE_READY
         from core.i18n import t
         tray = TrayApp(mock_settings, ModelProvider("."))
-        tray.transcription_worker = MagicMock()
-        tray.transcription_worker.is_ready = True
-        tray._resolve_idle_status()
+        tray.on_model_status(STATE_READY, "OK")
         assert t(STATE_READY) in tray.dashboard.status_label.text()
         assert t(STATE_READY) in tray.tray.toolTip()
         tray.tray.hide()
         tray.dashboard.close()
 
-    def test_on_mic_available_calls_resolve(self, qapp, mock_settings):
+    def test_mic_available_again_shows_model_status(self, qapp, mock_settings):
         from ui.tray_app import TrayApp
+        from core.settings import STATE_READY
+        from core.i18n import t
         tray = TrayApp(mock_settings, ModelProvider("."))
-        with patch.object(tray, "_resolve_idle_status") as mock_resolve:
-            tray.on_mic_available()
-            assert tray._mic_unavailable is False
-            mock_resolve.assert_called_once()
+        tray.on_model_status(STATE_READY, "OK")
+        tray.on_mic_unavailable()
+        tray.on_mic_available()
+        assert t(STATE_READY) in tray.dashboard.status_label.text()
         tray.tray.hide()
         tray.dashboard.close()
 
@@ -523,10 +521,10 @@ class TestTrayAppModelLoading:
         tray.osd.setStateError.assert_called_once_with(STATE_LOADING)
         tray.audio_worker.start_recording.assert_not_called()
 
-    def test_idle_status_while_loading(self, tray):
+    def test_status_while_loading(self, tray):
         from core.settings import STATE_LOADING
         from core.i18n import t
-        tray._resolve_idle_status()
+        tray.on_model_status(STATE_LOADING, "IDLE")
         assert t(STATE_LOADING) in tray.dashboard.status_label.text()
         assert t(STATE_LOADING) in tray.tray.toolTip()
 
@@ -540,3 +538,78 @@ class TestTrayAppAttachWorkers:
         assert (tray.audio_worker, tray.transcription_worker, tray.osd) == (aw, tw, osd)
         tray.tray.hide()
         tray.dashboard.close()
+
+
+class TestStatusOwnership:
+    """TrayApp is the only writer of the dashboard status line; it decides by one priority rule."""
+
+    @pytest.fixture
+    def tray(self, qapp, mock_settings):
+        from ui.tray_app import TrayApp
+        t = TrayApp(mock_settings, ModelProvider("."))
+        yield t
+        t.tray.hide()
+        t.dashboard.close()
+
+    @staticmethod
+    def _shows(tray, key):
+        from core.i18n import t
+        return t(key) in tray.dashboard.status_label.text() and t(key) in tray.tray.toolTip()
+
+    def test_model_ready_does_not_hide_missing_microphone(self, tray):
+        """The original bug: started without a mic, the model finished loading and showed 'Ready'."""
+        from core.settings import MSG_MIC_UNAVAILABLE, STATE_READY
+        tray.on_mic_unavailable()
+        tray.on_model_status(STATE_READY, "OK")
+        assert self._shows(tray, MSG_MIC_UNAVAILABLE)
+
+    def test_finished_transcription_does_not_hide_missing_microphone(self, tray):
+        from core.settings import MSG_MIC_UNAVAILABLE, STATE_READY
+        tray.on_model_status(STATE_READY, "OK")
+        tray.on_transcription_started()
+        tray.on_mic_unavailable()
+        tray.on_transcription_finished()
+        assert self._shows(tray, MSG_MIC_UNAVAILABLE)
+
+    def test_processing_shown_while_transcribing(self, tray):
+        from core.settings import STATE_PROCESSING, STATE_READY
+        tray.on_model_status(STATE_READY, "OK")
+        tray.on_transcription_started()
+        assert self._shows(tray, STATE_PROCESSING)
+        tray.on_transcription_finished()
+        assert self._shows(tray, STATE_READY)
+
+    def test_model_error_is_not_reported_as_missing_model(self, tray):
+        tray.on_model_status("status.model_error", "ERR")
+        assert self._shows(tray, "status.model_error")
+
+    def test_mic_failure_when_recording_starts_shows_no_mic(self, tray):
+        from core.settings import MSG_MIC_UNAVAILABLE
+        tray.set_recording(True)
+        tray.on_mic_unavailable()
+        assert self._shows(tray, MSG_MIC_UNAVAILABLE)
+
+    def test_recording_wins_over_model_updates(self, tray):
+        from core.settings import STATE_LISTENING, STATE_LOADING
+        tray.set_recording(True)
+        tray.on_model_status(STATE_LOADING, "IDLE")
+        assert self._shows(tray, STATE_LISTENING)
+
+    def test_download_notice_until_newer_model_status(self, tray):
+        from core.settings import STATE_READY
+        tray.on_download_status("status.downloading_model", "INFO")
+        assert self._shows(tray, "status.downloading_model")
+        tray.on_download_status("status.download_error", "ERR")
+        assert self._shows(tray, "status.download_error")
+        tray.on_model_status(STATE_READY, "OK")
+        assert self._shows(tray, STATE_READY)
+
+
+def test_status_says_loading_until_the_model_reports(qapp, mock_settings):
+    from ui.tray_app import TrayApp
+    from core.settings import STATE_LOADING
+    from core.i18n import t
+    tray = TrayApp(mock_settings, ModelProvider("."))
+    assert t(STATE_LOADING) in tray.dashboard.status_label.text()
+    tray.tray.hide()
+    tray.dashboard.close()

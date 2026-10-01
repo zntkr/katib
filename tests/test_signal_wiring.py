@@ -46,3 +46,8 @@ def test_no_access_to_dashboard_internals(path):
     source = (Path(__file__).resolve().parent.parent / path).read_text(encoding="utf-8")
     hits = re.findall(r"dashboard\._\w+", source)
     assert hits == [], f"{path} reaches into dashboard internals: {sorted(set(hits))}"
+
+
+def test_only_tray_app_writes_the_status_line():
+    """Worker status signals go through TrayApp's priority rule, never straight to the dashboard."""
+    assert "dashboard.set_status" not in MAIN_SOURCE

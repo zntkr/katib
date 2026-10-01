@@ -254,7 +254,10 @@ def main():
 
         audio_worker.level_changed.connect(tray.dashboard.update_level)
         audio_worker.level_changed.connect(osd.update_level)
-        transcription_worker.status_changed.connect(tray.dashboard.set_status)
+        # Status line: workers report facts, TrayApp decides what to show (single owner)
+        transcription_worker.status_changed.connect(tray.on_model_status)
+        transcription_worker.transcription_started.connect(tray.on_transcription_started)
+        transcription_worker.transcription_finished.connect(tray.on_transcription_finished)
         transcription_worker.loading_state_changed.connect(tray.dashboard.set_loading_indicator)
 
         # Microphone change → update audio worker + clear error flag
@@ -286,7 +289,7 @@ def main():
         tray.dashboard.download_model_requested.connect(downloader_worker.start_download)
         downloader_worker.error_occurred.connect(lambda _: tray.dashboard.set_loading_indicator(False))
         downloader_worker.error_occurred.connect(lambda _: tray.dashboard.set_download_state(False))
-        downloader_worker.status_changed.connect(tray.dashboard.set_status)
+        downloader_worker.status_changed.connect(tray.on_download_status)
         downloader_worker.download_state_changed.connect(tray.dashboard.set_download_state)
         downloader_worker.download_finished.connect(tray.dashboard.on_download_complete)
 
