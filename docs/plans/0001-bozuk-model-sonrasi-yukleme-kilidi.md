@@ -3,7 +3,7 @@
 > **Bu yaşayan bir belgedir.**
 > Göreve yeni başlayan ajan: önce [Devralma notu](#devralma-notu) bölümünü oku.
 
-**Durum:** ⏳ **BAŞLANMADI**
+**Durum:** ✅ **KAPANDI** 2026-10-01
 **Kullanıcı verisi değişikliği:** YOK (`settings.json` ve veri klasörleri değişmiyor)
 **Öncelik:** 🔴 Yüksek — kullanıcı uygulamayı yeniden başlatmadan dikteye
 dönemiyor ve hata mesajı sebebi söylemiyor ("Model failed to load").
@@ -93,4 +93,13 @@ Düzeltme: 2 dk · test: 15 dk → **~20 dk**
 
 ## Yürütme günlüğü
 
-*(henüz yok)*
+### 2026-10-01 — uygulandı, kapandı
+
+`del self._model` → `self._model = None` (`workers/transcription_worker.py`);
+`gc.collect()` korundu. Plandan sapma yok.
+
+**Test:** `tests/test_transcription_worker_logic.py::TestLoadModelRecovery::test_good_model_loads_again_after_a_failed_load`
+(A yüklenir → bozuk klasör hata verir → A yine yüklenir, `is_ready` True ve
+son durum `STATE_READY`). Kırmızı kanıtı: düzeltmeden önce son `is_ready`
+iddiası `False` ile kırmızıydı ("Model failed to load: corrupt model" sonrası
+üçüncü yükleme düştü). Worker testleri: 73 geçti.

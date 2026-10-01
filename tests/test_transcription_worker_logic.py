@@ -13,7 +13,7 @@ from workers.transcription_worker import (
     _RELOAD,
     _ReloadCommand,
 )
-from core.settings import MSG_MODEL_NOT_FOUND, STATE_LOADING
+from core.settings import MSG_MODEL_NOT_FOUND, STATE_LOADING, STATE_READY
 
 AUDIO = np.zeros(1600, dtype="float32")
 
@@ -220,6 +220,25 @@ class TestLoadModelNoValidDir:
              patch(_PATCH_MODEL_CLS) as mock_cls:
             worker._load_model()
         mock_cls.assert_not_called()
+
+
+# _load_model: recovery after a failed load (plan 0001)
+
+class TestLoadModelRecovery:
+
+    def test_good_model_loads_again_after_a_failed_load(self, qapp, mock_settings):
+        worker = TranscriptionWorker(mock_settings, MagicMock())
+        s = _capture(worker)
+        with patch.object(worker.model_provider, "get_active_model_path", return_value="/fake/dir"):
+            with patch(_PATCH_MODEL_CLS):
+                worker._load_model()                                   # 1) model A loads
+            with patch(_PATCH_MODEL_CLS, side_effect=Exception("corrupt model")):
+                worker._load_model()                                   # 2) broken folder fails
+            assert worker.is_ready is False
+            with patch(_PATCH_MODEL_CLS):
+                worker._load_model()                                   # 3) back to model A
+        assert worker.is_ready is True
+        assert s["status"][-1] == (STATE_READY, "OK")
 
 
 # _load_model: success

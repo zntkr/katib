@@ -96,7 +96,7 @@ class TranscriptionWorker(BaseWorker):
 
         try:
             if self._model is not None:
-                del self._model
+                self._model = None  # not `del`: the attribute must survive a failed load (plan 0001)
                 import gc
                 gc.collect()
 
