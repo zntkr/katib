@@ -43,7 +43,7 @@ Her AI oturumu önceki konuşmaları bilmez. Bu şu anlama gelir:
 2. "İnsan geliştirici için zor" ile "AI ajan için zor"u ayırt et. Bağlam belgelenmemişse ilki geçersizdir.
 3. Bir karar reddedildiyse ve neden reddedildiği load-bearing bir gerekçeye dayanıyorsa, ADR yaz — yoksa bir sonraki ajan aynı öneriyle gelir.
 4. Test suite'in kapsamadığı bir alanda değişiklik yapıyorsan, önce test yaz.
-5. İşe başlamadan **açık planlara** bak: `docs/plans/README.md`. İş bir plana bağlıysa planın "Devralma notu"ndan başla; plan kendi kendine yeten devir belgesidir. Yeni bir tarama/incelemeye başlamadan önce mevcut tarama belgelerini oku (`docs/kod-incelemesi-*.md`) — bilinen bulguyu yeniden keşfetme.
+5. İşe başlamadan **açık planlara** bak: `docs/plans/README.md`. İş bir plana bağlıysa planın "Devralma notu"ndan başla; plan kendi kendine yeten devir belgesidir. Yeni bir tarama/incelemeye başlamadan önce mevcut tarama belgelerini oku (`docs/*-incelemesi-*.md`) — bilinen bulguyu yeniden keşfetme.
 6. Bulduğun ve hemen düzeltmeyeceğin her kusur önce bir tarama belgesine (kanıtıyla), sonra numaralı bir plana düşer. Plan yazma kuralları: `docs/plans/README.md` → "Plan yazma kuralları".
 
 ---

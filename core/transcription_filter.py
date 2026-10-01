@@ -14,6 +14,8 @@ HALLUCINATIONS = {
     "amara org community", "sous titrage st 501", "sessiz", "sessizlik", 
     "ceviri", "cevirmen", "muzik", "alkis", "tesekkurler", "izlediginiz icin"
 }
+# Single-word stock phrases; a short clip made only of these ("Altyazı: Müzik") is invented.
+STOCK_WORDS = {phrase for phrase in HALLUCINATIONS if " " not in phrase}
 _PUNCTUATION = re.compile(r"[^\w\s]", re.UNICODE)
 _SPACES = re.compile(r"\s+")
 
@@ -34,8 +36,10 @@ def looks_like_hallucination(text: str, duration_seconds: float, max_duration: f
         return True
     if normalised in HALLUCINATIONS:
         return True
-    # "Altyazı M.K. Altyazı M.K. Altyazı M.K.": the same stock line repeated.
     words = normalised.split()
+    if all(word in STOCK_WORDS for word in words):
+        return True
+    # "Altyazı M.K. Altyazı M.K. Altyazı M.K.": the same stock line repeated.
     for phrase in HALLUCINATIONS:
         parts = phrase.split()
         if len(parts) >= 2 and words and len(words) % len(parts) == 0:
@@ -53,18 +57,10 @@ class TranscriptionFilter:
 
         original_text = text.strip()
         
-        # Check against hallucination rules
+        # Only a short clip that consists entirely of stock phrases is dropped. A stock
+        # word inside a real sentence ("Toplantı için teşekkürler") is kept: the old
+        # substring rule silently dropped whole dictated sentences.
         if looks_like_hallucination(original_text, duration):
             return None
-            
-        # Run original Katib filter for backward compatibility
-        norm_text = _normalise(original_text)
-        
-        # Original Katib logic: if ANY of these standalone words appear, drop it
-        # We check exact match or if it's contained (which Katib did originally)
-        katib_legacy_halls = ["sessiz", "sessizlik", "altyazi", "ceviri", "muzik", "alkis", "izlediginiz icin", "tesekkurler"]
-        for h in katib_legacy_halls:
-            if h in norm_text:
-                return None
-        
+
         return original_text

@@ -189,7 +189,7 @@ class TranscriptionWorker(BaseWorker):
 
             raw_text = " ".join(seg.text for seg in segments).strip()
 
-            final_text = self._filter.clean(raw_text)
+            final_text = self._filter.clean(raw_text, duration=len(audio) / 16000)
             
             if final_text is None:
                 _log.warning("No speech detected")

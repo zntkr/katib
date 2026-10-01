@@ -222,6 +222,24 @@ class TestLoadModelNoValidDir:
         mock_cls.assert_not_called()
 
 
+# _transcribe passes the clip length to the hallucination filter
+
+class TestTranscribeFilterDuration:
+
+    def _texts(self, qapp, mock_settings, seconds, segment):
+        worker = _make_worker_with_model(qapp, mock_settings, [segment])
+        texts = []
+        worker.text_ready.connect(texts.append)
+        worker._transcribe(np.zeros(int(16000 * seconds), dtype=np.float32))
+        return texts
+
+    def test_stock_phrase_from_a_short_clip_is_dropped(self, qapp, mock_settings):
+        assert self._texts(qapp, mock_settings, 1.0, " İzlediğiniz için teşekkürler.") == []
+
+    def test_stock_phrase_from_a_long_clip_is_kept(self, qapp, mock_settings):
+        assert self._texts(qapp, mock_settings, 10.0, " İzlediğiniz için teşekkürler.") == ["İzlediğiniz için teşekkürler."]
+
+
 # _load_model: recovery after a failed load (plan 0001)
 
 class TestLoadModelRecovery:

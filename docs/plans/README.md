@@ -110,7 +110,8 @@ günlüğü"ne kapanış girdisi yazılır, bu README'deki tablo güncellenir. K
 kalıcı bir mimari kural doğuruyorsa ADR yazılır ve CONTEXT.md'ye işlenir.
 
 **Bulgular nereden gelir:** Tarama/inceleme belgelerinden
-(`docs/<tür>-YYYY-AA-GG.md`, ör. `docs/kod-incelemesi-2026-10-01.md`). O
+(`docs/<tür>-incelemesi-YYYY-AA-GG.md`, ör. `docs/kod-incelemesi-2026-10-01.md`,
+`docs/hiz-dogruluk-incelemesi-2026-10-01.md`). O
 belgeler kanıt kaynağıdır, plan değildir. 🛑 Yeni bir taramaya başlamadan
 önce mevcut tarama belgelerini oku — bilinen bulguyu yeniden keşfetme.
 
