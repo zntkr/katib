@@ -617,3 +617,79 @@ class TestRunLoop:
              patch.object(worker, "_transcribe", side_effect=MemoryError("RAM full")):
             worker.run()
         assert any(lvl == "ERR" for lvl, _, _ in s["logs"])
+
+
+# _load_model: warm-up (plan 0008)
+
+class TestWarmUp:
+    """The first transcribe() pays one-off costs; the worker pays them right after loading."""
+
+    def _load(self, worker, transcribe=None, side_effect=None):
+        model = MagicMock()
+        if transcribe is not None:
+            model.transcribe.side_effect = transcribe
+        with patch.object(worker.model_provider, "get_active_model_path", return_value="/fake/dir"), \
+             patch(_PATCH_MODEL_CLS, return_value=model, side_effect=side_effect):
+            worker._load_model()
+        return model
+
+    def test_runs_the_decoder_and_the_vad_once_after_loading(self, qapp, mock_settings):
+        from workers.transcription_worker import TRANSCRIBE_OPTIONS
+        consumed = []
+
+        def transcribe(audio, **kwargs):
+            def segments():
+                consumed.append(kwargs["vad_filter"])  # faster-whisper decodes lazily
+                yield from ()
+            return segments(), MagicMock()
+
+        worker = TranscriptionWorker(mock_settings, MagicMock())
+        model = self._load(worker, transcribe)
+        calls = model.transcribe.call_args_list
+        assert len(calls) == 2
+        for call in calls:
+            audio = call.args[0]
+            assert audio.dtype == np.float32 and not audio.any()
+        # VAD drops silence before the decoder runs, so one call skips it; the other loads the VAD.
+        assert {c.kwargs["vad_filter"] for c in calls} == {False, True}
+        assert calls[1].kwargs == {**TRANSCRIBE_OPTIONS, "language": None}
+        assert consumed == [False, True]
+
+    def test_uses_the_selected_language(self, qapp, mock_settings):
+        mock_settings.set("language", "tr")
+        worker = TranscriptionWorker(mock_settings, MagicMock())
+        model = self._load(worker, lambda audio, **kw: ([], MagicMock()))
+        assert {c.kwargs["language"] for c in model.transcribe.call_args_list} == {"tr"}
+
+    def test_model_is_ready_before_warm_up(self, qapp, mock_settings):
+        """Startup is not delayed: a dictation arriving meanwhile is queued, not rejected."""
+        worker = TranscriptionWorker(mock_settings, MagicMock())
+        s = _capture(worker)
+        seen = []
+
+        def transcribe(audio, **kwargs):
+            seen.append((worker.is_ready, list(s["status"])))
+            return [], MagicMock()
+
+        self._load(worker, transcribe)
+        assert seen and all(ready and (STATE_READY, "OK") in status for ready, status in seen)
+
+    def test_logs_its_duration(self, qapp, mock_settings):
+        worker = TranscriptionWorker(mock_settings, MagicMock())
+        s = _capture(worker)
+        self._load(worker, lambda audio, **kw: ([], MagicMock()))
+        assert any(c == "STT" and m.startswith("Warm-up done (") for _, c, m in s["logs"])
+
+    def test_failure_is_only_a_warning(self, qapp, mock_settings):
+        worker = TranscriptionWorker(mock_settings, MagicMock())
+        s = _capture(worker)
+        self._load(worker, RuntimeError("boom"))
+        assert worker.is_ready is True
+        assert s["errors"] == []
+        assert any(lvl == "WRN" and "Warm-up failed: boom" in m for lvl, _, m in s["logs"])
+
+    def test_skipped_when_the_model_failed_to_load(self, qapp, mock_settings):
+        worker = TranscriptionWorker(mock_settings, MagicMock())
+        s = _capture(worker)
+        self._load(worker, side_effect=Exception("corrupt model"))
+        assert not any("Warm-up" in m for _, _, m in s["logs"])

@@ -4,7 +4,7 @@
 > her plan kendi kendine yeten bir devir belgesidir. Bir sayıya ya da karara
 > ihtiyacın varsa planı aç, buradan alıntılama.
 
-**Son güncelleme:** 2026-10-01 · **7 plan, 4 kapalı, 3 açık.** (0006–0007 hız/doğruluk incelemesinden açıldı.)
+**Son güncelleme:** 2026-10-01 · **8 plan, 4 kapalı, 4 açık.** (0006–0008 hız/doğruluk incelemesinden açıldı.)
 
 ⚠️ Bu tablo elle tutuluyor ve bayatlayabilir. Şüphelendiğinde depodan doğrula:
 
@@ -35,8 +35,9 @@ planı açık gösterebilir; `katla()` bunun içindir.
 | [0006](0006-kayit-baslangici-gecikmesi.md) | Kayıt başlangıcı: gecikme ve kesilen ilk hece | 🔄 3/4 faz | Faz 4: Windows ölçümü + kullanıcı kararı |
 | [0007](0007-sessizlik-katmanlarini-sadelestirme.md) | Sessizlik katmanlarını sadeleştirme (önce ölç) | ⏸️ Faz 1a ✅, kayıt bekliyor | Faz 1b: kullanıcının kayıtları |
 | [0005](0005-ses-islerinin-ui-thread-olcumu.md) | Ses işlerinin UI thread'de çalışması | ⏸️ Veri bekliyor | Kullanıcının Windows ölçümü |
+| [0008](0008-model-yuklenince-isinma.md) | Model yüklenince ısınma transkripsiyonu | ⏸️ Faz 1 ✅, doğrulama bekliyor | Faz 2: kullanıcının Windows log'u |
 
-0001–0004 2026-10-01'de kapandı (aşağıda "Kapalı planlar"). 0006–0007
+0001–0004 2026-10-01'de kapandı (aşağıda "Kapalı planlar"). 0006–0008
 `docs/hiz-dogruluk-incelemesi-2026-10-01.md`'nin bulgularıdır.
 
 ---
@@ -68,6 +69,7 @@ planı açık gösterebilir; `katla()` bunun içindir.
 0001 ✅ ──► 0002 ✅ ──► 0003 ✅ ──► 0004 ✅   (2026-10-01'de kapandı)
 0006 Faz 1–3 ✅ ──► 0007 Faz 1a ✅ ──► (kullanıcı ölçümleri) ──► 0006 Faz 4 kararı, 0007 Faz 2
 0005  (kullanıcı ölçümü gelince, bağımsız)
+0008 Faz 1 ✅ ──► (kullanıcının Windows log'u)
 ```
 
 ⚖️ **Gerekçe:** 0006 Faz 1–3 ölçüm beklemeden yapılabilir ve kısa kayıtları

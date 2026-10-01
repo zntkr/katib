@@ -67,7 +67,8 @@ sinyal işlenir") çelişiyor.
 
 ### 4. 🟡 Hız için ucuz kazançlar
 
-Model yüklenince bir ısınma transkripsiyonu; `beam_size=5` yerine `1` ve
+Model yüklenince bir ısınma transkripsiyonu (→ [plan 0008](plans/0008-model-yuklenince-isinma.md),
+kod `main`'de); `beam_size=5` yerine `1` ve
 `without_timestamps=True` (doğruluk etkisi ölçülmeli); kısa kayıtlarda hata
 yapan otomatik dil algılama yerine dilin bir kez seçilmesi; tuşu yoklama yerine
 olayla dinlemek.

@@ -19,6 +19,7 @@ from core.settings import MSG_MODEL_NOT_FOUND, STATE_READY, STATE_LOADING
 _log = get_logger("STT")
 
 DEVICE        = "cpu"
+SAMPLE_RATE   = 16000
 QUEUE_MAXSIZE = 5
 
 # Decoding options. scripts/olcum.py uses the same dict, so measurements test what users run.
@@ -87,6 +88,25 @@ class TranscriptionWorker(BaseWorker):
             self._load_model_inner()
         finally:
             self.is_loading = False
+        if self.is_ready:
+            self._warm_up()
+
+    def _warm_up(self):
+        """The first transcribe() pays one-off costs (CTranslate2 sets up its kernels,
+        faster-whisper loads the VAD model). Pay them now, not on the first dictation.
+        The model is already ready: a dictation arriving meanwhile waits in the queue."""
+        silence = np.zeros(SAMPLE_RATE, dtype=np.float32)
+        start = time.perf_counter()
+        try:
+            # VAD drops silence before the decoder runs, so the decoder needs a call without it.
+            for options in (dict(TRANSCRIBE_OPTIONS, vad_filter=False), TRANSCRIBE_OPTIONS):
+                segments, _ = self._model.transcribe(silence, language=self._target_language(), **options)
+                for _ in segments:  # decoding is lazy
+                    pass
+        except Exception as e:
+            _log.warning(f"Warm-up failed: {e}")
+            return
+        _log.info(f"Warm-up done ({(time.perf_counter() - start) * 1000:.0f} ms)")
 
     def _load_model_inner(self):
         original_dir = self.settings.get("model_dir")
@@ -168,6 +188,10 @@ class TranscriptionWorker(BaseWorker):
             self.error_occurred.emit("osd.stt_busy")
 
     # ----------------------------------------------------------------- private
+    def _target_language(self) -> str | None:
+        lang = self.settings.get("language", "auto")
+        return None if lang == "auto" else lang
+
     @measure_time("STT", "Whisper Transcription")
     def _transcribe(self, audio):
         if self._model is None:
@@ -178,23 +202,20 @@ class TranscriptionWorker(BaseWorker):
         self.transcription_started.emit()
         try:
             rms = float(np.sqrt(np.mean(audio ** 2)))
-            _log.info(f"Audio RMS={rms:.4f}, duration={len(audio)/16000:.1f}s")
-
-            lang_setting = self.settings.get("language", "auto")
-            target_lang = lang_setting if lang_setting != "auto" else None
+            _log.info(f"Audio RMS={rms:.4f}, duration={len(audio)/SAMPLE_RATE:.1f}s")
 
             prompt = self.settings.get("initial_prompt", "").strip()
 
             segments, _ = self._model.transcribe(
                 audio,
-                language       = target_lang,
+                language       = self._target_language(),
                 initial_prompt = prompt,
                 **TRANSCRIBE_OPTIONS,
             )
 
             raw_text = " ".join(seg.text for seg in segments).strip()
 
-            final_text = self._filter.clean(raw_text, duration=len(audio) / 16000)
+            final_text = self._filter.clean(raw_text, duration=len(audio) / SAMPLE_RATE)
             
             if final_text is None:
                 _log.warning("No speech detected")
