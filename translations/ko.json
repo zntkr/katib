@@ -133,7 +133,6 @@
         "mic_disconnected": "마이크 연결이 끊어졌습니다",
         "mic_muted": "마이크가 음소거되어 있습니다",
         "audio_merge_error": "오디오 처리 오류",
-        "keyboard_error": "키보드 읽기 오류",
         "hotkey_failed": "단축키가 작동하지 않습니다",
         "stt_crashed": "전사가 충돌했습니다",
         "model_load_failed": "모델 로드에 실패했습니다",

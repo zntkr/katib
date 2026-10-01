@@ -133,7 +133,6 @@
         "mic_disconnected": "Mikrofon bağlantısı kesildi",
         "mic_muted": "Mikrofon sessize alınmış",
         "audio_merge_error": "Ses işleme hatası",
-        "keyboard_error": "Klavye okuma hatası",
         "hotkey_failed": "Kısayol çalışmıyor",
         "stt_crashed": "Transkripsiyon çöktü",
         "model_load_failed": "Model yüklenemedi",

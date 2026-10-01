@@ -4,7 +4,7 @@
 > günlüğü"ne bir satır ekle.
 > Göreve yeni başlayan ajan: önce [Devralma notu](#devralma-notu) bölümünü oku.
 
-**Durum:** ⏳ **BAŞLANMADI** — 0/4 faz. Faz 4 kullanıcı kararı bekliyor.
+**Durum:** 🔄 **DEVAM EDİYOR** — 3/4 faz (2026-10-01). Faz 4 Faz 1 ölçümünü ve kullanıcı kararını bekliyor.
 **Kullanıcı verisi değişikliği:** YOK (`settings.json` ve veri klasörleri değişmiyor;
 çalışan örnekleme hızı yalnız bellekte tutulur)
 **Öncelik:** 🟠 Orta-yüksek — ilk hecenin kaybolması doğrudan doğruluk kaybıdır;
@@ -48,7 +48,7 @@ gizlilik/sistem simgesi bedeli taşır (Faz 4).
 # Faz 1 BİTTİYSE: basış → ilk ses parçası süresi loglanıyor
 grep -n "First audio" workers/audio_worker.py
 # Faz 2 BİTTİYSE: WASAPI dönüştürme bayrağı ya da hatırlanan hız kullanılıyor
-grep -n "auto_convert\|_working_rate" core/portaudio_source.py
+grep -n "auto_convert\|_working" core/portaudio_source.py
 # Faz 3 BAŞLAMADIYSA: 1 satır (yoklama döngüsü); BİTTİYSE: 0
 grep -c "currently_down = keyboard.is_pressed" workers/hotkey_worker.py
 ```
@@ -80,36 +80,36 @@ grep -c "currently_down = keyboard.is_pressed" workers/hotkey_worker.py
 
 ## Faz 1 — Ölç: basıştan ilk ses parçasına
 
-- [ ] `AudioWorker.start_recording()` başlangıç zamanını tutar; ilk
+- [x] `AudioWorker.start_recording()` başlangıç zamanını tutar; ilk
       `_audio_callback` çağrısında `First audio after N ms` (`Katib.MIC`, OK)
       loglanır. 16 kHz açma reddedilip cihaz hızına düşüldüyse bu da loglanır.
-- [ ] Test: sahte kaynakla `start_recording()` + bir callback → log satırı var.
+- [x] Test: sahte kaynakla `start_recording()` + bir callback → log satırı var.
 - [ ] Kullanıcıdan Windows ölçümü (plan 0005 ile aynı yöntem):
       `Select-String ... -Pattern "First audio"`. Sonuç "Yürütme günlüğü"ne.
 
 ## Faz 2 — Mikrofon tek denemede açılır
 
-- [ ] Windows'ta ilk deneme `extra_settings=sd.WasapiSettings(auto_convert=True)`
+- [x] Windows'ta ilk deneme `extra_settings=sd.WasapiSettings(auto_convert=True)`
       ile 16 kHz. `WasapiSettings` yoksa/hata verirse mevcut geri dönüş
-      (cihazın kendi hızı) çalışır ve **başarılı hız `_working_rate`'te
+      (cihazın kendi hızı) çalışır ve **başarılı hız `_working`'te
       hatırlanır**; sonraki `start()` doğrudan o hızla açar.
-- [ ] `set_device()` farklı cihaza geçince `_working_rate` sıfırlanır.
-- [ ] 🛑 ADR-0007 korunur: callback içinde açma/kapama yok.
-- [ ] Testler: (a) 16 kHz reddedilince ikinci basışta `sd.InputStream` **bir kez**
+- [x] `set_device()` farklı cihaza geçince `_working` sıfırlanır.
+- [x] 🛑 ADR-0007 korunur: callback içinde açma/kapama yok.
+- [x] Testler: (a) 16 kHz reddedilince ikinci basışta `sd.InputStream` **bir kez**
       çağrılır; (b) cihaz değişince yeniden 16 kHz denenir; (c) Windows'ta ilk
       denemede `extra_settings` WASAPI ayarı taşır.
 
 ## Faz 3 — Tuş olayla dinlenir
 
-- [ ] `_run_windows`: `keyboard.on_press_key(self._key, ...)` ve
+- [x] `_run_windows`: `keyboard.on_press_key(self._key, ...)` ve
       `on_release_key(...)`; `run()` yalnız `_running` bayrağını bekler,
       `stop()` kancaları `keyboard.unhook(...)` ile söker.
-- [ ] Basılı tutulan tuşun otomatik tekrar olayları tek `hotkey_pressed`
+- [x] Basılı tutulan tuşun otomatik tekrar olayları tek `hotkey_pressed`
       verir (`_is_key_down` korunur). `pause()` / `resume()` aynı anlamda kalır.
-- [ ] `set_key()` eski kancaları söküp yenilerini kurar.
-- [ ] `resume()`'daki tek seferlik `keyboard.is_pressed()` **kalır**: duraklatma
+- [x] `set_key()` eski kancaları söküp yenilerini kurar.
+- [x] `resume()`'daki tek seferlik `keyboard.is_pressed()` **kalır**: duraklatma
       sırasında basılı tutulan tuşun bırakılışını yanlışlıkla "basış" saymamak için.
-- [ ] Testler: kancalara verilen geri çağrılar elle tetiklenir → tekrar eden
+- [x] Testler: kancalara verilen geri çağrılar elle tetiklenir → tekrar eden
       basış tek sinyal; duraklatılmışken sinyal yok; `stop()` kancaları söker;
       `set_key()` sonrası yeni tuş çalışır. Mevcut yoklama testleri
       (`tests/test_hotkey_worker.py`) yeni davranışa çevrilir — **replace, don't layer**.
@@ -157,4 +157,41 @@ Faz 1: 30 dk · Faz 2: 1 sa · Faz 3: 1,5 sa · Faz 4 (B seçilirse): 3+ sa
 
 ## Yürütme günlüğü
 
-*(henüz yok)*
+### 2026-10-01 — Faz 1–3 uygulandı
+
+**Faz 1:** `AudioWorker` her kayıtta bir kez `First audio after N ms` logluyor
+(`start_recording()` → ilk PortAudio callback'i). ⚠️ Ölçüm tuşa basıştan değil
+`start_recording()`'den başlıyor; tuş gecikmesi Faz 3 ile zaten kalktı.
+Callback yalnız kuyruğa yazıyor (plan 0004). Windows ölçümü **bekleniyor**.
+
+**Faz 2:** `PortAudioSource.start()` denemeleri sırayla yapıyor: hatırlanan
+ayar → (Windows) `WasapiSettings(auto_convert=True)` ile 16 kHz → 16 kHz →
+cihazın kendi hızı. Açan ayar `_working`'te hatırlanıyor, cihaz değişince
+unutuluyor; yalnız bellekte. Geri dönüş olursa `Microphone opened at N Hz`
+loglanıyor. Plan dışı ek: oluşturulup `start()`'ta düşen stream artık
+kapatılıyor (önceden sızıyordu).
+
+**Faz 3:** Windows'ta `keyboard.on_press_key` (ana tuş) + her kombinasyon
+parçası için `on_release_key`; basışta değiştirici tuşların basılı olduğu
+`keyboard.is_pressed` ile doğrulanıyor. Herhangi bir parçanın bırakılması
+kaydı bitiriyor (yoklamanın davranışıyla aynı). `set_key()` çalışırken
+kancaları taşıyor, `stop()` sonrası `run()` kancaları söküyor. Kanca kurulamazsa
+`osd.hotkey_failed`. Artık hiç yayılmayan `osd.keyboard_error` 11 dil
+dosyasından ve ölü `_is_pressed()` / `_is_key_down_pynput` kaldırıldı.
+⚠️ Plandan sapma: ayarlar penceresi `ctrl+shift+K` gibi **kombinasyonlara** izin
+verdiği için tek `on_press_key` yetmedi; tasarım kombinasyonları kapsayacak
+şekilde genişletildi.
+
+**Testler:** `tests/test_audio_worker.py::TestStartLatency`,
+`tests/test_portaudio_source.py::TestOpenInOneAttempt` (5),
+`tests/test_hotkey_worker.py::TestWindowsKeyHooks` (8). Yoklamayı sınayan
+eski testler (`TestKeyRepeatPrevention`, `TestRunKeyboardError`,
+`TestRunSignalEmission`, `TestRunOuterCrash`, `test_run_ignores_keys_when_paused`)
+silindi — replace, don't layer. Kırmızı kanıtı: yeni testlerin hepsi
+değişiklikten önce kırmızıydı; "başlatılamayan stream kapatılır" testi düzeltme
+geçici geri alınarak ayrıca kırmızıya döndürüldü.
+
+⚠️ **Windows'ta doğrulanması gerekenler:** `keyboard` kanca geri çağrısı içinde
+`is_pressed` değiştirici durumunu doğru veriyor mu (konteynerde `keyboard`
+kancası kök yetkisi istiyor, denenemedi); `auto_convert` gerçek sürücüde
+16 kHz açıyor mu (log'da `Microphone opened at` satırı **görünmemeli**).

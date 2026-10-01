@@ -133,7 +133,6 @@
         "mic_disconnected": "麦克风已断开",
         "mic_muted": "麦克风已静音",
         "audio_merge_error": "音频处理错误",
-        "keyboard_error": "键盘读取错误",
         "hotkey_failed": "快捷键无效",
         "stt_crashed": "转录崩溃",
         "model_load_failed": "模型加载失败",

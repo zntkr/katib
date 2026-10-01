@@ -133,7 +133,6 @@
         "mic_disconnected": "マイクが切断されました",
         "mic_muted": "マイクがミュートされています",
         "audio_merge_error": "音声処理エラー",
-        "keyboard_error": "キーボード読み取りエラー",
         "hotkey_failed": "ホットキーが機能しません",
         "stt_crashed": "文字起こしがクラッシュしました",
         "model_load_failed": "モデルの読み込みに失敗しました",

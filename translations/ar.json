@@ -133,7 +133,6 @@
         "mic_disconnected": "انقطع اتصال الميكروفون",
         "mic_muted": "الميكروفون مكتوم",
         "audio_merge_error": "خطأ في معالجة الصوت",
-        "keyboard_error": "خطأ في قراءة لوحة المفاتيح",
         "hotkey_failed": "مفتاح الاختصار لا يعمل",
         "stt_crashed": "توقف النسخ",
         "model_load_failed": "فشل تحميل النموذج",

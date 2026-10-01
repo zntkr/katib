@@ -133,7 +133,6 @@
         "mic_disconnected": "Mikrofon getrennt",
         "mic_muted": "Mikrofon ist stummgeschaltet",
         "audio_merge_error": "Audioverarbeitungsfehler",
-        "keyboard_error": "Tastaturfehler",
         "hotkey_failed": "Hotkey funktioniert nicht",
         "stt_crashed": "Transkription abgestürzt",
         "model_load_failed": "Modell konnte nicht geladen werden",

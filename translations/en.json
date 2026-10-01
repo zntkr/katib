@@ -133,7 +133,6 @@
         "mic_disconnected": "Microphone disconnected",
         "mic_muted": "Microphone is muted",
         "audio_merge_error": "Audio processing error",
-        "keyboard_error": "Keyboard read error",
         "hotkey_failed": "Hotkey not working",
         "stt_crashed": "Transcription crashed",
         "model_load_failed": "Model failed to load",

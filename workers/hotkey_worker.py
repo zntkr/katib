@@ -18,16 +18,8 @@ class HotkeyWorker(BaseWorker):
         self._is_key_down = False
         self._running     = False
         self._paused      = False
-
-    def _is_pressed(self, key: str) -> bool:
-        if sys.platform == "win32":
-            import keyboard
-            return keyboard.is_pressed(key)
-        else:
-            from pynput import keyboard as pynput_kb
-            # pynput doesn't expose a synchronous is_pressed; we rely on the
-            # listener state tracked in run() via on_press/on_release instead.
-            return self._is_key_down_pynput
+        self._hooks: list = []          # keyboard hook handles (Windows)
+        self._modifiers: list[str] = []
 
     # ------------------------------------------------------------------ QThread
     def run(self):
@@ -38,38 +30,56 @@ class HotkeyWorker(BaseWorker):
             self._run_linux()
 
     def _run_windows(self):
-        import keyboard
+        # Listen with keyboard hook events instead of polling keyboard.is_pressed():
+        # polling every 50 ms delayed both edges and could miss a short tap (plan 0006).
+        try:
+            self._install_hooks()
+        except Exception as e:
+            _log.error(f"Hotkey could not be registered: {e}")
+            self.error_occurred.emit("osd.hotkey_failed")
+            return
         try:
             while self._running:
-                try:
-                    currently_down = keyboard.is_pressed(self._key)
-                except Exception:
-                    _log.error("Keyboard read error")
-                    self.error_occurred.emit("osd.keyboard_error")
-                    time.sleep(1.0)
-                    continue
+                time.sleep(0.1)
+        finally:
+            self._remove_hooks()
 
-                if self._paused:
-                    self._is_key_down = False
-                    time.sleep(0.05)
-                    continue
+    def _install_hooks(self) -> None:
+        """Press hook on the main key; release hooks on every part of a combination
+        ("ctrl+space"), so releasing any part ends the recording, as polling did."""
+        import keyboard
+        parts = [p.strip() for p in self._key.split("+") if p.strip()]
+        self._modifiers = parts[:-1]
+        self._hooks = [keyboard.on_press_key(parts[-1], self._on_main_key_down)]
+        for part in parts:
+            self._hooks.append(keyboard.on_release_key(part, self._on_key_part_up))
 
-                if currently_down and not self._is_key_down:
-                    self._is_key_down = True
-                    self.hotkey_pressed.emit()
-                elif not currently_down and self._is_key_down:
-                    self._is_key_down = False
-                    self.hotkey_released.emit()
+    def _remove_hooks(self) -> None:
+        import keyboard
+        for hook in self._hooks:
+            try:
+                keyboard.unhook(hook)
+            except Exception:
+                pass
+        self._hooks = []
 
-                time.sleep(0.05)
-        except Exception:
-            _log.error("Hotkey crashed")
-            self.error_occurred.emit("osd.hotkey_failed")
+    def _on_main_key_down(self, _event=None) -> None:
+        import keyboard
+        if self._paused or self._is_key_down:
+            return  # held key: Windows repeats the press event
+        if not all(keyboard.is_pressed(m) for m in self._modifiers):
+            return
+        self._is_key_down = True
+        self.hotkey_pressed.emit()
+
+    def _on_key_part_up(self, _event=None) -> None:
+        if self._paused or not self._is_key_down:
+            return
+        self._is_key_down = False
+        self.hotkey_released.emit()
 
     def _run_linux(self):
         from pynput import keyboard as pynput_kb
-
-        self._is_key_down_pynput = False
 
         def _canonical_key(key):
             try:
@@ -81,14 +91,12 @@ class HotkeyWorker(BaseWorker):
             k = _canonical_key(key)
             if k == self._key and not self._paused and not self._is_key_down:
                 self._is_key_down = True
-                self._is_key_down_pynput = True
                 self.hotkey_pressed.emit()
 
         def on_release(key) -> None:
             k = _canonical_key(key)
             if k == self._key and not self._paused and self._is_key_down:
                 self._is_key_down = False
-                self._is_key_down_pynput = False
                 self.hotkey_released.emit()
 
         try:
@@ -104,6 +112,13 @@ class HotkeyWorker(BaseWorker):
     def set_key(self, key: str):
         self._key         = key.lower()
         self._is_key_down = False
+        if self._hooks:  # listening on Windows: move the hooks to the new key
+            self._remove_hooks()
+            try:
+                self._install_hooks()
+            except Exception as e:
+                _log.error(f"Hotkey could not be registered: {e}")
+                self.error_occurred.emit("osd.hotkey_failed")
 
     def pause(self) -> None:
         self._paused = True
