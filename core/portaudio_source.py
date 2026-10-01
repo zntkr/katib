@@ -4,6 +4,9 @@ import numpy as np
 import sounddevice as sd
 
 from core.audio_source import AudioSource, AudioDeviceError, AudioDisconnectedError
+from core.log import get_logger
+
+_log = get_logger("MIC")
 
 try:
     _PortAudioError: type[Exception] = sd.PortAudioError  # type: ignore[assignment]
@@ -134,15 +137,17 @@ class PortAudioSource(AudioSource):
 
     def stop(self) -> None:
         self._close_dead_stream()
-        if self._stream is not None:
+        stream = self._stream
+        if stream is not None:
             self._intentional_close = True
+            # The finished callback may run inside stream.stop() and set
+            # self._stream = None; hold our own reference so close() still runs.
+            self._stream = None
             try:
-                self._stream.stop()
-                self._stream.close()
-            except Exception:
-                pass
-            finally:
-                self._stream = None
+                stream.stop()
+                stream.close()
+            except Exception as e:
+                _log.warning(f"Microphone stream did not close cleanly: {e}")
 
     @property
     def native_sample_rate(self) -> int:

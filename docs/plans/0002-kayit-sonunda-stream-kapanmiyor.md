@@ -3,7 +3,7 @@
 > **Bu yaşayan bir belgedir.**
 > Göreve yeni başlayan ajan: önce [Devralma notu](#devralma-notu) bölümünü oku.
 
-**Durum:** ⏳ **BAŞLANMADI**
+**Durum:** ✅ **KAPANDI** 2026-10-01
 **Kullanıcı verisi değişikliği:** YOK (`settings.json` ve veri klasörleri değişmiyor)
 **Öncelik:** 🟠 Orta-yüksek — açık kalan stream cihazı meşgul tutabilir ve
 yerel kaynak sızdırır; hata sessiz yutulduğu için log'da da görünmez.
@@ -100,4 +100,18 @@ Düzeltme: 10 dk · 2 test: 20 dk → **~30 dk**
 
 ## Yürütme günlüğü
 
-*(henüz yok)*
+### 2026-10-01 — uygulandı, kapandı
+
+`PortAudioSource.stop()` stream'i yerel değişkene alıyor ve `self._stream`'i
+`stop()`'tan önce `None` yapıyor; `stop()`/`close()` yerel referans üzerinden.
+Kapanış hatası artık yutulmuyor: `Katib.MIC` uyarısı olarak loglanıyor
+(`core/portaudio_source.py`'ye `get_logger("MIC")` eklendi). Plandan sapma yok.
+
+**Testler** (`tests/test_portaudio_source.py::TestStop`):
+`test_stop_closes_stream_even_if_finished_callback_runs_inside_stop` (en kötü
+sürücü davranışı: callback `stream.stop()` içinde çalışır) ve
+`test_stop_logs_close_errors`. Kırmızı kanıtı: ikisi de düzeltmeden önce
+kırmızıydı. Ses testleri: 23 geçti.
+
+⚠️ Gerçek sürücüde callback'in `stop()` içinde çalışıp çalışmadığı hâlâ
+ölçülmedi; düzeltme her iki sırada da doğru.

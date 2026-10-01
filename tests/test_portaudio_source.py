@@ -63,3 +63,27 @@ class TestUnexpectedStreamEnd:
         source._intentional_close = True
         source._sd_finished_callback()
         finished.assert_called_once_with(None)
+
+
+class TestStop:
+    """Plan 0002: stop() must close the stream even when PortAudio runs the
+    finished callback inside stream.stop() (it sets self._stream = None)."""
+
+    def test_stop_closes_stream_even_if_finished_callback_runs_inside_stop(self, source):
+        stream = MagicMock()
+        source._finished_callback = MagicMock()
+        source._stream = stream
+        stream.stop.side_effect = lambda: source._sd_finished_callback()
+        source.stop()
+        stream.close.assert_called_once()
+        assert source._stream is None
+
+    def test_stop_logs_close_errors(self, source):
+        from tests.log_helpers import on_log_entry
+        logs = []
+        on_log_entry(lambda lvl, comp, msg: logs.append((lvl, comp, msg)))
+        stream = MagicMock()
+        stream.close.side_effect = RuntimeError("device busy")
+        source._stream = stream
+        source.stop()
+        assert any(lvl == "WRN" and comp == "MIC" and "device busy" in msg for lvl, comp, msg in logs)
