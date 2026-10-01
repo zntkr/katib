@@ -131,3 +131,19 @@ class TestMainThreadTimings:
         on_log_entry(lambda lvl, comp, msg: logs.append(msg))
         getattr(worker, method)()
         assert any("completed:" in m and "ms" in m for m in logs)
+
+
+class TestStartLatency:
+    """Plan 0006 Faz 1: how long after start_recording() the first audio chunk arrives."""
+
+    def test_first_chunk_latency_is_logged_once(self, mock_settings, mock_audio_source):
+        worker = AudioWorker(mock_settings, mock_audio_source)
+        worker.set_device(1)
+        logs = []
+        on_log_entry(lambda lvl, comp, msg: logs.append(msg))
+        worker.start_recording()
+        worker._audio_callback(np.ones(1024, dtype=np.float32) * 0.1, None)
+        worker._audio_callback(np.ones(1024, dtype=np.float32) * 0.1, None)
+        latency = [m for m in logs if m.startswith("First audio after")]
+        assert len(latency) == 1
+        assert latency[0].endswith(" ms")

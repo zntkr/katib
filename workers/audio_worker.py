@@ -49,6 +49,8 @@ class AudioWorker(BaseWorker):
         self._stop_event = threading.Event()
         self._silence_timer = QElapsedTimer()
         self._silence_notified = False
+        self._start_clock = QElapsedTimer()  # start_recording() → first audio chunk (plan 0006)
+        self._first_chunk_pending = False
 
         # refresh_devices() re-initialises PortAudio, which must not happen inside a
         # PortAudio callback; the queued connection defers it until the callback returns.
@@ -123,6 +125,8 @@ class AudioWorker(BaseWorker):
             self._rms_history.clear()
 
         try:
+            self._start_clock.start()
+            self._first_chunk_pending = True
             self.audio_source.start(self._audio_callback, self._on_stream_finished)
             self._is_recording = True
             self._silence_timer.invalidate()
@@ -197,6 +201,10 @@ class AudioWorker(BaseWorker):
         try:
             if status_msg:
                 _log.warning(f"Status: {status_msg}")
+
+            if self._first_chunk_pending:
+                self._first_chunk_pending = False
+                _log.log(OK, f"First audio after {self._start_clock.elapsed()} ms")
 
             if indata is not None:
                 rms = float(np.sqrt(np.mean(indata ** 2)))
