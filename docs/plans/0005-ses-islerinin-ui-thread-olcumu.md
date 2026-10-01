@@ -5,7 +5,7 @@
 
 **Durum:** ⏸️ **VERİ BEKLİYOR** — kullanıcının Windows ölçümü gerekiyor
 (2026-10-01). Ölçüm gelmeden kod yazılmaz.
-**Ayar dosyası (`settings.json`) değişikliği:** YOK
+**Kullanıcı verisi değişikliği:** YOK (`settings.json` ve veri klasörleri değişmiyor)
 **Öncelik:** ⏸️ Ölçüme bağlı
 **Tarih:** 2026-10-01
 **İlgili belgeler:** CONTEXT.md → Mimari Kurallar #2 ("Bilinen istisna"),

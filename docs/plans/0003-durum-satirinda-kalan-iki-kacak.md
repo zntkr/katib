@@ -5,7 +5,7 @@
 > Göreve yeni başlayan ajan: önce [Devralma notu](#devralma-notu) bölümünü oku.
 
 **Durum:** ⏳ **BAŞLANMADI** — 0/2 faz
-**Ayar dosyası (`settings.json`) değişikliği:** YOK
+**Kullanıcı verisi değişikliği:** YOK (`settings.json` ve veri klasörleri değişmiyor)
 **Öncelik:** 🟡 Orta — yanlış durum bilgisi, veri kaybı yok.
 **Tarih:** 2026-10-01
 **İlgili belgeler:** `docs/kod-incelemesi-2026-10-01.md` §3–4, CONTEXT.md →

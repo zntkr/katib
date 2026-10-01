@@ -4,7 +4,7 @@
 > Göreve yeni başlayan ajan: önce [Devralma notu](#devralma-notu) bölümünü oku.
 
 **Durum:** ⏳ **BAŞLANMADI**
-**Ayar dosyası (`settings.json`) değişikliği:** YOK
+**Kullanıcı verisi değişikliği:** YOK (`settings.json` ve veri klasörleri değişmiyor)
 **Öncelik:** 🔴 Yüksek — kullanıcı uygulamayı yeniden başlatmadan dikteye
 dönemiyor ve hata mesajı sebebi söylemiyor ("Model failed to load").
 **Tarih:** 2026-10-01

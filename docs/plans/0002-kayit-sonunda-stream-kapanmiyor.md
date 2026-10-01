@@ -4,7 +4,7 @@
 > Göreve yeni başlayan ajan: önce [Devralma notu](#devralma-notu) bölümünü oku.
 
 **Durum:** ⏳ **BAŞLANMADI**
-**Ayar dosyası (`settings.json`) değişikliği:** YOK
+**Kullanıcı verisi değişikliği:** YOK (`settings.json` ve veri klasörleri değişmiyor)
 **Öncelik:** 🟠 Orta-yüksek — açık kalan stream cihazı meşgul tutabilir ve
 yerel kaynak sızdırır; hata sessiz yutulduğu için log'da da görünmez.
 **Tarih:** 2026-10-01

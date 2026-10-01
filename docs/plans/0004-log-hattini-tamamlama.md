@@ -5,7 +5,7 @@
 > Göreve yeni başlayan ajan: önce [Devralma notu](#devralma-notu) bölümünü oku.
 
 **Durum:** ⏳ **BAŞLANMADI** — 0/3 faz
-**Ayar dosyası (`settings.json`) değişikliği:** YOK
+**Kullanıcı verisi değişikliği:** YOK (`settings.json` ve veri klasörleri değişmiyor)
 **Öncelik:** 🟡 Orta (Faz 1 ses kalitesini etkileyebilir; Faz 2–3 borç)
 **Tarih:** 2026-10-01
 **İlgili belgeler:** `docs/kod-incelemesi-2026-10-01.md` §5–6,

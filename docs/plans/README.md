@@ -90,7 +90,7 @@ küçük harf, Türkçe karakter yok.
 > Göreve yeni başlayan ajan: önce [Devralma notu](#devralma-notu) bölümünü oku.
 
 **Durum:** ⏳ **BAŞLANMADI** | ⏸️ **VERİ BEKLİYOR** | ✅ **KAPANDI** YYYY-AA-GG
-**Ayar dosyası (`settings.json`) değişikliği:** YOK | VAR (kullanıcı onayı)
+**Kullanıcı verisi değişikliği:** YOK | VAR — açık onay; gerekiyorsa taşıma kodu (CONTEXT.md → Mimari Kurallar #8)
 **Öncelik:** 🔴 Yüksek | 🟠 Orta-yüksek | 🟡 Orta | 🟢 Düşük — tek cümle gerekçe
 **Tarih:** YYYY-AA-GG
 **İlgili belgeler:** tarama belgesi §, ADR, CONTEXT.md bölümü
