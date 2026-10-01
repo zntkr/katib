@@ -4,7 +4,7 @@
 > günlüğü"ne bir satır ekle.
 > Göreve yeni başlayan ajan: önce [Devralma notu](#devralma-notu) bölümünü oku.
 
-**Durum:** ⏳ **BAŞLANMADI** — 0/2 faz
+**Durum:** ✅ **KAPANDI** 2026-10-01 — 2/2 faz
 **Kullanıcı verisi değişikliği:** YOK (`settings.json` ve veri klasörleri değişmiyor)
 **Öncelik:** 🟡 Orta — yanlış durum bilgisi, veri kaybı yok.
 **Tarih:** 2026-10-01
@@ -61,19 +61,19 @@ grep -n "download_state_changed.connect(tray" main.py
 
 ## Faz 1 — İndirme sürerken bildirim kalır
 
-- [ ] `TrayApp.on_download_state(active: bool)`: `_downloading` olgusunu tutar.
-- [ ] `set_recording(True)`: `_download_notice`'i yalnız `not self._downloading`
+- [x] `TrayApp.on_download_state(active: bool)`: `_downloading` olgusunu tutar.
+- [x] `set_recording(True)`: `_download_notice`'i yalnız `not self._downloading`
       ise siler.
-- [ ] `main.py`: `downloader_worker.download_state_changed.connect(tray.on_download_state)`
+- [x] `main.py`: `downloader_worker.download_state_changed.connect(tray.on_download_state)`
       (mevcut dashboard bağlantısı kalır — yükleme çubuğu için).
-- [ ] Test: `test_recording_keeps_notice_while_download_runs` ve
+- [x] Test: `test_recording_keeps_notice_while_download_runs` ve
       `test_recording_clears_finished_download_error`.
 
 ## Faz 2 — Dil değişince doğru tepsi durumu
 
-- [ ] `_build_tray()` içindeki `setToolTip(...STATE_READY...)` kalkar.
-- [ ] `apply_language()` sonunda `self._resolve_status()`.
-- [ ] Test: `test_language_change_keeps_no_mic_tooltip` (mikrofon yok → dil
+- [x] `_build_tray()` içindeki `setToolTip(...STATE_READY...)` kalkar.
+- [x] `apply_language()` sonunda `self._resolve_status()`.
+- [x] Test: `test_language_change_keeps_no_mic_tooltip` (mikrofon yok → dil
       değişir → ipucu "Mikrofon Yok") ve `test_language_change_while_recording_keeps_rec_icon`.
 
 ⚠️ **Kırmızı kanıtı:** her yeni test bugünkü kodla kırmızı olmalı.
@@ -100,4 +100,20 @@ Faz 1: 30 dk · Faz 2: 20 dk → **~50 dk**
 
 ## Yürütme günlüğü
 
-*(henüz yok)*
+### 2026-10-01 — iki faz uygulandı, kapandı
+
+**Faz 1:** `TrayApp.on_download_state(active)` `_downloading`'i tutuyor;
+`set_recording(True)` bildirimi yalnız indirme sürmüyorsa siliyor. `main.py`:
+`download_state_changed` dashboard'a ek olarak `tray.on_download_state`'e de bağlı.
+
+**Faz 2:** `_build_tray()` ipucu yazmıyor; `apply_language()` tepsiyi kurduktan
+sonra `_resolve_status()` çağırıyor. Kullanılmayan `STATE_READY` import'u kalktı.
+
+**Testler** (`tests/test_tray_app.py::TestStatusOwnership`):
+`test_recording_keeps_notice_while_download_runs`,
+`test_recording_clears_finished_download_error`,
+`test_language_change_keeps_no_mic_tooltip`,
+`test_language_change_while_recording_keeps_rec_icon`. Kırmızı kanıtı: dördü
+de düzeltmeden önce kırmızıydı (ikinci test `on_download_state` olmadığı için;
+geçerken eski "bitmiş hata kayıttan sonra silinir" davranışını kilitliyor).
+Tepsi + kablolama testleri: 104 geçti. Plandan sapma yok.

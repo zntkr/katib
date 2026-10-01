@@ -291,6 +291,7 @@ def main():
         downloader_worker.error_occurred.connect(lambda _: tray.dashboard.set_download_state(False))
         downloader_worker.status_changed.connect(tray.on_download_status)
         downloader_worker.download_state_changed.connect(tray.dashboard.set_download_state)
+        downloader_worker.download_state_changed.connect(tray.on_download_state)
         downloader_worker.download_finished.connect(tray.dashboard.on_download_complete)
 
         tray.dashboard.language_change_requested.connect(tray.apply_language)

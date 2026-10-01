@@ -3,7 +3,7 @@ from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QPushButton,
 from PySide6.QtCore import QObject, Slot, QTimer
 
 from core.settings import (
-    APP_NAME, MSG_MIC_UNAVAILABLE, MSG_MODEL_NOT_FOUND, STATE_LISTENING, STATE_READY, STATE_LOADING,
+    APP_NAME, MSG_MIC_UNAVAILABLE, MSG_MODEL_NOT_FOUND, STATE_LISTENING, STATE_LOADING,
     STATE_PROCESSING,
 )
 from core.i18n import t
@@ -37,6 +37,7 @@ class TrayApp(QObject):
         self._processing: bool = False
         self._mic_unavailable: bool = False
         self._download_notice: tuple[str, str] | None = None
+        self._downloading: bool = False
         self._model_status: tuple[str, str] = (STATE_LOADING, "IDLE")
 
         p = theme_manager.palette
@@ -76,14 +77,14 @@ class TrayApp(QObject):
         self.tray.hide()
         self.tray.deleteLater()
         self._build_tray()
+        self._resolve_status()  # the rebuilt icon must show the current state (plan 0003)
         self.dashboard.refresh_language()
         if self.osd:
             self.osd.refresh_language()
         QTimer.singleShot(0, self.dashboard.reopen_settings)
 
     def _build_tray(self):
-        self.tray = QSystemTrayIcon(self.icon_idle)
-        self.tray.setToolTip(f"{APP_NAME} — {t(STATE_READY)}")
+        self.tray = QSystemTrayIcon(self.icon_idle)  # icon and tooltip are set by _resolve_status()
 
         menu = QMenu()
         act_panel = menu.addAction(t("tray.menu.dashboard"))
@@ -171,8 +172,8 @@ class TrayApp(QObject):
 
     def set_recording(self, active: bool):
         self._recording = active
-        if active:
-            self._download_notice = None
+        if active and not self._downloading:
+            self._download_notice = None  # a finished download outcome; keep "Downloading..." (plan 0003)
         else:
             self.dashboard.update_level(0.0)
         self._resolve_status()
@@ -205,6 +206,11 @@ class TrayApp(QObject):
         """ModelDownloaderWorker.status_changed: progress and outcome of a model download."""
         self._download_notice = (key, level)
         self._resolve_status()
+
+    @Slot(bool)
+    def on_download_state(self, active: bool) -> None:
+        """ModelDownloaderWorker.download_state_changed: whether a download is running."""
+        self._downloading = active
 
     @Slot()
     def on_transcription_started(self) -> None:

@@ -595,6 +595,36 @@ class TestStatusOwnership:
         tray.on_model_status(STATE_LOADING, "IDLE")
         assert self._shows(tray, STATE_LISTENING)
 
+    def test_recording_keeps_notice_while_download_runs(self, tray):
+        """Plan 0003 Faz 1: dictating during a download must not hide 'Downloading...'."""
+        tray.on_download_state(True)
+        tray.on_download_status("status.downloading_model", "INFO")
+        tray.set_recording(True)
+        tray.set_recording(False)
+        assert self._shows(tray, "status.downloading_model")
+
+    def test_recording_clears_finished_download_error(self, tray):
+        from core.settings import STATE_READY
+        tray.on_model_status(STATE_READY, "OK")
+        tray.on_download_state(True)
+        tray.on_download_status("status.download_error", "ERR")
+        tray.on_download_state(False)
+        tray.set_recording(True)
+        tray.set_recording(False)
+        assert self._shows(tray, STATE_READY)
+
+    def test_language_change_keeps_no_mic_tooltip(self, tray):
+        """Plan 0003 Faz 2: rebuilding the tray must not reset it to 'Ready'."""
+        from core.settings import MSG_MIC_UNAVAILABLE
+        tray.on_mic_unavailable()
+        tray.apply_language("en")
+        assert self._shows(tray, MSG_MIC_UNAVAILABLE)
+
+    def test_language_change_while_recording_keeps_rec_icon(self, tray):
+        tray.set_recording(True)
+        tray.apply_language("en")
+        assert tray.tray.icon().cacheKey() == tray._icon_rec.cacheKey()
+
     def test_download_notice_until_newer_model_status(self, tray):
         from core.settings import STATE_READY
         tray.on_download_status("status.downloading_model", "INFO")
