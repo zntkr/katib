@@ -12,7 +12,8 @@ import os
 import io
 import typing
 import logging
-from logging.handlers import RotatingFileHandler
+import queue
+from logging.handlers import RotatingFileHandler, QueueHandler, QueueListener
 import traceback
 import pprint
 from pathlib import Path
@@ -51,13 +52,27 @@ class StreamToLogger(io.TextIOBase):
 _LOG_FORMAT      = "%(asctime)s.%(msecs)03d | %(levelname)-8s | PID:%(process)-5d | %(threadName)-22s | %(name)s | %(filename)s:%(lineno)-4d | %(message)s"
 _LOG_DATEFMT     = "%Y-%m-%d %H:%M:%S"
 _owned_handlers: list[logging.Handler] = []  # installed by setup_logging(); replaced on a re-run
+# File and console writes happen on the listener's thread, never on the thread that logs:
+# a PortAudio callback must not block on disk I/O (plan 0004).
+_log_queue: queue.Queue = queue.Queue()
+_log_listener: QueueListener | None = None
+
+
+def stop_logging() -> None:
+    """Writes out everything still queued. Call before os._exit(), which skips atexit."""
+    global _log_listener
+    if _log_listener is not None:
+        _log_listener.stop()
+        _log_listener = None
 
 
 def setup_logging():
+    global _log_listener
     log_dir = get_log_dir()
     log_file = log_dir / "katib.log"
 
     root = logging.getLogger()
+    stop_logging()
     for h in _owned_handlers:
         root.removeHandler(h)
         h.close()
@@ -70,14 +85,20 @@ def setup_logging():
         handlers_list.append(RotatingFileHandler(str(log_file), maxBytes=5*1024*1024, backupCount=3, encoding='utf-8'))
     except Exception:
         pass  # fall back to console-only logging if the filesystem is not writable
-    if sys.stdout is not None:
+    # In --noconsole mode a previous run replaced sys.stdout with StreamToLogger; a console
+    # handler writing to it would feed every record back into logging (plan 0004).
+    if sys.stdout is not None and not isinstance(sys.stdout, StreamToLogger):
         handlers_list.append(logging.StreamHandler(sys.stdout))
 
     formatter = PrivacyFormatter(_LOG_FORMAT, datefmt=_LOG_DATEFMT)
     for h in handlers_list:
         h.setFormatter(formatter)
-        root.addHandler(h)
         _owned_handlers.append(h)
+    _log_listener = QueueListener(_log_queue, *handlers_list, respect_handler_level=True)
+    _log_listener.start()
+    queue_handler = QueueHandler(_log_queue)
+    root.addHandler(queue_handler)
+    _owned_handlers.append(queue_handler)
     root.setLevel(logging.INFO)
     logger = logging.getLogger(APP_NAME)
 
@@ -356,6 +377,7 @@ def main():
     import time
     time.sleep(0.25)
     global_logger.info("Clean shutdown (os._exit).")
+    stop_logging()
     logging.shutdown()
     os._exit(0)
 

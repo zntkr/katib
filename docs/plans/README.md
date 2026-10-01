@@ -4,7 +4,7 @@
 > her plan kendi kendine yeten bir devir belgesidir. Bir sayıya ya da karara
 > ihtiyacın varsa planı aç, buradan alıntılama.
 
-**Son güncelleme:** 2026-10-01 · **5 plan, 0 kapalı, 5 açık.**
+**Son güncelleme:** 2026-10-01 · **5 plan, 4 kapalı, 1 açık.** (0001–0004 aynı gün kapandı.)
 
 ⚠️ Bu tablo elle tutuluyor ve bayatlayabilir. Şüphelendiğinde depodan doğrula:
 
@@ -32,13 +32,9 @@ planı açık gösterebilir; `katla()` bunun içindir.
 
 | Plan | Konu | Öncelik | Bağımlılık |
 |---|---|---|---|
-| [0001](0001-bozuk-model-sonrasi-yukleme-kilidi.md) | Bozuk model sonrası model yükleme kilidi | 🔴 Yüksek | — |
-| [0002](0002-kayit-sonunda-stream-kapanmiyor.md) | Kayıt sonunda mikrofon stream'i kapanmıyor | 🟠 Orta-yüksek | — |
-| [0003](0003-durum-satirinda-kalan-iki-kacak.md) | Durum satırında kalan iki kaçak | 🟡 Orta | — |
-| [0004](0004-log-hattini-tamamlama.md) | Log hattını tamamlama (ADR-0004'ün kalan yarısı) | 🟡 Orta | — |
 | [0005](0005-ses-islerinin-ui-thread-olcumu.md) | Ses işlerinin UI thread'de çalışması | ⏸️ Veri bekliyor | Kullanıcının Windows ölçümü |
 
-Beşi de `docs/kod-incelemesi-2026-10-01.md`'nin bulgularıdır.
+0001–0004 2026-10-01'de kapandı (aşağıda "Kapalı planlar").
 
 ---
 
@@ -52,22 +48,19 @@ Beşi de `docs/kod-incelemesi-2026-10-01.md`'nin bulgularıdır.
 
 - **0002 → 0004 Faz 1.** İkisi de ses yolunun log/kaynak davranışına dokunur;
   önce 0002 yapılırsa 0004'ün ses testleri tek seferde yazılır. Ters sıra
-  **zararsızdır**.
+  **zararsızdır**. ✅ Karşılandı (2026-10-01): ikisi de bu sırayla kapandı.
 - **0003 → 0005.** 0005 ≥ 100 ms çıkarsa `TrayApp` ile `AudioWorker`
   arasındaki çağrılar sinyale döner; 0003'ün `TrayApp` testleri o zaman
-  zaten yerinde olur.
+  zaten yerinde olur. ✅ 0003 kapandı (2026-10-01).
 
 ---
 
 ## Tavsiye edilen sıra (öneri, emir değil)
 
 ```
-0001 ──► 0002 ──► 0003 ──► 0004
+0001 ✅ ──► 0002 ✅ ──► 0003 ✅ ──► 0004 ✅   (2026-10-01'de kapandı)
 0005  (kullanıcı ölçümü gelince, bağımsız)
 ```
-
-⚖️ **Gerekçe:** 0001 kullanıcıyı uygulamayı yeniden başlatmaya zorluyor;
-0002 cihazı meşgul bırakabiliyor. 0003 ve 0004 görünürlük ve borç.
 
 🛑 **Bu sıra bir yasak değildir.** Kullanıcı başka bir sırayı söylerse o geçerlidir.
 
@@ -125,5 +118,11 @@ belgeler kanıt kaynağıdır, plan değildir. 🛑 Yeni bir taramaya başlamada
 
 ## Kapalı planlar
 
-*Henüz yok.* Kapanan planlar silinmez; bir kararın neden öyle alındığının
-tarihsel kaydıdır.
+Kapanan planlar silinmez; bir kararın neden öyle alındığının tarihsel kaydıdır.
+
+| Plan | Konu | Kapanış |
+|---|---|---|
+| [0001](0001-bozuk-model-sonrasi-yukleme-kilidi.md) | Bozuk model sonrası model yükleme kilidi | 2026-10-01 |
+| [0002](0002-kayit-sonunda-stream-kapanmiyor.md) | Kayıt sonunda mikrofon stream'i kapanmıyor | 2026-10-01 |
+| [0003](0003-durum-satirinda-kalan-iki-kacak.md) | Durum satırında kalan iki kaçak | 2026-10-01 |
+| [0004](0004-log-hattini-tamamlama.md) | Log hattını tamamlama (ADR-0004'ün kalan yarısı) | 2026-10-01 |

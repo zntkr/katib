@@ -32,7 +32,9 @@ Bu ADR uzun süre uygulanmadan kaldı; worker'lar `log_entry` sinyalleriyle logl
 - `core/log.py`: `get_logger(<BİLEŞEN>)` → `Katib.<BİLEŞEN>` logger'ı; başarılı adımlar için `OK` (25) seviyesi.
 - Dikte edilen metin `extra={"transcript": metin}` ile verilir. `PrivacyFormatter` (dosya ve konsol) yalnızca uzunluğunu yazar: `Transcript (42 chars)`. `DashboardLogHandler` (QtLogHandler'ın karşılığı) metni ekranda gösterir.
 - Yakalanmamış istisna dökümündeki yerel değişkenlerde string değerler `<str len=N>` olarak maskelenir.
-- Henüz uygulanmayanlar: ayarlardan açılan DEBUG modu (bölüm 2) ve seviyenin `core/settings.py`'den yönetilmesi (bölüm 5). Arayüz bileşenlerinin (dashboard, ayarlar penceresi) kendi log satırları hâlâ yalnızca dashboard'a yazılır.
+- Dosya ve konsol yazması `QueueHandler`/`QueueListener` ile ayrı bir thread'de yapılır; log çağıran thread (ör. PortAudio callback'i) diske dokunmaz. Kapanışta `main.stop_logging()` kuyruğu boşaltır (plan 0004).
+- Ayarlar penceresi ve dashboard'un olay satırları da `get_logger("APP")` / `get_logger("MIC")` üzerinden gider; `SettingsDialog.log_entry` sinyali kaldırıldı. Yalnız i18n anahtarlı ekran rehberleri (`no_mic_found`, `model_missing_guidance`) dashboard'a özeldir: olay değil, dil değişince yeniden çevrilen yönergedir (plan 0004).
+- Henüz uygulanmayanlar: ayarlardan açılan DEBUG modu (bölüm 2) ve seviyenin `core/settings.py`'den yönetilmesi (bölüm 5).
 
 ## Sonuçlar
 - **Artı:** Hata teşhisi hızlanır, kod miktarı (boilerplate) azalır.

@@ -33,7 +33,7 @@ gerçek, 1'i asılsız, 3'ü bilinçli olarak plana dönüştürülmedi.
 
 ---
 
-## 1. 🔴 Bozuk model bir kez seçilince model yükleme kilitleniyor *(eskiden beri var)*
+## 1. ✅ DÜZELTİLDİ (2026-10-01, plan 0001) — Bozuk model bir kez seçilince model yükleme kilitleniyor *(eskiden beri var)*
 
 `workers/transcription_worker.py:98-99`:
 
@@ -51,7 +51,7 @@ başlatılana kadar.
 
 **Doğrulama:** Kod okuması. Çalıştırılarak denenmedi (gerçek model yok).
 
-## 2. 🟠 Kayıt bitince mikrofon stream'i kapatılmayabilir *(eskiden beri var)*
+## 2. ✅ DÜZELTİLDİ (2026-10-01, plan 0002) — Kayıt bitince mikrofon stream'i kapatılmayabilir *(eskiden beri var)*
 
 `core/portaudio_source.py:140-141`:
 
@@ -69,20 +69,20 @@ Callback'in `stop()` içinde mi sonra mı çalıştığı sürücüye bağlı.
 **Doğrulama:** Kod okuması. Gerçek ses cihazı olmadığı için tetiklenme
 sıklığı ölçülemedi.
 
-## 3. 🟡 Kayıt, devam eden indirmenin durum bildirimini siliyor *(2026-10-01 değişikliği)*
+## 3. ✅ DÜZELTİLDİ (2026-10-01, plan 0003) — Kayıt, devam eden indirmenin durum bildirimini siliyor *(2026-10-01 değişikliği)*
 
 `ui/tray_app.py:175` — `set_recording(True)` `_download_notice`'i koşulsuz
 siler. Model indirilirken dikte yapılırsa, kayıt bitince durum satırı
 indirme sürerken "Hazır" gösterir.
 
-## 4. 🟡 Dil değişince tepsi ipucu "Hazır"a dönüyor
+## 4. ✅ DÜZELTİLDİ (2026-10-01, plan 0003) — Dil değişince tepsi ipucu "Hazır"a dönüyor
 
 `ui/tray_app.py:78` — `apply_language()` tepsiyi `_build_tray()` ile
 yeniden kurar; o da satır 86'da ipucunu sabit `STATE_READY` yazar ve simgeyi
 boşta simgesine çevirir. `_resolve_status()` çağrılmaz. Mikrofon yokken dil
 değiştirilirse tepsi "Hazır" der.
 
-## 5. 🟡 PortAudio callback'i log satırını diske kendisi yazıyor *(2026-10-01 değişikliği)*
+## 5. ✅ DÜZELTİLDİ (2026-10-01, plan 0004) — PortAudio callback'i log satırını diske kendisi yazıyor *(2026-10-01 değişikliği)*
 
 ADR-0004 uygulanmadan önce ses thread'i `log_entry` sinyalini yayıyor, dosyaya
 **ana thread** yazıyordu. Şimdi `workers/audio_worker.py:199` (taşma
@@ -92,7 +92,7 @@ dönüşünü **PortAudio callback'inin içinde** yapıyor. Sistem yükteyken he
 taşma uyarısı bir dosya yazması demek; callback süresini aşarsa yeni
 taşmalar ve ses kaybı doğar.
 
-## 6. 🟢 `setup_logging()` iki kez çağrılırsa konsolsuz modda sonsuz döngü
+## 6. ✅ DÜZELTİLDİ (2026-10-01, plan 0004) — `setup_logging()` iki kez çağrılırsa konsolsuz modda sonsuz döngü
 
 `main.py:73-74` — ilk çağrı konsolsuz modda `sys.stdout`'u `StreamToLogger`
 yapar. İkinci çağrıda `sys.stdout is not None` doğru olur ve kök logger'a

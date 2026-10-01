@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QMessageBox
 
 from ui.dashboard import DashboardWindow
 from ui.utils import _make_icon
+from tests.log_helpers import on_log_entry
 
 
 @pytest.fixture
@@ -391,7 +392,7 @@ class TestSettingsDialogInteractions:
 
     def test_open_log_folder_when_missing_emits_warning(self, settings_dialog):
         logs = []
-        settings_dialog.log_entry.connect(lambda l, c, m: logs.append(l))
+        on_log_entry(lambda l, c, m: logs.append(l))
         with patch("os.path.exists", return_value=False):
             settings_dialog._open_log_folder()
         assert "WRN" in logs
@@ -642,7 +643,7 @@ class TestSettingsDialogInteractions:
 
     def test_reset_advanced_emits_ok_log(self, settings_dialog, mock_settings):
         logs = []
-        settings_dialog.log_entry.connect(lambda l, c, m: logs.append(l))
+        on_log_entry(lambda l, c, m: logs.append(l))
         settings_dialog._reset_advanced()
         assert "OK" in logs
 

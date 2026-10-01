@@ -4,7 +4,7 @@
 > günlüğü"ne bir satır ekle.
 > Göreve yeni başlayan ajan: önce [Devralma notu](#devralma-notu) bölümünü oku.
 
-**Durum:** ⏳ **BAŞLANMADI** — 0/3 faz
+**Durum:** ✅ **KAPANDI** 2026-10-01 — 3/3 faz
 **Kullanıcı verisi değişikliği:** YOK (`settings.json` ve veri klasörleri değişmiyor)
 **Öncelik:** 🟡 Orta (Faz 1 ses kalitesini etkileyebilir; Faz 2–3 borç)
 **Tarih:** 2026-10-01
@@ -74,30 +74,30 @@ grep -c "self.log_entry.emit" ui/settings_dialog.py
 
 ## Faz 1 — Diske yazma ses thread'inden çıkar
 
-- [ ] `setup_logging()`: dosya ve konsol handler'ları `QueueListener`'a,
+- [x] `setup_logging()`: dosya ve konsol handler'ları `QueueListener`'a,
       kök logger'a tek `QueueHandler`. Yeniden girişte eski dinleyici durdurulur
       (`_owned_handlers` deseniyle aynı).
-- [ ] `main.py` kapanışı: `listener.stop()` → `logging.shutdown()` → `os._exit(0)`.
-- [ ] Test: başka bir thread'den loglanan kayıt **dosya handler'ını o thread'de
+- [x] `main.py` kapanışı: `listener.stop()` → `logging.shutdown()` → `os._exit(0)`.
+- [x] Test: başka bir thread'den loglanan kayıt **dosya handler'ını o thread'de
       çalıştırmaz** (`RotatingFileHandler.emit`'i yamala, çağıran thread'i kaydet).
-- [ ] Test: `tests/test_log.py::TestLogFile` testleri kuyrukla da geçer
+- [x] Test: `tests/test_log.py::TestLogFile` testleri kuyrukla da geçer
       (okumadan önce kuyruğu boşalt). Transkript dosyaya **yine** gitmez.
 
 ## Faz 2 — `setup_logging()` yeniden girişte güvenli
 
-- [ ] `sys.stdout` bir `StreamToLogger` ise konsol handler'ı eklenmez.
-- [ ] Test: `sys.stdout = None` iken iki kez `setup_logging()`, ardından bir
+- [x] `sys.stdout` bir `StreamToLogger` ise konsol handler'ı eklenmez.
+- [x] Test: `sys.stdout = None` iken iki kez `setup_logging()`, ardından bir
       kayıt → `RecursionError` yok, kayıt dosyada bir kez.
 
 ## Faz 3 — Arayüz log'ları da tek yoldan
 
-- [ ] `SettingsDialog`: 5 `log_entry.emit` → `get_logger("APP")`; `log_entry`
+- [x] `SettingsDialog`: 5 `log_entry.emit` → `get_logger("APP")`; `log_entry`
       sinyali ve `dashboard.py:536`'daki bağlantısı silinir.
-- [ ] `DashboardWindow`: satır 276, 332, 336 → `get_logger("MIC")`.
-- [ ] Testler: `tests/test_dashboard.py` (`append_log_entry.assert_called_with`)
+- [x] `DashboardWindow`: satır 276, 332, 336 → `get_logger("MIC")`.
+- [x] Testler: `tests/test_dashboard.py` (`append_log_entry.assert_called_with`)
       ve `tests/test_ui_interactions.py` / `tests/test_dialogs.py`'deki
       `settings_dialog.log_entry.connect` kullanımları `on_log_entry`'ye çevrilir.
-- [ ] ADR-0004 §6 "Henüz uygulanmayanlar" listesinden bu madde düşülür.
+- [x] ADR-0004 §6 "Henüz uygulanmayanlar" listesinden bu madde düşülür.
 
 ⚠️ **Kırmızı kanıtı:** her yeni test, değişiklik geçici geri alındığında
 kırmızıya dönmeli.
@@ -128,4 +128,28 @@ Faz 1: 1 sa · Faz 2: 15 dk · Faz 3: 1 sa → **~2,5 sa**
 
 ## Yürütme günlüğü
 
-*(henüz yok)*
+### 2026-10-01 — üç faz uygulandı, kapandı
+
+**Faz 1:** `setup_logging()` dosya ve konsol handler'larını bir `QueueListener`'a
+veriyor, kök logger'da tek `QueueHandler` var; yeniden girişte eski dinleyici
+durduruluyor. Yeni `main.stop_logging()` kapanışta `logging.shutdown()` ve
+`os._exit(0)`'dan önce çağrılıyor. `QueueHandler.prepare()` `transcript`
+alanını koruyor: gizlilik testi (`test_transcript_text_never_reaches_the_file`)
+kuyruk üzerinden de geçti.
+
+**Faz 2:** `sys.stdout` bir `StreamToLogger` ise konsol handler'ı eklenmiyor.
+⚠️ Plandan sapma: test gerçek döngüyü tetiklemiyor (dinleyici thread'inde
+sonsuz döngü testi askıda bırakırdı); bunun yerine ikinci çağrıdan sonra
+`StreamToLogger`'a yazan bir handler olmadığını kontrol ediyor.
+
+**Faz 3:** `SettingsDialog`'un 5 olay satırı `get_logger("APP")`,
+dashboard'un 3 olay satırı `get_logger("MIC")` üzerinden; `SettingsDialog.log_entry`
+sinyali ve dashboard'daki bağlantısı silindi. i18n anahtarlı iki rehber satırı
+kararlaştırıldığı gibi dashboard'da kaldı. ADR-0004 §6 ve CONTEXT.md güncellendi.
+
+**Testler:** `tests/test_log.py::TestLogFile::test_file_is_not_written_on_the_logging_thread`,
+`tests/test_log.py::TestSetupLoggingReentry::test_second_setup_in_noconsole_mode_does_not_log_into_itself`;
+`tests/test_dashboard.py` (2), `tests/test_dialogs.py` (1) ve
+`tests/test_ui_interactions.py` (2) sinyal yerine `on_log_entry` ile gözlüyor.
+Kırmızı kanıtı: her fazın testleri değişiklikten önce kırmızıydı. Tam paket
+(Linux): 580 geçti, 24 kırmızı = bilinen platform hataları, yeni kırmızı yok.

@@ -24,7 +24,11 @@ def log_file(tmp_path):
 
 
 def _read(path):
-    for h in logging.getLogger().handlers:
+    import main
+    queue = getattr(main, "_log_queue", None)
+    if queue is not None:
+        queue.join()  # wait until the listener thread has written everything
+    for h in [*logging.getLogger().handlers, *main._owned_handlers]:
         h.flush()
     return path.read_text(encoding="utf-8")
 
@@ -41,6 +45,26 @@ class TestLogFile:
         text = _read(log_file)
         assert "gizli toplantı notu" not in text
         assert "Transcript (19 chars)" in text
+
+    def test_file_is_not_written_on_the_logging_thread(self, log_file):
+        """Plan 0004 Faz 1: a PortAudio callback must not do disk I/O itself."""
+        import threading
+        from logging.handlers import RotatingFileHandler
+        writers = []
+        real_emit = RotatingFileHandler.emit
+
+        def spy(handler, record):
+            writers.append(threading.current_thread().name)
+            real_emit(handler, record)
+
+        with patch.object(RotatingFileHandler, "emit", spy):
+            t = threading.Thread(target=lambda: get_logger("MIC").warning("Status: input overflow"),
+                                 name="PortAudioCallback")
+            t.start()
+            t.join()
+            text = _read(log_file)
+        assert "input overflow" in text
+        assert writers and "PortAudioCallback" not in writers
 
     def test_setup_twice_does_not_duplicate_lines(self, log_file):
         from main import setup_logging
@@ -80,3 +104,25 @@ class TestDashboardLogHandler:
     def test_debug_records_are_not_shown(self, entries):
         get_logger("MIC").debug("chatty")
         assert entries == []
+
+
+class TestSetupLoggingReentry:
+    def test_second_setup_in_noconsole_mode_does_not_log_into_itself(self, tmp_path):
+        """Plan 0004 Faz 2: with no console, the first run replaces sys.stdout with
+        StreamToLogger; a second run must not add a console handler writing to it
+        (every record would re-log itself forever)."""
+        import sys
+        import main
+        original = sys.stdout
+        sys.stdout = None
+        try:
+            with patch("main.get_log_dir", return_value=tmp_path / "Logs"):
+                main.setup_logging()
+                main.setup_logging()
+            loops = [h for h in main._owned_handlers
+                     if isinstance(getattr(h, "stream", None), main.StreamToLogger)]
+        finally:
+            sys.stdout = original
+            with patch("main.get_log_dir", return_value=tmp_path / "Logs2"):
+                main.setup_logging()
+        assert loops == []

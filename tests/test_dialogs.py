@@ -6,6 +6,7 @@ import pytest
 from unittest.mock import patch
 from PySide6.QtCore import Qt, QEvent
 from PySide6.QtGui import QKeyEvent
+from tests.log_helpers import on_log_entry
 
 
 class TestHelpWindow:
@@ -65,7 +66,7 @@ class TestSettingsDialog:
 
     def test_open_log_folder_missing_emits_warning(self, dialog):
         logs = []
-        dialog.log_entry.connect(lambda l, c, m: logs.append((l, c, m)))
+        on_log_entry(lambda l, c, m: logs.append((l, c, m)))
 
         # Simulate folder not found
         with patch("os.path.exists", return_value=False), \

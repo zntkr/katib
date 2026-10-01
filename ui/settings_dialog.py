@@ -18,6 +18,10 @@ from ui.theme import G_1, G_2, G_4, G_6, FONT_SIZE_SM, SETTINGS_WIDTH, SETTINGS_
 from ui.components import NoScrollComboBox, DynamicIconButton
 from ui.icons import ICN_DOWNLOAD, ICN_TICK
 from core.i18n import t, available_languages
+from core.log import get_logger, OK
+
+_log = get_logger("APP")
+
 
 class SettingsDialog(QDialog):
     _DEFAULT_PROMPTS: dict[str, str] = {
@@ -44,7 +48,6 @@ class SettingsDialog(QDialog):
     model_dir_changed        = Signal(str)
     model_reload_requested   = Signal()
     download_model_requested = Signal(str, str)
-    log_entry                = Signal(str, str, str)
     capture_mode_changed     = Signal(bool)  # True=capture started, False=finished
     language_change_requested = Signal(str)
     theme_changed             = Signal(str)
@@ -410,7 +413,7 @@ class SettingsDialog(QDialog):
                 import subprocess
                 subprocess.Popen(["xdg-open", log_dir])
         else:
-            self.log_entry.emit("WRN", "APP", t("settings.log_folder_missing"))
+            _log.warning(t("settings.log_folder_missing"))
 
     def _start_hotkey_capture(self) -> None:
         self._capturing_hotkey = True
@@ -439,7 +442,7 @@ class SettingsDialog(QDialog):
                     self._update_model_path_label(str(target_path))
                     self.model_dir_changed.emit(str(target_path))
                     name = target_path.name if not str(data).startswith("custom:") else "Custom Folder"
-                    self.log_entry.emit("OK", "APP", f"Switched to model: {name}")
+                    _log.log(OK, f"Switched to model: {name}")
             
             self._check_selected_model_status()
 
@@ -459,7 +462,7 @@ class SettingsDialog(QDialog):
         if resolved:
             self.settings.set("model_dir", resolved)
             self._update_model_path_label(resolved)
-            self.log_entry.emit("...", "APP", f"Model folder → {resolved}")
+            _log.info(f"Model folder → {resolved}")
             self.model_dir_changed.emit(resolved)
             self._sync_combo_with_current_dir(resolved)
         else:
@@ -582,7 +585,7 @@ class SettingsDialog(QDialog):
         val = self.compute_combo.currentData()
         if val is None: return
         self.settings.set("compute_type", val)
-        self.log_entry.emit("...", "APP", f"Precision → {val}")
+        _log.info(f"Precision → {val}")
         self.model_reload_requested.emit()
 
     def _populate_compute_type_options(self) -> None:
@@ -599,7 +602,7 @@ class SettingsDialog(QDialog):
     def _reset_advanced(self) -> None:
         self.settings.reset_processing_settings()
         self._refresh_values()
-        self.log_entry.emit("OK", "APP", "Settings reset.")
+        _log.log(OK, "Settings reset.")
 
     def refresh_theme(self) -> None:
         from ui.theme import theme_manager

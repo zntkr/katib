@@ -35,6 +35,10 @@ if TYPE_CHECKING:
 
 from ui.icons import ICN_COPY, ICN_TERMINAL, ICN_SETTINGS, ICN_DOT
 from ui.components import NoScrollComboBox, DynamicIconButton
+from core.log import get_logger
+
+_log = get_logger("MIC")
+
 
 class DashboardWindow(QWidget):
     device_changed            = Signal(int)
@@ -273,7 +277,7 @@ class DashboardWindow(QWidget):
             if device_data is not None:
                 reason = "Saved Preference" if preferred_idx != -1 else "System Default"
                 clean_name = self.mic_combo.itemText(select_idx).replace(" (Default)", "")
-                self.append_log_entry("...", "MIC", f"Auto-selected: {clean_name} ({reason})")
+                _log.info(f"Auto-selected: {clean_name} ({reason})")
                 
                 # Do NOT write settings here — only save when the user changes the device via _on_device_changed.
                 # self.settings.set("device_name", clean_name)
@@ -329,11 +333,11 @@ class DashboardWindow(QWidget):
             if " (Default)" in raw_text:
                 self.settings.set("device_index", -1)
                 self.settings.set("device_name", "")
-                self.append_log_entry("...", "MIC", "Switched to dynamic default tracking.")
+                _log.info("Switched to dynamic default tracking.")
             else:
                 self.settings.set("device_index", device_idx)
                 self.settings.set("device_name", clean_name)
-                self.append_log_entry("...", "MIC", f"Microphone locked: {clean_name}")
+                _log.info(f"Microphone locked: {clean_name}")
                 
             self.device_changed.emit(device_idx)
 
@@ -533,7 +537,6 @@ class DashboardWindow(QWidget):
             self._settings_dialog.model_dir_changed.connect(self.model_dir_changed)
             self._settings_dialog.model_reload_requested.connect(self.model_reload_requested)
             self._settings_dialog.download_model_requested.connect(self.download_model_requested)
-            self._settings_dialog.log_entry.connect(self.append_log_entry)
             self._settings_dialog.finished.connect(self._update_settings_btn_style)
             self._settings_dialog.language_change_requested.connect(self.language_change_requested)
             self._settings_dialog.theme_changed.connect(self.theme_changed)
