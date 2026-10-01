@@ -35,6 +35,9 @@ venv/
 enchanted-waddling-trinket.md
 skills-lock.json
 
+# Ölçüm kayıtları (plan 0007): kullanıcının kendi sesi, kişisel veri — depoya girmez
+olcum/
+
 # Test çıktıları
 .coverage
 htmlcov/

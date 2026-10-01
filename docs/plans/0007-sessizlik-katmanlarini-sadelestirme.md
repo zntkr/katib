@@ -4,7 +4,7 @@
 > günlüğü"ne bir satır ekle.
 > Göreve yeni başlayan ajan: önce [Devralma notu](#devralma-notu) bölümünü oku.
 
-**Durum:** ⏳ **BAŞLANMADI** — 0/3 faz. Faz 1'in ikinci yarısı kullanıcının
+**Durum:** ⏸️ **VERİ BEKLİYOR** — Faz 1a bitti (2026-10-01); Faz 1b kullanıcının
 kayıtlarını bekler.
 **Kullanıcı verisi değişikliği:** YOK (`settings.json` ve veri klasörleri değişmiyor)
 **Öncelik:** 🟠 Orta-yüksek — sessiz konuşanın ve kısa yanıtların ("Evet.",
@@ -79,15 +79,15 @@ grep -n "MIN_RECORDING_DURATION *=\|silence_db: float = -55\|vad_filter *= True"
 ## Faz 1 — Ölçüm altyapısı
 
 **1a — betik (ajan):**
-- [ ] `scripts/olcum.py`: `olcum/*.wav` + aynı adlı `.txt` (doğru metin; konuşmasız
+- [x] `scripts/olcum.py`: `olcum/*.wav` + aynı adlı `.txt` (doğru metin; konuşmasız
       kayıt için boş dosya). Her kaydı uygulamanın **gerçek** fonksiyonlarından
       geçirir: süre kontrolü, `analyse_vad`/`is_silent`, aynı parametrelerle
       `WhisperModel.transcribe`, `TranscriptionFilter.clean`. Çıktı: katman
       bazında tablo + toplam kelime hata oranı + ortalama Whisper süresi.
-- [ ] Parametreleri komut satırından değiştirilebilir yapar (`--min-sure`,
+- [x] Parametreleri komut satırından değiştirilebilir yapar (`--min-sure`,
       `--silence-db`, `--vad/--no-vad`) — Faz 2'nin karşılaştırması için.
-- [ ] `.gitignore`: `olcum/`.
-- [ ] Test: kelime hata oranı fonksiyonu (bilinen örnekler) ve "katman 1/2'de
+- [x] `.gitignore`: `olcum/`.
+- [x] Test: kelime hata oranı fonksiyonu (bilinen örnekler) ve "katman 1/2'de
       elenen kayıt Whisper'a gitmez" akışı, Whisper sahte nesneyle.
 
 **1b — kayıtlar (kullanıcı):**
@@ -144,4 +144,35 @@ Faz 1a: 2 sa · Faz 1b: kullanıcı · Faz 2: 1–2 sa · Faz 3: 30 dk
 
 ## Yürütme günlüğü
 
-*(henüz yok)*
+### 2026-10-01 — Faz 1a uygulandı
+
+`scripts/olcum.py` yazıldı. Kayıtları uygulamanın **gerçek** fonksiyonlarından
+geçiriyor: `MIN_RECORDING_DURATION`, `analyse_vad`/`is_silent`, Whisper,
+`TranscriptionFilter.clean`. Whisper ayarları için `workers/transcription_worker.py`'de
+`TRANSCRIBE_OPTIONS` sabiti çıkarıldı; worker ve betik aynı sözlüğü kullanıyor,
+yani ölçülen şey kullanıcının çalıştırdığı şey. Rapor dikte metnini varsayılan
+olarak göstermiyor (`--metin` ile gösteriyor); `olcum/` `.gitignore`'da
+(`git check-ignore` ile doğrulandı).
+
+⚠️ Plandan sapma: katman 2'nin "en az 0,3 sn sesli bölüm" kuralı `--silence-db`
+ile kapatılamadığı için `--no-seviye` eklendi (katman 2'yi tamamen kapatır).
+Seviye analizi uygulamadaki gibi 1024 örneklik bloklarla yapılıyor; uygulamada
+blok cihaz hızında alındığından (ör. 48 kHz'te 21 ms) eşikler birebir aynı
+olmayabilir — plan 0006 Faz 2 sonrası çoğu cihaz 16 kHz'te açılacağı için fark
+küçülür.
+
+**Testler:** `tests/test_olcum.py` (15): kelime hata oranı (büyük/küçük harf ve
+noktalama sayılmaz, Türkçe harf farkı sayılır), katman akışı (elenen kayıt
+Whisper'a gitmez; Whisper uygulamanın ayarlarıyla çağrılır; katmanlar
+kapatılabilir), WAV okuma (48 kHz stereo → 16 kHz mono), rapor sayıları ve
+metin gizliliği. Kırmızı kanıtı: betik yokken toplama hatası.
+
+**Kullanıcı için (Faz 1b):**
+
+```powershell
+# proje kökünde; olcum\ klasörüne a.wav + a.txt çiftleri
+python scripts\olcum.py                                     # bugünkü ayarlar
+python scripts\olcum.py --min-sure 0.2 --no-seviye --no-vad  # katmanlar kapalı
+```
+
+İki raporu da (metinsiz hâlleriyle) buraya yapıştırın.

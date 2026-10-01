@@ -33,7 +33,7 @@ planı açık gösterebilir; `katla()` bunun içindir.
 | Plan | Konu | Öncelik | Bağımlılık |
 |---|---|---|---|
 | [0006](0006-kayit-baslangici-gecikmesi.md) | Kayıt başlangıcı: gecikme ve kesilen ilk hece | 🔄 3/4 faz | Faz 4: Windows ölçümü + kullanıcı kararı |
-| [0007](0007-sessizlik-katmanlarini-sadelestirme.md) | Sessizlik katmanlarını sadeleştirme (önce ölç) | 🟠 Orta-yüksek | Faz 1b: kullanıcının kayıtları |
+| [0007](0007-sessizlik-katmanlarini-sadelestirme.md) | Sessizlik katmanlarını sadeleştirme (önce ölç) | ⏸️ Faz 1a ✅, kayıt bekliyor | Faz 1b: kullanıcının kayıtları |
 | [0005](0005-ses-islerinin-ui-thread-olcumu.md) | Ses işlerinin UI thread'de çalışması | ⏸️ Veri bekliyor | Kullanıcının Windows ölçümü |
 
 0001–0004 2026-10-01'de kapandı (aşağıda "Kapalı planlar"). 0006–0007
@@ -66,7 +66,7 @@ planı açık gösterebilir; `katla()` bunun içindir.
 
 ```
 0001 ✅ ──► 0002 ✅ ──► 0003 ✅ ──► 0004 ✅   (2026-10-01'de kapandı)
-0006 Faz 1–3 ✅ ──► 0007 Faz 1a ──► (kullanıcı ölçümleri) ──► 0006 Faz 4 kararı, 0007 Faz 2
+0006 Faz 1–3 ✅ ──► 0007 Faz 1a ✅ ──► (kullanıcı ölçümleri) ──► 0006 Faz 4 kararı, 0007 Faz 2
 0005  (kullanıcı ölçümü gelince, bağımsız)
 ```
 

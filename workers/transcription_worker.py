@@ -21,6 +21,19 @@ _log = get_logger("STT")
 DEVICE        = "cpu"
 QUEUE_MAXSIZE = 5
 
+# Decoding options. scripts/olcum.py uses the same dict, so measurements test what users run.
+TRANSCRIBE_OPTIONS = {
+    "beam_size"                 : 5,
+    "vad_filter"                : True,
+    "vad_parameters"            : {
+        "threshold"              : 0.4,
+        "min_speech_duration_ms" : 200,
+        "min_silence_duration_ms": 500,
+    },
+    "no_speech_threshold"       : 0.6,
+    "condition_on_previous_text": False,
+}
+
 class _ReloadCommand:
     pass
 
@@ -174,17 +187,9 @@ class TranscriptionWorker(BaseWorker):
 
             segments, _ = self._model.transcribe(
                 audio,
-                language                  = target_lang,
-                beam_size                 = 5,
-                vad_filter                = True,
-                vad_parameters            = {
-                    "threshold"              : 0.4,
-                    "min_speech_duration_ms" : 200,
-                    "min_silence_duration_ms": 500,
-                },
-                no_speech_threshold       = 0.6,
-                initial_prompt            = prompt,
-                condition_on_previous_text= False,
+                language       = target_lang,
+                initial_prompt = prompt,
+                **TRANSCRIBE_OPTIONS,
             )
 
             raw_text = " ".join(seg.text for seg in segments).strip()
