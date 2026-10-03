@@ -53,6 +53,13 @@ def _stub_qt_os_hooks():
 
 
 @pytest.fixture(autouse=True)
+def _no_gpu():
+    """Tests must not depend on the machine's GPU: it is unusable unless a test says otherwise."""
+    with patch("core.gpu.unavailable_reason", return_value="disabled in tests"):
+        yield
+
+
+@pytest.fixture(autouse=True)
 def _flush_qt_deletelater(qapp):
     """Flushes the deleteLater() queue after each test.
     Accumulated QWidget objects can cause hangs across multiple test files."""

@@ -72,6 +72,7 @@ WHISPER_MODELS = {
 
 COMPUTE_TYPE_OPTIONS_CPU  = ("int8", "int8_float32", "float32")
 COMPUTE_TYPE_OPTIONS_CUDA = ("float16", "int8_float16", "float32")
+COMPUTE_DEVICE_OPTIONS    = ("auto", "cpu", "cuda")  # auto: GPU when usable, else CPU (ADR-0010)
 
 @dataclass
 class SettingDef:
@@ -99,6 +100,7 @@ SETTINGS_SCHEMA = [
                {"options": [("Auto Detect", "auto"), ("Arabic", "ar"), ("Chinese", "zh"), ("English", "en"), ("French", "fr"), ("German", "de"), ("Greek", "el"), ("Hindi", "hi"), ("Indonesian", "id"), ("Italian", "it"), ("Japanese", "ja"), ("Korean", "ko"), ("Persian", "fa"), ("Portuguese", "pt"), ("Russian", "ru"), ("Spanish", "es"), ("Turkish", "tr"), ("Urdu", "ur")], "full_width": True}),
     SettingDef("compute_type", str, "int8", "Processing", "schema.compute_type.label", "custom",
                {"full_width": True}, tooltip="schema.compute_type.tooltip"),
+    SettingDef("compute_device", str, "auto", "Processing", "Compute Device", "custom"),
 
     SettingDef("initial_prompt", str, "",
                "Processing", "schema.initial_prompt.label", "lineedit",
@@ -241,6 +243,8 @@ class SettingsManager:
         if key == "compute_type":
             valid = COMPUTE_TYPE_OPTIONS_CPU
             return val if val in valid else "int8"
+        if key == "compute_device":
+            return val if val in COMPUTE_DEVICE_OPTIONS else "auto"
 
         return val
 

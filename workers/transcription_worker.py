@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from faster_whisper import WhisperModel
 
 from workers.base_worker import BaseWorker, measure_time
+from core import gpu
 from core.log import get_logger, OK
 from core.transcription_filter import TranscriptionFilter
 from core.settings import MSG_MODEL_NOT_FOUND, STATE_READY, STATE_LOADING
@@ -18,7 +19,6 @@ from core.settings import MSG_MODEL_NOT_FOUND, STATE_READY, STATE_LOADING
 
 _log = get_logger("STT")
 
-DEVICE        = "cpu"
 SAMPLE_RATE   = 16000
 QUEUE_MAXSIZE = 5
 
@@ -58,6 +58,7 @@ class TranscriptionWorker(BaseWorker):
         self.is_ready: bool = False
         self.is_loading: bool = True  # run() loads the model first; False once an attempt ends
         self._current_model_dir: str | None = None
+        self._device = "cpu"  # where the loaded model runs: "cuda" or "cpu"
         self._filter = TranscriptionFilter()
 
     # ------------------------------------------------------------------ QThread
@@ -81,17 +82,19 @@ class TranscriptionWorker(BaseWorker):
                 _log.error(f"Transcription crashed: {detail}")
                 self.error_occurred.emit("osd.stt_crashed")
             
-    def _load_model(self):
+    def _load_model(self, allow_gpu: bool = True):
         self.is_ready = False
         self.is_loading = True
         try:
-            self._load_model_inner()
+            self._load_model_inner(allow_gpu)
         finally:
             self.is_loading = False
-        if self.is_ready:
-            self._warm_up()
+        if self.is_ready and not self._warm_up() and self._device == "cuda":
+            # The CUDA libraries load lazily: a GPU can accept the model and still fail to run it.
+            _log.warning("GPU could not run the model, switching to CPU")
+            self._load_model(allow_gpu=False)
 
-    def _warm_up(self):
+    def _warm_up(self) -> bool:
         """The first transcribe() pays one-off costs (CTranslate2 sets up its kernels,
         faster-whisper loads the VAD model). Pay them now, not on the first dictation.
         The model is already ready: a dictation arriving meanwhile waits in the queue."""
@@ -105,10 +108,45 @@ class TranscriptionWorker(BaseWorker):
                     pass
         except Exception as e:
             _log.warning(f"Warm-up failed: {e}")
-            return
+            return False
         _log.info(f"Warm-up done ({(time.perf_counter() - start) * 1000:.0f} ms)")
+        return True
 
-    def _load_model_inner(self):
+    def _gpu_compute_type(self, allow_gpu: bool) -> str | None:
+        """The compute type for a GPU load, or None when the model must go to the CPU (ADR-0010)."""
+        preference = self.settings.get("compute_device")
+        if not allow_gpu or preference == "cpu":
+            return None
+        reason = gpu.unavailable_reason()
+        if reason is None:
+            return gpu.compute_type()
+        if preference == "cuda":
+            _log.warning(f"GPU requested but not usable: {reason}")
+        else:
+            _log.info(f"GPU not used: {reason}")
+        return None
+
+    def _open_model(self, model_cls, model_dir: str, allow_gpu: bool):
+        """Loads on the GPU when it is usable; any GPU failure ends on the CPU, as before GPU support."""
+        def open_on(device: str, compute_type: str):
+            _log.info(f"Loading ({device}/{compute_type})")
+            return model_cls(
+                model_dir,
+                device           = device,
+                compute_type     = compute_type,
+                local_files_only = True,
+                cpu_threads      = _CPU_THREADS,
+            )
+
+        gpu_compute_type = self._gpu_compute_type(allow_gpu)
+        if gpu_compute_type is not None:
+            try:
+                return open_on("cuda", gpu_compute_type), "cuda"
+            except Exception as e:
+                _log.warning(f"GPU load failed ({str(e) or 'unknown error'}), using CPU")
+        return open_on("cpu", self.settings.get("compute_type")), "cpu"
+
+    def _load_model_inner(self, allow_gpu: bool = True):
         original_dir = self.settings.get("model_dir")
         valid_dir = self.model_provider.get_active_model_path()
 
@@ -120,11 +158,7 @@ class TranscriptionWorker(BaseWorker):
         if original_dir and valid_dir != original_dir:
             _log.warning(f"Selected folder invalid, using: {valid_dir}")
 
-        device       = "cpu"
-        compute_type = self.settings.get("compute_type")
-
         self.status_changed.emit(STATE_LOADING, "IDLE")
-        _log.info(f"Loading ({device}/{compute_type})")
         self.loading_state_changed.emit(True)
 
         try:
@@ -135,13 +169,7 @@ class TranscriptionWorker(BaseWorker):
 
             from faster_whisper import WhisperModel
             start_time = time.time()
-            self._model = WhisperModel(
-                valid_dir,
-                device           = device,
-                compute_type     = compute_type,
-                local_files_only = True,
-                cpu_threads      = _CPU_THREADS,
-            )
+            self._model, self._device = self._open_model(WhisperModel, valid_dir, allow_gpu)
             self._current_model_dir = valid_dir
             elapsed = time.time() - start_time
             hotkey = self.settings.get("hotkey", "F9").upper()
@@ -192,6 +220,15 @@ class TranscriptionWorker(BaseWorker):
         lang = self.settings.get("language", "auto")
         return None if lang == "auto" else lang
 
+    def _decode(self, audio) -> str:
+        segments, _ = self._model.transcribe(
+            audio,
+            language       = self._target_language(),
+            initial_prompt = self.settings.get("initial_prompt", "").strip(),
+            **TRANSCRIBE_OPTIONS,
+        )
+        return " ".join(seg.text for seg in segments).strip()
+
     @measure_time("STT", "Whisper Transcription")
     def _transcribe(self, audio):
         if self._model is None:
@@ -204,16 +241,17 @@ class TranscriptionWorker(BaseWorker):
             rms = float(np.sqrt(np.mean(audio ** 2)))
             _log.info(f"Audio RMS={rms:.4f}, duration={len(audio)/SAMPLE_RATE:.1f}s")
 
-            prompt = self.settings.get("initial_prompt", "").strip()
-
-            segments, _ = self._model.transcribe(
-                audio,
-                language       = self._target_language(),
-                initial_prompt = prompt,
-                **TRANSCRIBE_OPTIONS,
-            )
-
-            raw_text = " ".join(seg.text for seg in segments).strip()
+            try:
+                raw_text = self._decode(audio)
+            except Exception as e:
+                if self._device != "cuda":
+                    raise
+                # GPU memory can run out mid-session (e.g. a game starts); the CPU still works.
+                _log.warning(f"GPU transcription failed ({str(e) or 'unknown error'}), switching to CPU")
+                self._load_model(allow_gpu=False)
+                if not self.is_ready:
+                    raise
+                raw_text = self._decode(audio)
 
             final_text = self._filter.clean(raw_text, duration=len(audio) / SAMPLE_RATE)
             

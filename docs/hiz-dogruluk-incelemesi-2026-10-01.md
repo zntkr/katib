@@ -84,6 +84,11 @@ hata oranını ölçen küçük bir betik gerekir.
 Konuşurken canlı transkripsiyon, bulut, LLM ile düzeltme, GPU (CUDA) desteği —
 amaca hizmet etmeden karmaşıklık ve paket boyutu ekler.
 
+> ⚠️ **2026-10-03 — GPU maddesi geçersiz.** Proje sahibi hedefi "macOS diktesine
+> yakın kalite" olarak netleştirdi ve GPU desteğini onayladı. Karar ve ölçümler:
+> [ADR-0010](adr/0010-optional-gpu-acceleration.md); iş:
+> [plan 0009](plans/0009-gpu-destegi.md). Diğer üç madde için not geçerliliğini korur.
+
 ## Bakılmadı — kapsam sınırı
 
 Gerçek Windows'ta gecikme ve doğruluk ölçümü (cihaz yok); farklı mikrofonlar;

@@ -59,6 +59,20 @@ class TestSettingsManager:
         sm.set("compute_type", "invalid")
         assert sm.get("compute_type") == "int8"
 
+    def test_compute_device_defaults_to_auto(self, settings_file):
+        assert SettingsManager().get("compute_device") == "auto"
+
+    @pytest.mark.parametrize("value", ["auto", "cpu", "cuda"])
+    def test_compute_device_valid(self, settings_file, value):
+        sm = SettingsManager()
+        sm.set("compute_device", value)
+        assert sm.get("compute_device") == value
+
+    def test_compute_device_invalid_falls_back(self, settings_file):
+        sm = SettingsManager()
+        sm.set("compute_device", "quantum")
+        assert sm.get("compute_device") == "auto"
+
     def test_reset_processing_settings(self, settings_file):
         sm = SettingsManager()
         sm.set("language", "auto")

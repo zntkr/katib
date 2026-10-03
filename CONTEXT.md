@@ -74,6 +74,7 @@ Katib, Windows üzerinde çalışan, tamamen çevrimdışı (offline) bir ses-me
 - **OSD (Status Indicator)**: Katib esnasında ekranın alt-ortasında beliren, etkileşimsiz (click-through) ve minimalist durum göstergesi. Kayıt/işleme durumu ve kritik hataların tek operasyonel görünürlük kanalıdır.
 - **Armored Logic (Zırhlı Mantık)**: İşçi (Worker) seviyesinde başlayan, sistem hatalarını (örn. Mute durumu) proaktif olarak tespit edip kullanıcıyı uyaran korumacı mühendislik katmanı.
 - **Binary Armor (İkili Zırh)**: "Ölü veya Canlı" prensibi. Sinyal matematiksel olarak tam sıfır (0.0) ise hata (Mute) kabul edilir; 0.0'dan büyük her sinyal (fısıltı dahil) geçerli kabul edilerek işlenir.
+- **GPU Hızlandırma (isteğe bağlı)**: Whisper modeli, kullanılabilir bir NVIDIA GPU ve CUDA kitaplıkları varsa GPU'da, yoksa CPU'da çalışır. GPU bir iyileştirmedir, gereksinim değildir: yüklemede, ısınmada ya da dikte anında GPU hata verirse Katib CPU'ya döner ve çalışmaya devam eder. Kararı yalnız `core/gpu.py` verir; kullanıcı `compute_device` ayarıyla (`auto` / `cpu` / `cuda`) zorlayabilir. Bkz. ADR-0010, plan 0009.
 - **Zombie Device (Hayalet Cihaz)**: Fiziksel bağlantısı kesilmiş olmasına rağmen PortAudio'nun (ve Windows sürücüsünün) hâlâ listelemaya devam ettiği mikrofon. `sd.query_devices()` cihazı gösterir, ancak `sd.InputStream` açılmaya çalışıldığında PortAudio hatası (-9996 / Invalid device) fırlatır. `QMediaDevices.audioInputs()` (Qt) ve `sd.query_devices()` (PortAudio) farklı isim formatları kullandığından iki liste arasında güvenilir isim eşleştirmesi yapılamaz. Bkz. ADR-0007.
 
 ## Mimari Kurallar
@@ -119,7 +120,8 @@ Tüm uygulama verisi tek bir kökte tutulur (ADR-0009). Kök yalnızca `core/set
     1. **Monitoring (Gözlem)**: Dashboard üzerinden detaylı log takibi ve ayarların yapılması.
     2. **Operation (Operasyon)**: OSD üzerinden kayıt/işleme durumu ve kritik hataların takibi.
 - **Deterministic Specificity (Belirleyici Spesifiklik)**: Hata mesajları genel ("Hata oluştu") değil, spesifik ("Mikrofon Susturuldu" veya "Cihaz Koptu") olmalıdır. Sistem neden bozulduğunu biliyorsa bunu kullanıcıdan gizlemez.
-- Model boyutu ve donanım (CPU/GPU) ayarları `TranscriptionWorker` içindeki yapılandırmaya bağlıdır.
+- Modelin hangi donanımda çalışacağını `TranscriptionWorker._open_model` seçer: önce GPU (`core/gpu.py` "kullanılabilir" diyorsa), olmazsa CPU. GPU'ya dokunan her yeni kod yolu CPU'ya dönüşünü ve testini de getirir (ADR-0010). `compute_type` ayarı yalnız CPU içindir; GPU'da hesap tipi otomatik seçilir.
+- Testler makinenin GPU'suna bağlı olamaz: `tests/conftest.py::_no_gpu` GPU'yu varsayılan olarak kullanılamaz yapar; GPU davranışını sınayan test `core.gpu`'yu kendisi yamalar.
 - **Uygulama Dil Seçimi (App Language Selection)**: Desteklenen diller `translations/` dizinindeki JSON dosyalarına göre dinamik olarak listelenir (`core/i18n.py`). Sistem dili çalışma zamanında algılanarak dil listesinin (combobox) en üstünde, dinamik olarak yerelleştirilmiş `(Sistem)` / `(System)` etiketiyle sunulur. Dil seçimi değiştiğinde uygulama yeniden başlatılmaz; `TrayApp.apply_language()` çağrılır, tray menüsü rebuild edilir, Settings dialog kapatılıp yeni dille yeniden açılır (Live UI ilkesi).
 
 ## Anti-Patterns ve Yasaklar (Aşırı Mühendisliğe Karşı)

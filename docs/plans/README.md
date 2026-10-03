@@ -4,7 +4,7 @@
 > her plan kendi kendine yeten bir devir belgesidir. Bir sayıya ya da karara
 > ihtiyacın varsa planı aç, buradan alıntılama.
 
-**Son güncelleme:** 2026-10-01 · **8 plan, 4 kapalı, 4 açık.** (0006–0008 hız/doğruluk incelemesinden açıldı.)
+**Son güncelleme:** 2026-10-03 · **9 plan, 4 kapalı, 5 açık.** (0006–0008 hız/doğruluk incelemesinden, 0009 ADR-0010'dan açıldı.)
 
 ⚠️ Bu tablo elle tutuluyor ve bayatlayabilir. Şüphelendiğinde depodan doğrula:
 
@@ -36,9 +36,11 @@ planı açık gösterebilir; `katla()` bunun içindir.
 | [0007](0007-sessizlik-katmanlarini-sadelestirme.md) | Sessizlik katmanlarını sadeleştirme (önce ölç) | ⏸️ Faz 1a ✅, kayıt bekliyor | Faz 1b: kullanıcının kayıtları |
 | [0005](0005-ses-islerinin-ui-thread-olcumu.md) | Ses işlerinin UI thread'de çalışması | ⏸️ Veri bekliyor | Kullanıcının Windows ölçümü |
 | [0008](0008-model-yuklenince-isinma.md) | Model yüklenince ısınma transkripsiyonu | ⏸️ Faz 1 ✅, doğrulama bekliyor | Faz 2: kullanıcının Windows log'u |
+| [0009](0009-gpu-destegi.md) | GPU desteği (isteğe bağlı hızlandırma) | ⏸️ Faz 1 ✅, karar bekliyor | Faz 2–3: kullanıcı kararı (dağıtım, ayar ekranı) |
 
 0001–0004 2026-10-01'de kapandı (aşağıda "Kapalı planlar"). 0006–0008
-`docs/hiz-dogruluk-incelemesi-2026-10-01.md`'nin bulgularıdır.
+`docs/hiz-dogruluk-incelemesi-2026-10-01.md`'nin bulgularıdır; 0009 hedefin
+netleşmesiyle (ADR-0010) açıldı.
 
 ---
 
@@ -70,6 +72,7 @@ planı açık gösterebilir; `katla()` bunun içindir.
 0006 Faz 1–3 ✅ ──► 0007 Faz 1a ✅ ──► (kullanıcı ölçümleri) ──► 0006 Faz 4 kararı, 0007 Faz 2
 0005  (kullanıcı ölçümü gelince, bağımsız)
 0008 Faz 1 ✅ ──► (kullanıcının Windows log'u)
+0009 Faz 1 ✅ ──► (kullanıcı kararı) ──► Faz 2 dağıtım, Faz 3 ayar ekranı ──► Faz 4 (0007 Faz 1b'nin kayıtlarıyla)
 ```
 
 ⚖️ **Gerekçe:** 0006 Faz 1–3 ölçüm beklemeden yapılabilir ve kısa kayıtları
