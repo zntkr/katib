@@ -1,0 +1,3 @@
+# Optional: the CUDA library that lets the model run on an NVIDIA GPU (ADR-0010).
+# Without it Katib runs on the CPU. core/gpu.py finds it under site-packages/nvidia/*/bin.
+nvidia-cublas-cu12==12.9.2.10

@@ -1,9 +1,11 @@
-PySide6
-faster-whisper
-numpy
-sounddevice
-keyboard
-pynput
-pyperclip
-huggingface_hub
-truststore
+# Direct runtime dependencies, pinned (ADR-0011). Everything they pull in is pinned in
+# constraints.txt; always install with:  pip install -r requirements.txt -c constraints.txt
+PySide6==6.10.2
+faster-whisper==1.2.1
+numpy==2.4.4
+sounddevice==0.5.5
+keyboard==0.13.5
+pynput==1.8.2
+pyperclip==1.11.0
+huggingface_hub==1.12.0
+truststore==0.10.4

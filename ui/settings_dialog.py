@@ -93,7 +93,8 @@ class SettingsDialog(QDialog):
         # would hand focus to the first ComboBox. Because btn_hotkey is a real child widget,
         # setFocus() override works; there is no :focus style, so the user sees no highlight,
         # but Tab navigation starts from btn_hotkey.
-        QTimer.singleShot(0, self.btn_hotkey.setFocus)
+        # The button is the timer's context: Qt drops the call if the dialog is destroyed first.
+        QTimer.singleShot(0, self.btn_hotkey, self.btn_hotkey.setFocus)
 
     def _section_title(self, key: str) -> QLabel:
         p = theme_manager.palette
@@ -347,7 +348,7 @@ class SettingsDialog(QDialog):
                     right.addLayout(self._make_row(t(sdef.ui_label), widget))
 
     def focus_model(self) -> None:
-        QTimer.singleShot(50, self.model_select_combo.setFocus)
+        QTimer.singleShot(50, self.model_select_combo, self.model_select_combo.setFocus)
 
     def _on_dynamic_changed(self, key: str, value):
         self.settings.set(key, value)

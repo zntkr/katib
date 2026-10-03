@@ -15,8 +15,8 @@ build_diag*.log
 installer/
 
 # Build araçları ve script'leri
+# (hooks/ burada DEĞİL: Katib.spec onu ister, depoda olmalı — ADR-0011)
 analyze_build.py
-hooks/
 
 
 # Sanal Ortamlar (Virtual Environments)
@@ -54,4 +54,3 @@ cleaner.py
 check.py
 diff.txt
 .gemini/
-CONTEXT.md

@@ -1,2 +1,4 @@
-pytest
-pytest-cov
+# Test and build tools, pinned (ADR-0011). Install together with requirements.txt and -c constraints.txt.
+pytest==9.0.3
+pytest-cov==7.1.0
+pyinstaller==6.19.0

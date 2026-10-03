@@ -47,12 +47,14 @@ Son sürümü [Releases](../../releases) sayfasından indir, zip'i aç, `Katib.e
 
 ### Seçenek B — Kaynak koddan
 
-Python 3.10 veya üzeri gerektirir
+Python 3.14 veya üzeri gerektirir
 
 ```bash
 git clone https://github.com/zntkr/katib.git
 cd katib
-pip install -r requirements.txt
+py -3.14 -m venv .venv          # Linux/macOS: python3.14 -m venv .venv
+.venv\Scripts\activate          # Linux/macOS: source .venv/bin/activate
+pip install -r requirements.txt -c constraints.txt
 python main.py
 ```
 
@@ -109,8 +111,7 @@ Katib, ağdan yalıtılmış ortamlara uygun şekilde tasarlanmıştır:
 ## Kaynak koddan derleme
 
 ```bash
-pip install pyinstaller
-pyinstaller Katib.spec
+build.bat
 ```
 
 Çıktı: `dist/Katib/Katib.exe`

@@ -47,12 +47,14 @@
 
 ### الخيار ب — من المصدر
 
-يتطلب Python 3.10 أو أحدث
+يتطلب Python 3.14 أو أحدث
 
 ```bash
 git clone https://github.com/zntkr/katib.git
 cd katib
-pip install -r requirements.txt
+py -3.14 -m venv .venv          # Linux/macOS: python3.14 -m venv .venv
+.venv\Scripts\activate          # Linux/macOS: source .venv/bin/activate
+pip install -r requirements.txt -c constraints.txt
 python main.py
 ```
 
@@ -98,8 +100,7 @@ python main.py
 ## البناء من المصدر
 
 ```bash
-pip install pyinstaller
-pyinstaller Katib.spec
+build.bat
 ```
 
 المخرجات: `dist/Katib/Katib.exe`

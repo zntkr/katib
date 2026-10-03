@@ -44,8 +44,8 @@ grep -n "compute_device" ui/settings_dialog.py   # çıktı boş
 **Ortam**
 - Testler: `python -m pytest -q`; referans Windows CI. Testler GPU'ya bağlı değildir
   (`tests/conftest.py::_no_gpu`).
-- Gerçek GPU ile deneme için geliştirme ortamında `nvidia-cublas-cu12` pip paketi
-  kurulu olmalı; `core/gpu.py` onu `site-packages/nvidia/*/bin` altında bulur.
+- Gerçek GPU ile deneme için sanal ortama `requirements-gpu.txt` kurulmalı
+  (`nvidia-cublas-cu12`); `core/gpu.py` onu `site-packages/nvidia/*/bin` altında bulur.
 - ⚠️ Proje sahibinin makinesinde CUDA Toolkit **13** kurulu; CTranslate2 4.7.1
   CUDA **12** ister, o kurulum işe yaramaz.
 

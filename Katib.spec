@@ -124,36 +124,20 @@ a = Analysis(
         'PySide6.Qt3DLogic', 'PySide6.Qt3DRender',
         'PySide6.QtCharts', 'PySide6.QtDataVisualization', 'PySide6.QtStateMachine',
 
-        # Gereksiz Olabilecek Standart & 3. Parti Kütüphaneler
-        'tkinter', 'matplotlib', 'IPython', 'scipy', 'PIL', 'PyQt5', 'PyQt6',
-
-        # Büyük ve Kullanılmayan Paketler (~490 MB tasarruf)
-        'torch', 'torchvision', 'torchaudio',
-        'transformers',
-        # onnxruntime kasıtlı olarak dahil: faster_whisper VAD filtresi için gerekli
-        'pandas', 'pandas.core',
-        'sklearn', 'sklearn.utils',
-        'grpc', 'grpc._cython',
-        'lxml',
-        'hf_xet', 'xet_client',
-
-        # Kullanılmayan 3. Parti Paketler
-        'cryptography',
-        'pydantic', 'pydantic_core', 'pydantic_settings',
-        'aiohttp', 'aiohttp_socks', 'aiosignal',
-        'fastapi', 'starlette', 'uvicorn',
-        'flask', 'werkzeug',
-        'anthropic',
-        'chromadb',
-        'sentence_transformers',
-        'sympy', 'networkx', 'paramiko', 'kubernetes', 'neo4j', 'libcst',
+        # huggingface_hub'ın isteğe bağlı indirme hızlandırıcısı; model indirme onsuz da çalışır.
+        # onnxruntime kasıtlı olarak dahil: faster_whisper VAD filtresi için gerekli.
+        'hf_xet',
 
         # Kullanılmayan Python Stdlib Modülleri
-        'unittest', 'doctest', 'pydoc',
+        'tkinter', 'unittest', 'doctest', 'pydoc',
         'xmlrpc', 'xmlrpc.client', 'xmlrpc.server',
         'curses', 'antigravity', 'this',
-        'lib2to3', 'idlelib', 'turtledemo', 'turtle',
+        'idlelib', 'turtledemo', 'turtle',
         'ensurepip', 'venv',
+
+        # Derleme projenin .venv'inden yapılır (ADR-0011): ortamda yalnız constraints.txt'teki
+        # paketler vardır. İlgisiz üçüncü parti paketleri (torch, pandas, fastapi…) burada tek
+        # tek dışlamak gerekmez; öyle bir liste gerekiyorsa derleme yanlış ortamdan yapılıyordur.
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,

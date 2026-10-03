@@ -88,14 +88,15 @@ PRs welcome. For significant changes, open an issue first. Architecture decision
 ```bash
 git clone https://github.com/zntkr/katib.git
 cd katib
-pip install -r requirements.txt
+py -3.14 -m venv .venv          # Linux/macOS: python3.14 -m venv .venv
+.venv\Scripts\activate          # Linux/macOS: source .venv/bin/activate
+pip install -r requirements.txt -c constraints.txt
 python main.py
 ```
 
 ```bash
 # Build
-pip install pyinstaller
-pyinstaller Katib.spec
+build.bat
 ```
 
 ---

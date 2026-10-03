@@ -47,12 +47,14 @@ Descarga la última versión desde la página de [Releases](../../releases), des
 
 ### Opción B — Desde el código fuente
 
-Requiere Python 3.10+
+Requiere Python 3.14+
 
 ```bash
 git clone https://github.com/zntkr/katib.git
 cd katib
-pip install -r requirements.txt
+py -3.14 -m venv .venv          # Linux/macOS: python3.14 -m venv .venv
+.venv\Scripts\activate          # Linux/macOS: source .venv/bin/activate
+pip install -r requirements.txt -c constraints.txt
 python main.py
 ```
 
@@ -98,8 +100,7 @@ Katib está diseñado para funcionar en entornos sin acceso a internet:
 ## Compilar desde el código fuente
 
 ```bash
-pip install pyinstaller
-pyinstaller Katib.spec
+build.bat
 ```
 
 Resultado: `dist/Katib/Katib.exe`

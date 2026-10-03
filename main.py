@@ -135,7 +135,9 @@ def setup_logging():
             try:
                 # Limit depth and total size to keep log entries readable.
                 # Strings are masked: they may hold dictated text (ADR-0004).
-                locals_str = pprint.pformat(mask_text(frame.f_locals), indent=2, width=120, depth=3, compact=True)
+                # dict(): since Python 3.13 f_locals is a proxy, not a dict, and mask_text
+                # would pass it through unmasked.
+                locals_str = pprint.pformat(mask_text(dict(frame.f_locals)), indent=2, width=120, depth=3, compact=True)
                 if len(locals_str) > 4096:
                     locals_str = locals_str[:4096] + "\n... (truncated)"
                 log_message.append(locals_str)

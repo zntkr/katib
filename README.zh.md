@@ -47,12 +47,14 @@
 
 ### 方式 B — 从源码运行
 
-需要 Python 3.10 及以上版本
+需要 Python 3.14 及以上版本
 
 ```bash
 git clone https://github.com/zntkr/katib.git
 cd katib
-pip install -r requirements.txt
+py -3.14 -m venv .venv          # Linux/macOS: python3.14 -m venv .venv
+.venv\Scripts\activate          # Linux/macOS: source .venv/bin/activate
+pip install -r requirements.txt -c constraints.txt
 python main.py
 ```
 
@@ -98,8 +100,7 @@ Katib 设计上支持完全隔离网络的环境：
 ## 从源码构建
 
 ```bash
-pip install pyinstaller
-pyinstaller Katib.spec
+build.bat
 ```
 
 输出文件：`dist/Katib/Katib.exe`

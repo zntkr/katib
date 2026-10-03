@@ -47,12 +47,14 @@
 
 ### 옵션 B — 소스에서 빌드
 
-Python 3.10 이상 필요
+Python 3.14 이상 필요
 
 ```bash
 git clone https://github.com/zntkr/katib.git
 cd katib
-pip install -r requirements.txt
+py -3.14 -m venv .venv          # Linux/macOS: python3.14 -m venv .venv
+.venv\Scripts\activate          # Linux/macOS: source .venv/bin/activate
+pip install -r requirements.txt -c constraints.txt
 python main.py
 ```
 
@@ -98,8 +100,7 @@ Katib은 완전 폐쇄 환경(에어갭)에서도 사용할 수 있도록 설계
 ## 소스에서 빌드
 
 ```bash
-pip install pyinstaller
-pyinstaller Katib.spec
+build.bat
 ```
 
 출력 경로: `dist/Katib/Katib.exe`

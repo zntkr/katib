@@ -110,6 +110,21 @@ Tüm uygulama verisi tek bir kökte tutulur (ADR-0009). Kök yalnızca `core/set
 - Loglar: `<kök>\Logs\katib.log` — `get_log_dir()`
 - Eski konum `~/.katib_app`, açılışta `migrate_legacy_data()` ile taşınır.
 
+## Geliştirme Ortamı (ADR-0011)
+Python sürümü tek yerde yazar: `.python-version`. CI ve `build.bat` oradan okur. Her şey projenin kendi sanal ortamında çalışır; genel Python ortamından çalıştırma ve derleme desteklenmez (makinede birden çok Python kurulu olabilir ve `python` komutu yanlışına gidebilir).
+
+```
+py -3.14 -m venv .venv
+.venv\Scripts\python -m pip install -r requirements.txt -r requirements-dev.txt -c constraints.txt
+.venv\Scripts\python -m pytest -q
+.venv\Scripts\python main.py
+build.bat                      # ortamı kurar/eşitler, PyInstaller ve Inno Setup'ı çalıştırır
+```
+
+- Bağımlılıklar sabittir: doğrudan olanlar `requirements*.txt` içinde `==` ile, çektikleri her paket `constraints.txt` içinde. Sürüm değiştirirken ikisi birlikte güncellenir (adımlar: ADR-0011 → Sonuçlar).
+- GPU ile denemek için ayrıca: `.venv\Scripts\python -m pip install -r requirements-gpu.txt` (ADR-0010).
+- Derlemenin istediği her dosya depoda olmalıdır (`hooks/`, `Katib.iss`). `.gitignore`'a bir şey eklemeden önce `Katib.spec` ve `build.bat`'ın onu isteyip istemediğine bak.
+
 ## Geliştirici Notları
 - Yeni bir ayar eklenirken `core/settings.py` üzerinden geçilmeli ve varsayılan değeri tanımlanmalıdır.
 - Kullanıcıya gösterilecek operasyonel hatalar OSD üzerinden bildirilir (worker'ların `error_occurred` sinyali `main.py`'de `osd.setStateError`'a bağlıdır). OSD tek operasyonel görünürlük kanalıdır; dashboard kapalıyken bile kullanıcı kritik hatayı görür.

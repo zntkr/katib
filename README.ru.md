@@ -47,12 +47,14 @@
 
 ### Вариант B — Из исходного кода
 
-Требуется Python 3.10+
+Требуется Python 3.14+
 
 ```bash
 git clone https://github.com/zntkr/katib.git
 cd katib
-pip install -r requirements.txt
+py -3.14 -m venv .venv          # Linux/macOS: python3.14 -m venv .venv
+.venv\Scripts\activate          # Linux/macOS: source .venv/bin/activate
+pip install -r requirements.txt -c constraints.txt
 python main.py
 ```
 
@@ -98,8 +100,7 @@ Katib разработан с расчётом на изолированные �
 ## Сборка из исходного кода
 
 ```bash
-pip install pyinstaller
-pyinstaller Katib.spec
+build.bat
 ```
 
 Результат: `dist/Katib/Katib.exe`

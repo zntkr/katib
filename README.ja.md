@@ -47,12 +47,14 @@
 
 ### オプション B — ソースから実行
 
-Python 3.10 以上が必要です
+Python 3.14 以上が必要です
 
 ```bash
 git clone https://github.com/zntkr/katib.git
 cd katib
-pip install -r requirements.txt
+py -3.14 -m venv .venv          # Linux/macOS: python3.14 -m venv .venv
+.venv\Scripts\activate          # Linux/macOS: source .venv/bin/activate
+pip install -r requirements.txt -c constraints.txt
 python main.py
 ```
 
@@ -98,8 +100,7 @@ Katib はエアギャップ環境でも使用できるよう設計されてい�
 ## ソースからビルド
 
 ```bash
-pip install pyinstaller
-pyinstaller Katib.spec
+build.bat
 ```
 
 出力先: `dist/Katib/Katib.exe`

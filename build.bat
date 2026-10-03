@@ -1,14 +1,35 @@
 @echo off
+setlocal
+cd /d "%~dp0"
 echo ===================================================
 echo Katib Paketleme ve Kurulum (Setup) Olusturucu
 echo ===================================================
 
-:: Python komutunu tanimlayin
-set PYTHON_CMD=C:\Users\ASUS\AppData\Local\Python\bin\python.exe
+:: Derleme her zaman projenin kendi sanal ortamindan (.venv) yapilir; paketlenen sey
+:: yalniz requirements*.txt ve constraints.txt'te yazan surumlerdir (ADR-0011).
+:: Python surumu tek yerde yazar: .python-version
+set /p PY_VERSION=<.python-version
+set VENV_PY=.venv\Scripts\python.exe
 
 echo.
-echo [1/2] PyInstaller ile uygulama paketleniyor...
-%PYTHON_CMD% -m PyInstaller Katib.spec --clean
+echo [1/3] Sanal ortam hazirlaniyor (Python %PY_VERSION%)...
+if not exist %VENV_PY% py -%PY_VERSION% -m venv .venv
+if not exist %VENV_PY% (
+    echo [HATA] Sanal ortam kurulamadi. Python %PY_VERSION% kurulu mu? ^(py -0p ile bakin^)
+    pause
+    exit /b 1
+)
+%VENV_PY% -m pip install --disable-pip-version-check -q -r requirements.txt -r requirements-dev.txt -c constraints.txt
+if %ERRORLEVEL% NEQ 0 (
+    echo [HATA] Bagimliliklar kurulamadi!
+    pause
+    exit /b %ERRORLEVEL%
+)
+echo [OK] Sanal ortam hazir.
+
+echo.
+echo [2/3] PyInstaller ile uygulama paketleniyor...
+%VENV_PY% -m PyInstaller Katib.spec --clean -y
 if %ERRORLEVEL% NEQ 0 (
     echo [HATA] PyInstaller paketlemesi basarisiz oldu!
     pause
@@ -17,7 +38,7 @@ if %ERRORLEVEL% NEQ 0 (
 echo [OK] PyInstaller islemi tamamlandi.
 
 echo.
-echo [2/2] Inno Setup ile Setup.exe olusturuluyor...
+echo [3/3] Inno Setup ile Setup.exe olusturuluyor...
 :: Inno Setup 6 ve 7 icin olasi yollari kontrol edelim
 set ISCC=""
 if exist "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" set ISCC="C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
@@ -31,9 +52,9 @@ if not %ISCC%=="" (
         pause
         exit /b %ERRORLEVEL%
     )
-    echo [OK] Kurulum dosyasi basariyla olusturuldu (installer/ klasorunu kontrol edin).
+    echo [OK] Kurulum dosyasi basariyla olusturuldu ^(installer/ klasorunu kontrol edin^).
 ) else (
-    echo [UYARI] Inno Setup Compiler (ISCC.exe) bulunamadi.
+    echo [UYARI] Inno Setup Compiler ^(ISCC.exe^) bulunamadi.
     echo Lutfen Inno Setup'i kurun veya 'Katib.iss' dosyasina cift tiklayip kendiniz 'Compile' yapin.
 )
 
