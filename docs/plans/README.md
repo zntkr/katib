@@ -4,7 +4,7 @@
 > her plan kendi kendine yeten bir devir belgesidir. Bir sayıya ya da karara
 > ihtiyacın varsa planı aç, buradan alıntılama.
 
-**Son güncelleme:** 2026-10-04 · **10 plan, 4 kapalı, 6 açık.** (0006–0008 hız/doğruluk incelemesinden, 0009 ADR-0010'dan, 0010 ADR-0012'den açıldı.)
+**Son güncelleme:** 2026-10-04 · **11 plan, 4 kapalı, 7 açık.** (0006–0008 hız/doğruluk incelemesinden, 0009 ADR-0010'dan, 0010 ADR-0012'den, 0011 ADR-0014'ten açıldı.)
 
 ⚠️ Bu tablo elle tutuluyor ve bayatlayabilir. Şüphelendiğinde depodan doğrula:
 
@@ -32,6 +32,7 @@ planı açık gösterebilir; `katla()` bunun içindir.
 
 | Plan | Konu | Öncelik | Bağımlılık |
 |---|---|---|---|
+| [0011](0011-kurulum-konumu-ve-tasima.md) | Kurulum konumu (kaldırıcı kullanıcı verisini siliyordu) | 🔴 ⏸️ Faz 1 ✅, doğrulama bekliyor | Faz 2: kullanıcının kendi makinesinde yükseltme |
 | [0006](0006-kayit-baslangici-gecikmesi.md) | Kayıt başlangıcı: gecikme ve kesilen ilk hece | 🔄 3/4 faz | Faz 4: Windows ölçümü + kullanıcı kararı |
 | [0007](0007-sessizlik-katmanlarini-sadelestirme.md) | Sessizlik katmanlarını sadeleştirme (önce ölç) | ⏸️ Faz 1a ✅, kayıt bekliyor | Faz 1b: kullanıcının kayıtları |
 | [0005](0005-ses-islerinin-ui-thread-olcumu.md) | Ses işlerinin UI thread'de çalışması | ⏸️ Veri bekliyor | Kullanıcının Windows ölçümü |

@@ -109,6 +109,7 @@ Tüm uygulama verisi tek bir kökte tutulur (ADR-0009). Kök yalnızca `core/set
 - Modeller: `<kök>\Models\<model-klasörü>` — `DEFAULT_DOWNLOAD_PARENT`. Klasör adı `repo_id`'nin son parçasıdır (örn. `faster-whisper-small`).
 - Loglar: `<kök>\Logs\katib.log` — `get_log_dir()`
 - Eski konum `~/.katib_app`, açılışta `migrate_legacy_data()` ile taşınır.
+- **Program dosyaları veri kökünde durmaz (ADR-0014):** kurulum her zaman `%LOCALAPPDATA%\Programs\Katib` klasörüne yapılır (klasör sorulmaz) ve kaldırıcı yalnız kendi kurduğunu kaldırır. Betiğe veri köküne yazan ya da oradan silen satır eklenmez (`tests/test_installer.py`). 1.0.0 programı veri köküne kuruyordu (plan 0011).
 
 ## Geliştirme Ortamı (ADR-0011)
 Python sürümü tek yerde yazar: `.python-version`. CI ve `build.bat` oradan okur. Her şey projenin kendi sanal ortamında çalışır; genel Python ortamından çalıştırma ve derleme desteklenmez (makinede birden çok Python kurulu olabilir ve `python` komutu yanlışına gidebilir).
