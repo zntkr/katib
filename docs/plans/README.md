@@ -4,7 +4,7 @@
 > her plan kendi kendine yeten bir devir belgesidir. Bir sayıya ya da karara
 > ihtiyacın varsa planı aç, buradan alıntılama.
 
-**Son güncelleme:** 2026-10-04 · **11 plan, 4 kapalı, 7 açık.** (0006–0008 hız/doğruluk incelemesinden, 0009 ADR-0010'dan, 0010 ADR-0012'den, 0011 ADR-0014'ten açıldı.)
+**Son güncelleme:** 2026-10-06 · **14 plan, 4 kapalı, 10 açık.** (0006–0008 hız/doğruluk incelemesinden, 0009 ADR-0010'dan, 0010 ADR-0012'den, 0011 ADR-0014'ten, 0012–0014 2026-10-06 hız incelemesinden açıldı.)
 
 ⚠️ Bu tablo elle tutuluyor ve bayatlayabilir. Şüphelendiğinde depodan doğrula:
 
@@ -39,10 +39,15 @@ planı açık gösterebilir; `katla()` bunun içindir.
 | [0008](0008-model-yuklenince-isinma.md) | Model yüklenince ısınma transkripsiyonu | ⏸️ Faz 1 ✅, doğrulama bekliyor | Faz 2: kullanıcının Windows log'u |
 | [0009](0009-gpu-destegi.md) | GPU desteği (isteğe bağlı hızlandırma) | ⏸️ Faz 1 ✅, karar bekliyor | Faz 2–3: kullanıcı kararı (dağıtım, ayar ekranı) |
 | [0010](0010-tek-pencereli-arayuz.md) | Tek pencereli arayüz (dashboard'un kaldırılması) | ⏸️ Faz 1–3 ✅, doğrulama bekliyor | Faz 4: kullanıcının gerçek uygulamada denemesi |
+| [0012](0012-cozumleme-ayarlari-ve-gecikme-olcumu.md) | Çözümleme ayarları ve uçtan uca gecikme ölçümü | 🟠 ⏳ Başlanmadı | Faz 1–2 hemen yapılabilir; Faz 4–5 kullanıcı ölçümü (Faz 3), Faz 5 ayrıca onay |
+| [0013](0013-large-v3-turbo-modeli.md) | `large-v3-turbo` modeli | 🟠 ⏸️ Karar bekliyor | Model kaynağı ve listedeki yer: kullanıcı kararı |
+| [0014](0014-uzun-diktelerde-arka-planda-cozumleme.md) | Uzun diktelerde arka planda çözümleme | 🟠 ⏸️ Veri bekliyor | 🛑 0012 Faz 4; 0012 Faz 3 ölçümü + kullanıcı kararı |
 
 0001–0004 2026-10-01'de kapandı (aşağıda "Kapalı planlar"). 0006–0008
 `docs/hiz-dogruluk-incelemesi-2026-10-01.md`'nin bulgularıdır; 0009 hedefin
-netleşmesiyle (ADR-0010) açıldı.
+netleşmesiyle (ADR-0010) açıldı. 0012–0014 `docs/hiz-incelemesi-2026-10-06.md`'nin
+bulgularıdır; aynı incelemeyle 0006 Faz 4'e seçenek C ("ilk basışta uyan, N dk
+uyanık kal"), 0007'ye Silero/seviye analizi karşılaştırması eklendi.
 
 ---
 
@@ -50,10 +55,15 @@ netleşmesiyle (ADR-0010) açıldı.
 
 ### 🛑 SERT — bozarsan bir şey kırılır
 
-*Şu an yok.*
+- **0012 Faz 4 → 0014 Faz 2.** Parçalı ve bütün çözümleme aynı `decode_options`'ı
+  kullanmalı; 0014 sabit sözlüğe göre yazılırsa 0012 Faz 4 onu sessizce ayırır ve
+  `olcum.py`'nin ölçtüğü şey çalışan şey olmaz.
 
 ### ⚖️ YUMUŞAK — yalnız öncelik, güvenlik değil
 
+- **0012 Faz 2 → 0007 Faz 1b, 0012 Faz 3, 0013 Faz 2.** Ölçüm betiği önce ısınma,
+  `--cihaz` ve tekrar kazanmalı; yoksa ilk kaydın süresi soğuk başlangıcı içerir ve
+  GPU ölçülemez. Kayıt seti üç plan için ortaktır — kullanıcı bir kez kaydeder.
 - **0006 Faz 1–3 → 0007 Faz 1b.** Tuş ve mikrofon gecikmesi düşmeden alınan
   ölçüm, kısa kayıtları olduğundan kısa gösterir ve 0007'nin asgari süre
   kararını yanıltır. Ters sıra zararsızdır ama ölçüm tekrarlanmalıdır.
@@ -75,7 +85,13 @@ netleşmesiyle (ADR-0010) açıldı.
 0005  (kullanıcı ölçümü gelince, bağımsız)
 0008 Faz 1 ✅ ──► (kullanıcının Windows log'u)
 0009 Faz 1 ✅ ──► (kullanıcı kararı) ──► Faz 2 dağıtım, Faz 3 ayar ekranı ──► Faz 4 (0007 Faz 1b'nin kayıtlarıyla)
+0012 Faz 1–2 ──► (kullanıcı: ortak kayıt seti, 0007 Faz 1b + 0012 Faz 3 + 0013 Faz 2) ──► 0012 Faz 4 ──► 0014 Faz 0 kararı
+0013 (kaynak kararı) ──► Faz 1 ──► Faz 2 ölçümü
 ```
+
+⚖️ **2026-10-06 eki:** 0012 Faz 1–2 ölçüm beklemeden yapılabilir ve sonraki bütün
+hız kararlarının (0006 Faz 4, 0007 Faz 2, 0009, 0013, 0014) ölçüm aracıdır → hız
+işlerinde önce o.
 
 ⚖️ **Gerekçe:** 0006 Faz 1–3 ölçüm beklemeden yapılabilir ve kısa kayıtları
 uzatır; 0007'nin ölçümü bu yüzden 0006'dan **sonra** alınırsa "0,5 sn altı"

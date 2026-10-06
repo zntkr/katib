@@ -73,6 +73,9 @@ kod `main`'de); `beam_size=5` yerine `1` ve
 yapan otomatik dil algılama yerine dilin bir kez seçilmesi; tuşu yoklama yerine
 olayla dinlemek.
 
+> 2026-10-06: ısınma ve olayla dinleme yapıldı (0008, 0006 Faz 3); `beam_size`,
+> `without_timestamps` ve dil seçimi → [plan 0012](plans/0012-cozumleme-ayarlari-ve-gecikme-olcumu.md).
+
 ### Önce ölçüm altyapısı
 
 2–4'ün hepsi "daha hızlı / daha doğru" iddiası; bunu tartmak için kullanıcının
@@ -88,6 +91,13 @@ amaca hizmet etmeden karmaşıklık ve paket boyutu ekler.
 > yakın kalite" olarak netleştirdi ve GPU desteğini onayladı. Karar ve ölçümler:
 > [ADR-0010](adr/0010-optional-gpu-acceleration.md); iş:
 > [plan 0009](plans/0009-gpu-destegi.md). Diğer üç madde için not geçerliliğini korur.
+
+> ⚠️ **2026-10-06 — "Canlı transkripsiyon" maddesi yeniden tartılıyor.** Proje sahibi
+> diktelerin çoğunun 15 sn'yi aştığını bildirdi; gerekçenin öncülü ("yalnız uzun
+> diktelerde anlamlı") değişti. Canlı **yazma** hâlâ önerilmiyor; önerilen, metni yine
+> bırakışta tek seferde yapıştırıp çözümlemeyi konuşma sürerken arka planda yapmak.
+> Ölçümle kapılı: [plan 0014](plans/0014-uzun-diktelerde-arka-planda-cozumleme.md),
+> tarama: [`hiz-incelemesi-2026-10-06.md`](hiz-incelemesi-2026-10-06.md) §9.
 
 ## Bakılmadı — kapsam sınırı
 

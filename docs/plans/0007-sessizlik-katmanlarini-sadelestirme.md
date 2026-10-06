@@ -41,6 +41,25 @@ Sorunlar (kod okuması, **ölçülmedi**):
 yazar. Ama hangisinin gerçek kaydı ne sıklıkla attığı ölçülmedi. Bu plan
 tahminle eşik oynatmaz; önce ölçer.
 
+### Hangisi daha kararlı: Silero VAD mi, kendi seviye analizimiz mi? *(2026-10-06)*
+
+Proje sahibinin sorusu; ayrıntı `docs/hiz-incelemesi-2026-10-06.md` §11 (kaynak + kod okuması).
+
+| | Katman 2 — `is_silent` | Katman 3 — `vad_filter` |
+|---|---|---|
+| Yöntem | Enerji (RMS) eşiği, sabit -55 dB | Silero VAD v6 (sinir ağı, faster-whisper'ın içinde) |
+| Ayırt ettiği | Yalnız "ne kadar yüksek" | "Konuşma mı": fan, klavye, müzik konuşmadan ayrılır |
+| Karar | Kaydın tamamına evet/hayır | Konuşma bölümlerini bulur, aradaki sessizliği atar |
+| Zayıf yeri | Kısık mikrofon, fısıltı; yüksek sesli gürültüyü geçirir | Yumuşak başlayan kelime (`speech_pad_ms=400` dolgu) |
+
+**Değerlendirme:** Silero daha kararlıdır; içeriğe bakar, mikrofon kazancına bağlı
+değildir. Katman 2 yalnız kısa basışlarda ve kısık mikrofonda karar verir — yani
+tam da gerçek kaydı kaybetme riskinin olduğu yerde. **Uzun diktelerde** (proje
+sahibinde çoğunluk 15 sn+) katman 2 neredeyse hiç devreye girmez, Silero'nun değeri
+ise artar: düşünme duraklamaları Whisper'ın en çok uydurduğu yerdir ve 30 sn sınırını
+aşan sesi kısaltır. Bu, aşağıdaki hedef yapıyı (katman 2 → yalnız tam sıfır; sessizlik
+kararı Silero'da) destekler; karar yine Faz 1b ölçümüyle verilir.
+
 ---
 
 ## Devralma notu
@@ -69,7 +88,7 @@ grep -n "MIN_RECORDING_DURATION *=\|silence_db: float = -55\|vad_filter *= True"
 | Konu | Karar | Gerekçe |
 |---|---|---|
 | Eşik değiştirmeden önce | Ölçüm seti + betik (Faz 1) | "Daha doğru" iddiası ancak bir ölçüte göre tartılabilir |
-| Ölçüm seti | Kullanıcının 20–30 kısa kaydı: kısa yanıtlar (Evet/Tamam/Hayır), normal cümleler, kısık/fısıltı, gürültülü ortam, **konuşmasız** basışlar (yanlışlıkla dokunuş, ortam sesi), yalnız "Teşekkürler." | Hem kaybolan gerçek kaydı (yanlış negatif) hem geçen uydurmayı (yanlış pozitif) görmek için |
+| Ölçüm seti | Kullanıcının 20–30 kısa kaydı: kısa yanıtlar (Evet/Tamam/Hayır), normal cümleler, kısık/fısıltı, gürültülü ortam, **konuşmasız** basışlar (yanlışlıkla dokunuş, ortam sesi), yalnız "Teşekkürler."; ayrıca **duraklamalı 15 sn+ dikteler** (2026-10-06; plan 0012 ile ortak set) | Hem kaybolan gerçek kaydı (yanlış negatif) hem geçen uydurmayı (yanlış pozitif) görmek için |
 | Ölçülenler | Her kayıt için: hangi katmanda elendi / geçti, Whisper metni, doğru metne göre kelime hata oranı, Whisper süresi | Katman bazında karar |
 | Hedef yapı (ölçüme göre kesinleşir) | Katman 1: yalnız **yanlışlıkla dokunuş** (~0,2 sn altı). Katman 2: yalnız **tam sıfır** (Binary Armor, susturulmuş mikrofon). Katman 3: ölçüme göre `vad_filter` kalır ya da gider. Katman 4: kalır | Binary Armor ilkesine dönüş; sessizlik kararını Whisper'a bırakmak |
 | Başarı ölçütü | Konuşmalı kayıtlarda elenen = 0; konuşmasız kayıtlarda yapıştırılan uydurma metin = 0 (ya da bugünkü değerden kötü değil) | İki hata türü birlikte tartılır |
@@ -176,3 +195,10 @@ python scripts\olcum.py --min-sure 0.2 --no-seviye --no-vad  # katmanlar kapalı
 ```
 
 İki raporu da (metinsiz hâlleriyle) buraya yapıştırın.
+
+### 2026-10-06 — Silero / seviye analizi karşılaştırması eklendi
+
+Proje sahibinin "VAD mı kararlı, kendi sistemimiz mi?" sorusu "Neden bu plan"
+altına tabloyla yazıldı (`docs/hiz-incelemesi-2026-10-06.md` §11). Ölçüm setine
+duraklamalı 15 sn+ dikteler eklendi (diktelerin çoğu bu uzunlukta); set plan 0012
+ile ortak. Kod değişikliği yok.
