@@ -4,11 +4,15 @@ app's real decision chain. Whisper is faked; no model needed.
 """
 import wave
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from scripts.olcum import Ayarlar, degerlendir, kelime_hata_orani, olc, rapor, wav_oku
+from scripts.olcum import (
+    Ayarlar, Sonuc, cozumleme, degerlendir, kelime_hata_orani, main, model_ac, olc, rapor,
+    sure_ozeti, wav_oku,
+)
+from workers.transcription_worker import TRANSCRIBE_OPTIONS
 
 SR = 16000
 
@@ -113,3 +117,120 @@ class TestOlcVeRapor:
         sonuclar = olc(tmp_path, _model(" Gizli cümle."), Ayarlar())
         assert "Gizli" not in rapor(sonuclar)
         assert "Gizli" in rapor(sonuclar, metin_goster=True)
+
+
+# ------------------------------------------------------------------ plan 0012 Faz 2
+
+def _sonuc(sure_sn, ms):
+    return Sonuc("a.wav", True, None, 0.0, ms, "", sure_sn)
+
+
+class TestCozumleme:
+    def test_without_overrides_it_is_the_apps_options(self):
+        assert cozumleme(Ayarlar()) == dict(TRANSCRIBE_OPTIONS, vad_filter=True)
+
+    def test_overrides_reach_the_options(self):
+        options = cozumleme(Ayarlar(beam=1, zaman_damgasiz=True, sicaklik=(0.0,), vad=False))
+        assert options["beam_size"] == 1
+        assert options["without_timestamps"] is True
+        assert options["temperature"] == 0.0
+        assert options["vad_filter"] is False
+
+    def test_a_temperature_list_stays_a_list(self):
+        assert cozumleme(Ayarlar(sicaklik=(0.0, 0.4)))["temperature"] == [0.0, 0.4]
+
+    def test_overrides_are_what_whisper_is_called_with(self):
+        model = _model(" Merhaba.")
+        degerlendir(_speech(), model, Ayarlar(beam=1, zaman_damgasiz=True))
+        kwargs = model.transcribe.call_args[1]
+        assert kwargs["beam_size"] == 1 and kwargs["without_timestamps"] is True
+
+
+class TestTekrar:
+    def test_each_recording_runs_n_times_and_reports_the_median(self):
+        model = _model(" Merhaba.")
+        # start/end pairs: 100 ms, 300 ms, 200 ms → median 200 ms
+        clock = [0.0, 0.1, 1.0, 1.3, 2.0, 2.2]
+        with patch("scripts.olcum.time.perf_counter", side_effect=clock):
+            katman, _, ms = degerlendir(_speech(), model, Ayarlar(tekrar=3))
+        assert katman is None
+        assert model.transcribe.call_count == 3
+        assert ms == pytest.approx(200.0)
+
+
+class TestSureOzeti:
+    def test_times_are_split_by_recording_length(self):
+        sonuclar = [_sonuc(2.0, 100), _sonuc(3.0, 300), _sonuc(20.0, 1500), _sonuc(40.0, 4000)]
+        satirlar = sure_ozeti(sonuclar)
+        assert satirlar[0].startswith("Whisper süresi: medyan 900 ms")
+        assert any("< 5 sn" in line and "medyan 200 ms" in line and "(2 kayıt)" in line for line in satirlar)
+        assert any("15–30 sn" in line and "medyan 1500 ms" in line for line in satirlar)
+        assert any("> 30 sn" in line and "medyan 4000 ms" in line for line in satirlar)
+        assert not any("5–15 sn" in line for line in satirlar)  # empty bucket is left out
+
+    def test_nothing_measured_gives_no_lines(self):
+        assert sure_ozeti([Sonuc("a.wav", True, "sure", 1.0, None, "", 0.3)]) == []
+
+    def test_report_shows_the_recording_length(self, tmp_path):
+        TestOlcVeRapor()._wav(tmp_path / "k.wav", _speech(2.0))
+        (tmp_path / "k.txt").write_text("merhaba", encoding="utf-8")
+        metin = rapor(olc(tmp_path, _model(" Merhaba."), Ayarlar()))
+        assert "  2.0 " in metin and "< 5 sn" in metin
+
+
+class TestModelAc:
+    @pytest.fixture
+    def whisper(self):
+        with patch("faster_whisper.WhisperModel") as cls:
+            yield cls
+
+    def test_auto_without_a_gpu_opens_on_the_cpu_with_the_users_precision(self, whisper):
+        _, cihaz, compute_type = model_ac("m", "auto", None, 0, "int8")
+        assert (cihaz, compute_type) == ("cpu", "int8")
+        assert whisper.call_args[1]["device"] == "cpu"
+
+    def test_auto_with_a_gpu_opens_on_the_gpu(self, whisper):
+        with patch("core.gpu.unavailable_reason", return_value=None), \
+             patch("core.gpu.compute_type", return_value="float16"):
+            _, cihaz, compute_type = model_ac("m", "auto", None, 0, "int8")
+        assert (cihaz, compute_type) == ("cuda", "float16")
+
+    def test_cuda_without_a_gpu_stops_with_the_reason(self, whisper):
+        with pytest.raises(SystemExit, match="disabled in tests"):
+            model_ac("m", "cuda", None, 0, "int8")
+        whisper.assert_not_called()
+
+    def test_threads_and_precision_can_be_forced(self, whisper):
+        model_ac("m", "cpu", "float32", 8, "int8")
+        kwargs = whisper.call_args[1]
+        assert (kwargs["compute_type"], kwargs["cpu_threads"]) == ("float32", 8)
+
+
+class TestMain:
+    def _run(self, tmp_path, *args, language="auto"):
+        TestOlcVeRapor()._wav(tmp_path / "k.wav", _speech())
+        (tmp_path / "k.txt").write_text("merhaba", encoding="utf-8")
+        model = _model(" Merhaba.")
+        settings = MagicMock()
+        settings.get.side_effect = lambda key, default=None: {
+            "language": language, "compute_type": "int8", "initial_prompt": ""}.get(key, default)
+        order = MagicMock()
+        with patch("core.settings.SettingsManager", return_value=settings), \
+             patch("scripts.olcum.model_ac", return_value=(model, "cpu", "int8")), \
+             patch("scripts.olcum.warm_up", side_effect=lambda *a: order.warm_up(*a)) as warm, \
+             patch("scripts.olcum.olc", side_effect=lambda *a: order.olc() or []):
+            assert main(["--klasor", str(tmp_path), "--model", "m", *args]) == 0
+        return warm, order
+
+    def test_the_model_is_warmed_up_before_anything_is_measured(self, tmp_path):
+        _, order = self._run(tmp_path)
+        assert [c[0] for c in order.mock_calls if c[0] in ("warm_up", "olc")] == ["warm_up", "olc"]
+
+    def test_auto_language_setting_means_detection(self, tmp_path):
+        warm, _ = self._run(tmp_path, language="auto")
+        assert warm.call_args[0][1] is None
+
+    def test_warm_up_uses_the_measured_options(self, tmp_path):
+        warm, _ = self._run(tmp_path, "--dil", "tr", "--beam", "1")
+        model, dil, options = warm.call_args[0]
+        assert dil == "tr" and options["beam_size"] == 1

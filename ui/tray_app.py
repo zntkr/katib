@@ -1,3 +1,4 @@
+import time
 from typing import TYPE_CHECKING
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
 from PySide6.QtCore import QObject, Qt, Slot, QTimer
@@ -7,6 +8,7 @@ from core.settings import (
     STATE_PROCESSING,
 )
 from core.i18n import t, set_language
+from core.log import get_logger, OK
 from core.text_injector import inject_text
 from ui.utils import colorize_svg_icon
 from ui.theme import theme_manager
@@ -18,6 +20,19 @@ if TYPE_CHECKING:
     from ui.help_window import HelpWindow
     from ui.osd import MinimalOSD
     from workers.transcription_worker import TranscriptionWorker
+
+_log = get_logger("APP")
+
+
+def _log_dictation_latency(released_at: float, timing: tuple[float, float] | None) -> None:
+    """The number the user feels: key release → text pasted (plan 0012)."""
+    elapsed_ms = (time.perf_counter() - released_at) * 1000.0
+    detail = ""
+    if timing is not None:
+        audio_seconds, model_seconds = timing
+        detail = f" (audio {audio_seconds:.1f} s, model {model_seconds * 1000.0:.0f} ms)"
+    _log.log(OK, f"Dictation done: release->paste {elapsed_ms:.0f} ms{detail}")
+
 
 class TrayApp(QObject):
     """The tray icon and its menu. Owns the settings window and decides which status the
@@ -44,6 +59,10 @@ class TrayApp(QObject):
         self._model_status: tuple[str, str] = (STATE_LOADING, "IDLE")
         self._last_transcript: str | None = None
         self._help_window: 'HelpWindow | None' = None
+        # Key release of the dictation in flight and its model timing: the one number the user
+        # feels is release → paste (plan 0012). Cleared when the dictation ends either way.
+        self._released_at: float | None = None
+        self._dictation_timing: tuple[float, float] | None = None  # seconds of audio, seconds of model
 
         p = theme_manager.palette
         self.icon_idle = colorize_svg_icon(ICN_MIC, p["CLR_TEXT_MUTED"], size=64)
@@ -145,7 +164,18 @@ class TrayApp(QObject):
     def on_text_ready(self, text: str) -> None:
         self._last_transcript = text
         self._act_copy.setEnabled(True)
+        # Taken before the paste: inject_text() runs processEvents(), which can deliver
+        # transcription_finished (it clears both) before the paste returns.
+        released_at, timing = self._released_at, self._dictation_timing
+        self._released_at = self._dictation_timing = None
         inject_text(text, injection_method=self.settings.get("injection_method", "clipboard"))
+        if released_at is not None:
+            _log_dictation_latency(released_at, timing)
+
+    @Slot(float, float)
+    def on_dictation_timed(self, audio_seconds: float, model_seconds: float) -> None:
+        """TranscriptionWorker.dictation_timed; arrives before text_ready (same thread, queued)."""
+        self._dictation_timing = (audio_seconds, model_seconds)
 
     @Slot()
     def on_hotkey_pressed(self):
@@ -155,12 +185,16 @@ class TrayApp(QObject):
             return
         if self.osd:
             self.osd.setStateRecording()
+        self._released_at = None  # a dropped recording must not time the next one
+        self._dictation_timing = None
         self.set_recording(True)
         if self.audio_worker:
             self.audio_worker.start_recording()
 
     @Slot()
     def on_hotkey_released(self):
+        if self._recording:
+            self._released_at = time.perf_counter()
         self.set_recording(False)
         if self.audio_worker:
             self.audio_worker.stop_recording()
@@ -231,6 +265,8 @@ class TrayApp(QObject):
     @Slot()
     def on_transcription_finished(self) -> None:
         self._processing = False
+        self._released_at = None  # no speech or an error: nothing was pasted, nothing to time
+        self._dictation_timing = None
         self._resolve_status()
 
     @Slot()

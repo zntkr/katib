@@ -4,7 +4,7 @@
 > günlüğü"ne bir satır ekle.
 > Göreve yeni başlayan ajan: önce [Devralma notu](#devralma-notu) bölümünü oku.
 
-**Durum:** ⏳ **BAŞLANMADI**
+**Durum:** ⏸️ **VERİ BEKLİYOR** — Faz 1–2 bitti (2026-10-06); Faz 3 kullanıcının ölçümünü bekler.
 **Kullanıcı verisi değişikliği:** YOK — Faz 1–4 ve 6. **Faz 5 VAR** (konuşma dili
 varsayılanı; açık onay ve gerekiyorsa taşıma kodu, CONTEXT.md → Mimari Kurallar #8).
 **Öncelik:** 🟠 Orta-yüksek — dikte süresinin neredeyse tamamı Whisper çağrısında;
@@ -42,7 +42,7 @@ büyüktür → ölçüm seti uzun kayıtları da içermeli.
 
 ```bash
 # Faz 1 BİTTİYSE: uçtan uca satır loglanıyor
-grep -n "release→paste" ui/tray_app.py
+grep -n "release->paste" ui/tray_app.py
 # Faz 2 BİTTİYSE: betikte yeni bayraklar
 grep -n "\-\-beam\|\-\-cihaz\|\-\-tekrar" scripts/olcum.py
 # Faz 4 BAŞLAMADIYSA: sabit sözlük duruyor; BİTTİYSE: decode_options var
@@ -75,24 +75,24 @@ grep -n "analyse hardware automatically" workers/transcription_worker.py   # ç�
 
 ## Faz 1 — Uçtan uca süre logu
 
-- [ ] `TrayApp.on_hotkey_released` bırakış anını tutar; `on_text_ready` yapıştırmadan
-      sonra `Dictation release→paste N ms (audio X s)` loglar (OK seviyesi). Ses
-      süresi için `dictation_timed` zaten var; gerekiyorsa `TrayApp` ona da bağlanır
-      (yeni public sinyal yok).
-- [ ] Kayıt elenirse ya da metin çıkmazsa tutulan an temizlenir; sonraki dikte
+- [x] `TrayApp.on_hotkey_released` bırakış anını tutar; `on_text_ready` yapıştırmadan
+      sonra `Dictation done: release->paste N ms (audio X s, model Y ms)` loglar (OK
+      seviyesi). Ses ve model süresi için `TrayApp` `dictation_timed`'a bağlandı
+      (yeni sinyal yok).
+- [x] Kayıt elenirse ya da metin çıkmazsa tutulan an temizlenir; sonraki dikte
       eski anla ölçülmez.
-- [ ] Test: sahte saatle bırakış + `on_text_ready` → satır var ve süre doğru;
+- [x] Test: sahte saatle bırakış + `on_text_ready` → satır var ve süre doğru;
       bırakış olmadan `on_text_ready` → satır yok.
 
 ## Faz 2 — Ölçüm betiği bu soruları tartabilsin
 
-- [ ] Ölçümden önce ısınma (uygulamadaki `_warm_up` ile aynı iki çağrı).
-- [ ] `--cihaz cpu|cuda`, `--compute-type`, `--threads`.
-- [ ] `--beam N`, `--zaman-damgasiz`, `--sicaklik 0` (ya da liste).
-- [ ] `--tekrar N`: her kayıt N kez; rapor medyan ve p90 verir (ADR-0010'daki
+- [x] Ölçümden önce ısınma (uygulamadaki `_warm_up` ile aynı iki çağrı).
+- [x] `--cihaz cpu|cuda`, `--compute-type`, `--threads`.
+- [x] `--beam N`, `--zaman-damgasiz`, `--sicaklik 0` (ya da liste).
+- [x] `--tekrar N`: her kayıt N kez; rapor medyan ve p90 verir (ADR-0010'daki
       ölçüm gürültüsü).
-- [ ] Rapor süreyi ses uzunluğuna göre kırar: < 5 sn, 5–15 sn, 15–30 sn, > 30 sn.
-- [ ] Testler: bayraklar Whisper çağrısına doğru ayarla gider (sahte model);
+- [x] Rapor süreyi ses uzunluğuna göre kırar: < 5 sn, 5–15 sn, 15–30 sn, > 30 sn.
+- [x] Testler: bayraklar Whisper çağrısına doğru ayarla gider (sahte model);
       medyan/p90 hesabı; ısınma çağrısı ölçülen süreye girmez.
 
 ## Faz 3 — Ölçüm (kullanıcı)
@@ -176,3 +176,53 @@ Faz 1: 45 dk · Faz 2: 2 sa · Faz 3: kullanıcı · Faz 4: 1 sa · Faz 5: 1–2
 ### 2026-10-06 — Plan açıldı
 
 `docs/hiz-incelemesi-2026-10-06.md`'nin §1–§7 ve §12 bulgularından. Kod değişikliği yok.
+
+### 2026-10-06 — Faz 1–2 uygulandı
+
+**Faz 1:** `TrayApp` bırakış anını (`perf_counter`) tutuyor ve `on_text_ready` metni
+yapıştırdıktan sonra tek satır yazıyor:
+`Dictation done: release->paste 1840 ms (audio 18.2 s, model 1620 ms)` (`Katib.APP`, OK).
+Ses ve model süresi `dictation_timed`'dan geliyor; `main.py`'de `TrayApp`'e de bağlandı.
+An; yeni basışta, `transcription_finished`'ta (konuşma yok / hata) ve satır yazılınca
+temizleniyor; reddedilen basış (model yükleniyor) zaman başlatmıyor. ⚠️ `inject_text()`
+`processEvents()` çağırdığı için kuyruktaki `transcription_finished` yapıştırma sırasında
+gelip anı silebiliyordu (ilk yazımda yakalandı) → an yapıştırmadan **önce** alınıyor;
+testi var. ⚠️ Plandan sapma:
+log satırı ASCII `->` kullanıyor (PowerShell'de `Select-String` kalıbı kolay olsun diye).
+
+**Faz 2:** `scripts/olcum.py`: `--cihaz auto|cpu|cuda` (varsayılan `auto`, uygulama gibi
+`core.gpu`'ya sorar), `--compute-type`, `--threads`, `--beam`, `--zaman-damgasiz`,
+`--sicaklik 0` / `0,0.4`, `--tekrar N` (süre medyandır). Rapor her kaydın uzunluğunu
+gösteriyor ve Whisper süresini medyan/p90 olarak `< 5 / 5–15 / 15–30 / > 30 sn`
+kırılımıyla veriyor; başta kullanılan cihaz ve çözümleme ayarları yazılıyor.
+Ölçümden önce ısınma: uygulamanın `_warm_up` gövdesi `workers/transcription_worker.py::warm_up(model, language, options)`
+olarak dışarı alındı; worker ve betik aynı fonksiyonu, betik ölçülen ayarlarla çağırıyor.
+
+⚠️ **Plan dışı düzeltme:** konuşma dili ayarı `auto` iken (varsayılan) betik Whisper'a
+`language="auto"` geçiriyordu; faster-whisper bunu `'auto' is not a valid language code`
+ile reddeder → varsayılan ayarlı kullanıcıda betik hiç çalışmazdı. Artık `auto` → `None`.
+
+**Testler:** `tests/test_tray_app.py::TestDictationLatency` (7),
+`tests/test_olcum.py` (15 yeni: `TestCozumleme`, `TestTekrar`, `TestSureOzeti`,
+`TestModelAc`, `TestMain`). Tam takım Linux'ta: 718 geçti, 7 kırmızı — değişiklikten
+önceki 7 Windows'a özgü testin aynısı. Kırmızı kanıtı: `tray_app.py` geri alınınca 4 gecikme
+testi kırmızı (2'si "satır yazılmaz" testleri, ikisinde de doğal olarak yeşil); an
+yapıştırmadan sonra alınınca `processEvents` testi kırmızı; `olcum.py`
+geri alınınca test dosyası toplanamıyor. Konteynerde Hugging Face erişimi yok (ağ
+politikası) → gerçek modelle duman testi yapılamadı; betiğin geçirdiği bütün ayar adları
+`WhisperModel.transcribe` imzasında var (faster-whisper 1.2.1, `inspect.signature` ile doğrulandı).
+
+**Kullanıcı için (Faz 3):** kayıt seti `olcum\` klasörüne (0007 ile ortak; 15–30 sn ve
+30 sn+ dikteler dahil). Her satırı `--tekrar 3` ile çalıştırıp raporları (metinsiz) buraya:
+
+```powershell
+python scripts\olcum.py --tekrar 3                                          # bugünkü ayarlar
+python scripts\olcum.py --tekrar 3 --dil tr                                 # §2 dil sabit
+python scripts\olcum.py --tekrar 3 --dil tr --beam 1                        # §3
+python scripts\olcum.py --tekrar 3 --dil tr --beam 1 --zaman-damgasiz       # §4
+python scripts\olcum.py --tekrar 3 --dil tr --beam 1 --zaman-damgasiz --sicaklik 0   # §5
+# GPU varsa aynı satırlar --cihaz cuda ile; CPU için ayrıca --cihaz cpu --threads 8
+```
+
+Uygulamanın kendisinde: birkaç gerçek dikteden sonra
+`Select-String -Path "$env:LOCALAPPDATA\Katib\Logs\katib.log" -Pattern "release->paste"`.

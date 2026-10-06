@@ -305,6 +305,7 @@ def main():
         # Live facts on the dictation tab: how loud the last recording was, how long the model took
         audio_worker.recording_analysed.connect(window.show_last_recording)
         transcription_worker.dictation_timed.connect(window.show_last_dictation)
+        transcription_worker.dictation_timed.connect(tray.on_dictation_timed)  # release → paste log line
 
         # Device list: AudioWorker queries → the settings window shows it and reports the
         # microphone in use through device_changed.
