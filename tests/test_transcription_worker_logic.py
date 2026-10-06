@@ -733,6 +733,76 @@ class TestDeviceSelection:
             assert self._load(worker, model_cls) == [("cuda", "float16")]
 
 
+class TestModelLoadedReport:
+    """model_loaded tells the settings window where the model runs and why not on the GPU."""
+
+    def _reports(self, mock_settings, model_cls, reason=None):
+        worker = TranscriptionWorker(mock_settings, MagicMock())
+        reports = []
+        worker.model_loaded.connect(lambda *args: reports.append(args))
+        with _gpu(reason=reason), \
+             patch.object(worker.model_provider, "get_active_model_path", return_value="/fake/dir"), \
+             patch(_PATCH_MODEL_CLS, side_effect=model_cls):
+            worker._load_model()
+        return reports
+
+    def test_on_the_gpu(self, qapp, mock_settings):
+        assert self._reports(mock_settings, lambda *a, **k: _model()) == [("cuda", "float16", "")]
+
+    def test_on_the_cpu_because_the_gpu_is_unusable(self, qapp, mock_settings):
+        reports = self._reports(mock_settings, lambda *a, **k: _model(), reason="no NVIDIA GPU detected")
+        assert reports == [("cpu", "int8", "no NVIDIA GPU detected")]
+
+    def test_on_the_cpu_because_the_user_chose_it(self, qapp, mock_settings):
+        mock_settings.set("compute_device", "cpu")
+        assert self._reports(mock_settings, lambda *a, **k: _model()) == [("cpu", "int8", "compute_device is set to cpu")]
+
+    def test_on_the_cpu_because_the_gpu_load_failed(self, qapp, mock_settings):
+        def model_cls(*args, **kwargs):
+            if kwargs["device"] == "cuda":
+                raise RuntimeError("CUDA out of memory")
+            return _model()
+        assert self._reports(mock_settings, model_cls) == [("cpu", "int8", "GPU load failed: CUDA out of memory")]
+
+    def test_on_the_cpu_because_the_gpu_failed_the_warm_up(self, qapp, mock_settings):
+        def model_cls(*args, **kwargs):
+            return _model(fails=RuntimeError("no cublas")) if kwargs["device"] == "cuda" else _model()
+        assert self._reports(mock_settings, model_cls) == [
+            ("cuda", "float16", ""), ("cpu", "int8", "GPU could not run the model")]
+
+    def test_a_later_gpu_load_clears_the_note(self, qapp, mock_settings):
+        worker = TranscriptionWorker(mock_settings, MagicMock())
+        reports = []
+        worker.model_loaded.connect(lambda *args: reports.append(args))
+        with patch.object(worker.model_provider, "get_active_model_path", return_value="/fake/dir"), \
+             patch(_PATCH_MODEL_CLS, side_effect=lambda *a, **k: _model()):
+            with _gpu(reason="CUDA libraries not found"):
+                worker._load_model()
+            with _gpu():
+                worker._load_model()
+        assert reports[-1] == ("cuda", "float16", "")
+
+
+class TestDictationTimed:
+    """dictation_timed: seconds of audio and seconds the model took, for the settings window."""
+
+    def _timings(self, qapp, mock_settings, model):
+        worker = TranscriptionWorker(mock_settings, MagicMock())
+        worker._model = model
+        timings = []
+        worker.dictation_timed.connect(lambda *args: timings.append(args))
+        worker._transcribe(np.zeros(16000 * 2, dtype=np.float32))
+        return timings
+
+    def test_reported_for_a_transcribed_dictation(self, qapp, mock_settings):
+        [(audio_seconds, elapsed)] = self._timings(qapp, mock_settings, _model(" Hello world"))
+        assert audio_seconds == 2.0
+        assert 0 <= elapsed < 1
+
+    def test_not_reported_when_the_transcription_fails(self, qapp, mock_settings):
+        assert self._timings(qapp, mock_settings, _model(fails=RuntimeError("boom"))) == []
+
+
 class TestGpuFailureDuringDictation:
     """GPU memory can run out mid-session (a game starts); the dictation must still be written."""
 

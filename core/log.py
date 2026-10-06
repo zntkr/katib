@@ -1,10 +1,10 @@
 """
 Katib logging (ADR-0004). Every component logs through the standard `logging`
 module under the "Katib.<COMPONENT>" logger; main.py installs the handlers that
-write the log file and feed the dashboard.
+write the log file and feed the log tab of the settings window.
 
 Dictated text is private: pass it as `extra={"transcript": text}` and the
-message stays text-free. The dashboard shows the text; files only get its length.
+message stays text-free. The log tab shows the text; files only get its length.
 """
 import logging
 
@@ -65,7 +65,7 @@ def mask_text(value, depth: int = 3):
     return value
 
 
-def _dashboard_tag(levelno: int) -> str:
+def _log_tag(levelno: int) -> str:
     if levelno >= logging.ERROR:
         return "ERR"
     if levelno >= logging.WARNING:
@@ -79,11 +79,11 @@ class _Bridge(QObject):
     entry = Signal(str, str, str)  # level tag, component, message
 
 
-class DashboardLogHandler(logging.Handler):
-    """Forwards component records ("Katib.<COMPONENT>") to the dashboard log box.
+class LogViewHandler(logging.Handler):
+    """Forwards component records ("Katib.<COMPONENT>") to the log tab of the settings window.
 
     Records may come from any thread (workers, PortAudio callbacks); the Qt signal
-    queues them onto the dashboard's thread. Connect `bridge.entry` in main.py.
+    queues them onto the window's thread. Connect `bridge.entry` in main.py.
     """
 
     def __init__(self) -> None:
@@ -99,6 +99,6 @@ class DashboardLogHandler(logging.Handler):
             text = getattr(record, "transcript", None)
             if text is not None:
                 message = f"{message}: {text!r}"
-            self.bridge.entry.emit(_dashboard_tag(record.levelno), component, message)
+            self.bridge.entry.emit(_log_tag(record.levelno), component, message)
         except Exception:
             self.handleError(record)

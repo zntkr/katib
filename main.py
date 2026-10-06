@@ -22,7 +22,7 @@ from core.settings import (
     APP_NAME, MSG_MODEL_NOT_FOUND, MSG_MIC_UNAVAILABLE,
     STATE_PROCESSING, STATE_LISTENING, STATE_READY, get_log_dir,
 )
-from core.log import PrivacyFormatter, DashboardLogHandler, get_logger, mask_text, OK
+from core.log import PrivacyFormatter, LogViewHandler, get_logger, mask_text, OK
 import PySide6.QtSvg  # required for SVG plugin registration
 import warnings
 import signal
@@ -204,20 +204,21 @@ def main():
                STATE_PROCESSING, STATE_LISTENING, STATE_READY):
         if _t(_k) == _k:
             global_logger.warning("i18n: STATUS key missing in catalog: '%s'", _k)
-    theme_manager.apply_theme(app, settings_manager.get("theme", "system"))
+    theme_manager.apply_theme(app)
     global_logger.info("Theme and settings loaded.")
 
     from ui.tray_app import TrayApp
 
-    global_logger.info("Building UI (Tray/Dashboard)...")
+    global_logger.info("Building UI (tray, settings window)...")
     tray = TrayApp(settings=settings_manager, model_provider=model_provider)
+    window = tray.settings_window
     app.setWindowIcon(tray.icon_idle)
 
-    # ADR-0004: every "Katib.<COMPONENT>" logger also feeds the dashboard log box
-    # (setup_logging() already writes them to the file, without transcript text).
-    dashboard_log = DashboardLogHandler()
-    dashboard_log.bridge.entry.connect(tray.dashboard.append_log_entry)
-    logging.getLogger(APP_NAME).addHandler(dashboard_log)
+    # ADR-0004: every "Katib.<COMPONENT>" logger also feeds the log tab of the settings
+    # window (setup_logging() already writes them to the file, without transcript text).
+    log_view = LogViewHandler()
+    log_view.bridge.entry.connect(window.append_log_entry)
+    logging.getLogger(APP_NAME).addHandler(log_view)
     app_log = get_logger("APP")
 
     _workers = {}
@@ -257,7 +258,7 @@ def main():
         transcription_worker.transcription_started.connect(osd.setStateProcessing)
         transcription_worker.transcription_finished.connect(osd.hide_osd)
 
-        # Microphone hardware error → persistent dashboard status + transient OSD error
+        # Microphone hardware error → persistent tray status + transient OSD error
         audio_worker.mic_unavailable.connect(tray.on_mic_unavailable)
         # Binary Armor: signal exactly 0.0 for > 1.5 s while recording → the mic is muted
         audio_worker.muted_detected.connect(lambda: osd.setStateError("osd.mic_muted"))
@@ -267,67 +268,59 @@ def main():
         hotkey_worker.error_occurred.connect(lambda msg: osd.setStateError(msg))
         transcription_worker.error_occurred.connect(lambda msg: osd.setStateError(msg))
         transcription_worker.model_missing.connect(lambda: osd.setStateError(MSG_MODEL_NOT_FOUND))
-        transcription_worker.model_missing.connect(tray.dashboard.show_model_missing_guidance)
-        transcription_worker.model_loaded.connect(tray.dashboard.clear_model_missing_guidance)
+        transcription_worker.model_missing.connect(tray.on_model_missing)
+        transcription_worker.model_loaded.connect(window.on_model_loaded)
         downloader_worker.error_occurred.connect(lambda msg: osd.setStateError(msg))
 
         audio_worker.audio_ready.connect(transcription_worker.add_audio)
 
         transcription_worker.text_ready.connect(tray.on_text_ready)
 
-        audio_worker.level_changed.connect(tray.dashboard.update_level)
+        audio_worker.level_changed.connect(tray.on_level_changed)
         audio_worker.level_changed.connect(osd.update_level)
-        # Status line: workers report facts, TrayApp decides what to show (single owner)
+        # Status: workers report facts, TrayApp decides what the tray shows (single owner)
         transcription_worker.status_changed.connect(tray.on_model_status)
         transcription_worker.transcription_started.connect(tray.on_transcription_started)
         transcription_worker.transcription_finished.connect(tray.on_transcription_finished)
-        transcription_worker.loading_state_changed.connect(tray.dashboard.set_loading_indicator)
+        transcription_worker.loading_state_changed.connect(window.set_loading_indicator)
 
         # Microphone change → update audio worker + clear error flag
-        tray.dashboard.device_changed.connect(audio_worker.set_device)
-        tray.dashboard.device_changed.connect(lambda _: tray.on_mic_available())
+        window.device_changed.connect(audio_worker.set_device)
+        window.device_changed.connect(lambda _: tray.on_mic_available())
 
         # Hotkey change → update hotkey worker
-        tray.dashboard.hotkey_changed.connect(hotkey_worker.set_key)
+        window.hotkey_changed.connect(hotkey_worker.set_key)
         # Pause hotkey worker during capture mode so accidental presses don't start recording.
-        tray.dashboard.hotkey_capture_mode.connect(
+        window.hotkey_capture_mode.connect(
             lambda capturing: hotkey_worker.pause() if capturing else hotkey_worker.resume()
         )
 
-        # Model folder or compute setting changed → reload model
+        # Model folder changed → reload model
         def _on_model_dir_changed(path):
             model_provider.active_model_path = path
             transcription_worker.reload_model()
-            
-        tray.dashboard.model_dir_changed.connect(_on_model_dir_changed)
-        tray.dashboard.model_reload_requested.connect(transcription_worker.reload_model)
 
-        # Device list: UI requests → AudioWorker queries → UI populates
-        tray.dashboard.refresh_devices_requested.connect(audio_worker.refresh_devices)
-        audio_worker.devices_ready.connect(tray.dashboard.populate_devices)
-        audio_worker.refresh_devices()   # populate combo on startup
-        # populate_devices finds the saved microphone and emits device_changed to call set_device.
+        window.model_dir_changed.connect(_on_model_dir_changed)
 
-        # Model downloader: UI → downloader → dashboard + transcription
-        tray.dashboard.download_model_requested.connect(downloader_worker.start_download)
-        downloader_worker.error_occurred.connect(lambda _: tray.dashboard.set_loading_indicator(False))
-        downloader_worker.error_occurred.connect(lambda _: tray.dashboard.set_download_state(False))
+        # Live facts on the dictation tab: how loud the last recording was, how long the model took
+        audio_worker.recording_analysed.connect(window.show_last_recording)
+        transcription_worker.dictation_timed.connect(window.show_last_dictation)
+
+        # Device list: AudioWorker queries → the settings window shows it and reports the
+        # microphone in use through device_changed.
+        audio_worker.devices_ready.connect(window.populate_devices)
+        audio_worker.refresh_devices()   # fill the list on startup
+
+        # Model downloader: settings window → downloader → settings window + transcription
+        window.download_model_requested.connect(downloader_worker.start_download)
+        downloader_worker.error_occurred.connect(lambda _: window.set_download_state(False))
         downloader_worker.status_changed.connect(tray.on_download_status)
-        downloader_worker.download_state_changed.connect(tray.dashboard.set_download_state)
+        downloader_worker.download_state_changed.connect(window.set_download_state)
         downloader_worker.download_state_changed.connect(tray.on_download_state)
-        downloader_worker.download_finished.connect(tray.dashboard.on_download_complete)
+        downloader_worker.download_finished.connect(window.on_download_complete)
 
-        tray.dashboard.language_change_requested.connect(tray.apply_language)
-
-        def _on_theme_changed(theme: str) -> None:
-            theme_manager.apply_theme(app, theme)
-            tray.dashboard.refresh_theme()
-
-        tray.dashboard.theme_changed.connect(_on_theme_changed)
-        app.styleHints().colorSchemeChanged.connect(
-            lambda: settings_manager.get("theme", "system") == "system"
-            and theme_manager.apply_theme(app, "system")
-        )
+        window.language_change_requested.connect(tray.apply_language)
+        window.help_requested.connect(tray.show_help)
 
         # ---------------------------------------------------- start workers
         global_logger.info("Starting worker threads...")
@@ -335,8 +328,8 @@ def main():
         audio_worker.start()
         hotkey_worker.start()
 
-        tray.dashboard.show()
-        tray.dashboard.raise_()
+        # No window opens at startup: the tray icon and the pill are the interface (ADR-0012).
+        # The settings window opens itself only when there is no model to dictate with.
         app_log.log(OK, _t("app.started").format(key=settings_manager.get('hotkey', 'F9').upper()))
         global_logger.info("System ready.")
 
@@ -346,8 +339,8 @@ def main():
         app_log.info(_t("app.shutting_down"))
 
         # Hide windows to avoid C++-side drawing errors (QBackingStore) after the event loop ends.
-        for window in QApplication.topLevelWidgets():
-            window.hide()
+        for widget in QApplication.topLevelWidgets():
+            widget.hide()
         tray.tray.hide()
 
         # Send only a soft stop signal to worker threads — no wait() — to avoid

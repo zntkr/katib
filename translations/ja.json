@@ -13,38 +13,23 @@
     },
     "tray": {
         "menu": {
-            "dashboard": "ダッシュボード",
             "settings": "設定",
             "user_guide": "ユーザーガイド",
+            "copy_transcript": "最後の文字起こしをコピー",
             "quit": "終了"
         }
     },
-    "dashboard": {
-        "title": "ダッシュボード",
-        "copy_tooltip": "最後の文字起こしをコピー",
-        "copied_tooltip": "コピーしました！",
-        "console_tooltip": "コンソールの表示/非表示",
-        "settings_tooltip": "設定",
-        "no_mic_found": "マイクが見つかりません。",
-        "model_missing_guidance": "モデルが見つかりません。設定 → モデルからダウンロードまたはフォルダを選択してください。",
-        "device_refreshed": "デバイスリストが変更されました。更新中..."
-    },
     "settings": {
         "title": "設定",
-        "group_general": "一般",
-        "group_model": "モデル",
-        "group_processing": "処理",
         "group_system": "システム",
         "hotkey_label": "ホットキー",
         "ai_model_label": "AIモデル",
         "browse": "参照...",
         "download": "ダウンロード",
         "downloading": "...",
-        "path_not_selected": "パス: 未選択",
         "save": "保存",
         "user_guide": "ユーザーガイド",
         "open_log_folder": "ログフォルダを開く",
-        "reset_settings": "設定をリセット",
         "hotkey_capture": "キーを押してください...",
         "invalid_folder_title": "無効なフォルダ",
         "invalid_folder_msg": "Whisperモデルファイルを含むフォルダを選択してください。",
@@ -54,11 +39,18 @@
         "log_folder_missing": "ログフォルダはまだ作成されていません。",
         "select_folder_dialog": "モデルフォルダを選択",
         "app_language_label": "アプリの言語",
-        "theme_label": "テーマ",
-        "theme_system": "システム",
-        "theme_dark": "ダーク",
-        "theme_light": "ライト",
-        "injection_method_label": "Text Injection Method"
+        "injection_method_label": "Text Injection Method",
+        "group_log": "ログ",
+        "microphone_label": "マイク",
+        "no_mic_found": "マイクが見つかりません。",
+        "model_missing_guidance": "モデルが見つかりません。設定 → ディクテーションからダウンロードまたはフォルダを選択してください。",
+        "speech_language_label": "音声言語",
+        "ai_prompt_label": "AIプロンプト",
+        "ai_prompt_tooltip": "AIにコンテキストや書式の指示を提供します。",
+        "tab_dictation": "ディクテーション",
+        "tab_app": "アプリ",
+        "last_recording": "前回の録音: {seconds} 秒 · 音声 {speech} dB · ノイズ {noise} dB",
+        "last_dictation": "前回のディクテーション: {audio} 秒 → {elapsed} 秒"
     },
     "help": {
         "title": "ユーザーガイド",
@@ -72,7 +64,7 @@
         "status_writing": "書き込み中  →  モデルが処理中",
         "status_warning": "警告        →  3秒表示後、自動的に閉じます",
         "hotkey_title": "ホットキー",
-        "hotkey_desc": "設定 → 一般で任意のキーを割り当てます。",
+        "hotkey_desc": "設定 → ディクテーションで任意のキーを割り当てます。",
         "model_title": "モデル",
         "model_desc": "速度と精度のバランスを調整します。小さいモデルは速く、大きいモデルはより正確です。",
         "model": {
@@ -92,34 +84,21 @@
             "acc_max": "最大"
         },
         "ai_prompt_title": "AIプロンプト",
-        "ai_prompt_desc": "設定 → 処理 → AIプロンプトを使って、モデルにコンテキストや書式ルールを指定します：",
+        "ai_prompt_desc": "設定 → ディクテーション → AIプロンプトを使って、モデルにコンテキストや書式ルールを指定します：",
         "ai_prompt_ex1": "「これは技術文書です。」",
         "ai_prompt_ex2": "「小文字のみ、句読点なし。」",
         "trouble_title1": "「マイクなし」と表示される",
-        "trouble_desc1": "ダッシュボードのマイクリストからデバイスを選択してください。表示されない場合は、抜き差しして再試行してください。",
+        "trouble_desc1": "設定 → ディクテーションでデバイスを選択してください。表示されない場合は、抜き差しして再試行してください。",
         "trouble_title2": "音声が認識されない、または結果が空",
         "trouble_desc2": "マイクの音量とミュート状態を確認してください。非常に短い録音（0.5秒未満）はスキップされます。",
         "trouble_title3": "間違った単語が入力される",
-        "trouble_desc3": "より大きいモデルを試すか、設定 → 処理 → AIプロンプトに専門用語のコンテキストを追加してください。",
+        "trouble_desc3": "より大きいモデルを試すか、設定 → ディクテーション → AIプロンプトに専門用語のコンテキストを追加してください。",
         "trouble_title4": "アプリが開かない / トレイアイコンがない",
         "trouble_desc4": "アプリがすでにバックグラウンドで動作している可能性があります。タスクマネージャーで{app}を探してください。",
         "trouble_title5": "音声は認識されたがテキストが入力されない",
         "trouble_desc5": "話す前に対象フィールドをクリックしてフォーカスを当ててください。",
         "trouble_title6": "Model Download Error / Network Error",
         "trouble_desc6": "If you are on a corporate network, downloads may be blocked by a firewall. Please contact your IT department for offline deployment."
-    },
-    "schema": {
-        "language": {
-            "label": "音声言語"
-        },
-        "compute_type": {
-            "label": "精度",
-            "tooltip": "変更するとモデルがリロードされます。"
-        },
-        "initial_prompt": {
-            "label": "AIプロンプト",
-            "tooltip": "AIにコンテキストや書式の指示を提供します。"
-        }
     },
     "app": {
         "started": "起動しました — ホットキー: {key}",

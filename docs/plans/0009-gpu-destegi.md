@@ -38,7 +38,7 @@ python -m pytest -q tests/test_transcription_worker_logic.py -k "Device or Gpu"
 # Faz 2 BAŞLAMADIYSA: paketleme GPU kitaplıklarını hâlâ dışlıyor
 grep -n "CPU-ONLY" Katib.spec
 # Faz 3 BAŞLAMADIYSA: ayar ekranında cihaz seçimi yok
-grep -n "compute_device" ui/settings_dialog.py   # çıktı boş
+grep -n "compute_device" ui/settings_window.py   # çıktı boş
 ```
 
 **Ortam**
@@ -90,11 +90,12 @@ ancak kitaplıklar `PATH`'te ise kullanır. Seçenekler:
 
 ## Faz 3 — Ayar ekranı (karar bekliyor)
 
-- [ ] `compute_device` ekranda gösterilsin mi? Gösterilirse 11 dil dosyasına etiket
-      ve değişince model yeniden yükleme gerekir.
-- [ ] GPU etkinken "Hassasiyet" (`compute_type`) seçimi etkisizdir; ya devre dışı
-      gösterilir ya da GPU seçenekleri (`COMPUTE_TYPE_OPTIONS_CUDA`) sunulur. İkincisi
-      `compute_type`'ın anlamını değiştirir → kural #8 onayı.
+- [x] Karar (proje sahibi, 2026-10-04, plan 0010): modelin çalıştığı yer **bilgi olarak**
+      gösterilir ("GPU · float16" ya da "CPU · int8 · neden"), ayar olarak değil.
+      `compute_device` ve `compute_type` ekranda yoktur; yalnız `settings.json`'dan değişir.
+      "Hassasiyet" seçimi pencereden kaldırıldı.
+- [ ] `compute_device`'ı ekrandan seçilebilir yapmak hâlâ açık bir seçenek; bozuk bir kart
+      bildirilirse yeniden değerlendirilir.
 
 ## Faz 4 — Doğruluk ölçümü ve varsayılan model
 

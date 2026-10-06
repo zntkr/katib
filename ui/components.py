@@ -83,7 +83,8 @@ class SettingGroup(QFrame):
         self.group_layout.setSpacing(G_1)
 
         from ui.theme import theme_manager
-        self.title_label = QLabel(title.upper())
+        from core.i18n import upper
+        self.title_label = QLabel(upper(title))
         self.title_label.setMinimumWidth(10)
         self.group_layout.addWidget(self.title_label)
 
@@ -117,7 +118,7 @@ class DynamicIconButton(QPushButton):
 
         from ui.theme import theme_manager
         p = theme_manager.palette
-        self.idle_color = idle_color if idle_color else p["CLR_IDLE"]
+        self.idle_color = idle_color if idle_color else p["CLR_TEXT_MUTED"]
         self.hover_color = hover_color if hover_color else p["CLR_TEXT"]
         self.action_color = action_color
         self.disabled_color = disabled_color if disabled_color else p["CLR_TEXT_FAINT"]
@@ -157,7 +158,7 @@ class DynamicIconButton(QPushButton):
         from ui.theme import theme_manager
         p = theme_manager.palette
         self.action_color   = action_color
-        self.idle_color     = idle_color     if idle_color     is not None else p["CLR_IDLE"]
+        self.idle_color     = idle_color     if idle_color     is not None else p["CLR_TEXT_MUTED"]
         self.hover_color    = hover_color    if hover_color    is not None else p["CLR_TEXT"]
         self.disabled_color = disabled_color if disabled_color is not None else p["CLR_TEXT_FAINT"]
         self._rebuild_icons()

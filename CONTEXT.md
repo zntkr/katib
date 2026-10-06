@@ -70,7 +70,7 @@ Katib, Windows üzerinde çalışan, tamamen çevrimdışı (offline) bir ses-me
 - **VAD (Voice Activity Detection)**: Ses içindeki sessiz bölümleri ayıklayan filtre.
 - **Hallucination Filter**: Whisper'ın sessizlik anında uydurduğu "Teşekkürler", "Sessiz" gibi kelimeleri temizleyen mantıksal katman.
 - **Deferred Initialization**: Uygulama açılışında "beyaz ekran" oluşmasını önlemek için worker'ların ve ağır modellerin yüklenmesini geciktiren mekanizma.
-- **Theme Manager**: Uygulamanın koyu/açık tema ve renk paletini yöneten merkezi birim.
+- **Theme Manager**: Uygulamanın tek renk paletini (koyu mavimsi gri; açık tema yoktur, ADR-0013) ve stil dosyasını tutan merkezi birim (`ui/theme.py`). Bileşenler rengi yalnız buradan alır.
 - **OSD (Status Indicator)**: Katib esnasında ekranın alt-ortasında beliren, etkileşimsiz (click-through) ve minimalist durum göstergesi. Kayıt/işleme durumu ve kritik hataların tek operasyonel görünürlük kanalıdır.
 - **Armored Logic (Zırhlı Mantık)**: İşçi (Worker) seviyesinde başlayan, sistem hatalarını (örn. Mute durumu) proaktif olarak tespit edip kullanıcıyı uyaran korumacı mühendislik katmanı.
 - **Binary Armor (İkili Zırh)**: "Ölü veya Canlı" prensibi. Sinyal matematiksel olarak tam sıfır (0.0) ise hata (Mute) kabul edilir; 0.0'dan büyük her sinyal (fısıltı dahil) geçerli kabul edilerek işlenir.
@@ -95,7 +95,7 @@ Katib, Windows üzerinde çalışan, tamamen çevrimdışı (offline) bir ses-me
 
 ## Dosya Yapısı ve Sorumluluklar
 - `main.py`: Uygulamanın giriş noktası ve sinyal yönlendirme merkezi.
-- `ui/`: Tüm görsel arayüz bileşenleri (Dashboard, Tray, Dialogs).
+- `ui/`: Arayüzün üç yüzeyi (ADR-0012): tepsi simgesi (`tray_app.py`), sekmeli ayar penceresi (`settings_window.py`) ve pill (`osd.py`); ayrıca kullanım kılavuzu penceresi.
 - `workers/`: İş mantığını yürüten arka plan thread'leri.
 - `core/`: Ayarlar, metin enjeksiyonu ve tema gibi çekirdek yardımcı işlevler.
 - `ui/osd.py`: Operasyonel geri bildirim için kullanılan minimalist gösterge katmanı.
@@ -126,18 +126,19 @@ build.bat                      # ortamı kurar/eşitler, PyInstaller ve Inno Set
 - Derlemenin istediği her dosya depoda olmalıdır (`hooks/`, `Katib.iss`). `.gitignore`'a bir şey eklemeden önce `Katib.spec` ve `build.bat`'ın onu isteyip istemediğine bak.
 
 ## Geliştirici Notları
-- Yeni bir ayar eklenirken `core/settings.py` üzerinden geçilmeli ve varsayılan değeri tanımlanmalıdır.
-- Kullanıcıya gösterilecek operasyonel hatalar OSD üzerinden bildirilir (worker'ların `error_occurred` sinyali `main.py`'de `osd.setStateError`'a bağlıdır). OSD tek operasyonel görünürlük kanalıdır; dashboard kapalıyken bile kullanıcı kritik hatayı görür.
+- **Yeni ayar eklemenin tek yolu:** (1) `core/settings.py::DEFAULTS`'a anahtarı ve varsayılanını yaz; (2) ekranda görünecekse bileşenini `ui/settings_window.py`'de ilgili sekmenin `_build_*_tab` metoduna **elle** ekle ve `_refresh_values`'a işle. Ayar listesinden arayüz üreten bir mekanizma yoktur ve kurulmamalıdır (ADR-0012). `tests/test_config.py`, kodda okunan her anahtarın `DEFAULTS`'ta olduğunu denetler.
+- Kullanıcıya gösterilecek operasyonel hatalar OSD üzerinden bildirilir (worker'ların `error_occurred` sinyali `main.py`'de `osd.setStateError`'a bağlıdır). OSD tek operasyonel görünürlük kanalıdır; hiçbir pencere açık değilken bile kullanıcı kritik hatayı görür.
 - Worker'ların her public sinyali `main.py`'de bağlanmalıdır; `tests/test_signal_wiring.py` bağlanmamış bir sinyali yakalar. Kullanılmayan bir sinyal eklemek yerine silinmelidir.
-- `main.py` ve `TrayApp` dashboard'un `_` ile başlayan üyelerine erişmez; yalnızca public metotlarını kullanır (test ile korunur).
-- Dashboard durum satırını ve tray ipucunu yalnızca `TrayApp._resolve_status()` yazar. Worker'lar olgu bildirir (`status_changed`, `transcription_started/finished`, `mic_unavailable`), `TrayApp` tek öncelik kuralıyla karar verir: kayıt > işleme > indirme bildirimi > mikrofon yok > model durumu. `main.py` worker sinyallerini `dashboard.set_status`'a doğrudan bağlamaz (test ile korunur).
-- Uygulama mimarisi iki ana role ayrılmıştır:
-    1. **Monitoring (Gözlem)**: Dashboard üzerinden detaylı log takibi ve ayarların yapılması.
-    2. **Operation (Operasyon)**: OSD üzerinden kayıt/işleme durumu ve kritik hataların takibi.
+- Ayar penceresi (`SettingsWindow`) uygulama boyunca yaşayan tek nesnedir ve `main.py`'de bir kez bağlanır; her public sinyali `main.py`'de bağlı olmalıdır (test ile korunur). Dil değişince pencere yeniden yaratılmaz, sekmeleri yerinde yeniden kurulur (`rebuild()`), böylece bağlantılar kopmaz.
+- `main.py` ve `TrayApp` ayar penceresinin `_` ile başlayan üyelerine erişmez; yalnızca public metotlarını kullanır (test ile korunur).
+- Tepsi simgesini ve ipucunu yalnızca `TrayApp._resolve_status()` yazar. Worker'lar olgu bildirir (`status_changed`, `transcription_started/finished`, `mic_unavailable`), `TrayApp` tek öncelik kuralıyla karar verir: kayıt > işleme > indirme bildirimi > mikrofon yok > model durumu. `main.py` tepsi ipucunu ya da simgesini kendisi yazmaz (test ile korunur).
+- Arayüz iki role ayrılmıştır (ADR-0012):
+    1. **Monitoring (Gözlem)**: Ayar penceresi, üç sekme: "Dikte" (kısayol, konuşma dili, mikrofon, model, komut ve canlı bilgi: son kaydın seviyesi, modelin çalıştığı yer, son diktenin süresi), "Uygulama" (dil, yazma yöntemi) ve "Günlük" (canlı log). Kendiliğinden açılmaz; tepsi menüsünden açılır. Tek istisnalar: dikte edilecek model yoksa "Dikte" sekmesinde açılır, Windows tepsi sunmuyorsa uygulamaya ulaşmanın tek yolu olarak açılır.
+    2. **Operation (Operasyon)**: OSD (pill) üzerinden kayıt/işleme durumu ve kritik hataların takibi; tepsi simgesi ve ipucu kalıcı durumu gösterir.
 - **Deterministic Specificity (Belirleyici Spesifiklik)**: Hata mesajları genel ("Hata oluştu") değil, spesifik ("Mikrofon Susturuldu" veya "Cihaz Koptu") olmalıdır. Sistem neden bozulduğunu biliyorsa bunu kullanıcıdan gizlemez.
 - Modelin hangi donanımda çalışacağını `TranscriptionWorker._open_model` seçer: önce GPU (`core/gpu.py` "kullanılabilir" diyorsa), olmazsa CPU. GPU'ya dokunan her yeni kod yolu CPU'ya dönüşünü ve testini de getirir (ADR-0010). `compute_type` ayarı yalnız CPU içindir; GPU'da hesap tipi otomatik seçilir.
 - Testler makinenin GPU'suna bağlı olamaz: `tests/conftest.py::_no_gpu` GPU'yu varsayılan olarak kullanılamaz yapar; GPU davranışını sınayan test `core.gpu`'yu kendisi yamalar.
-- **Uygulama Dil Seçimi (App Language Selection)**: Desteklenen diller `translations/` dizinindeki JSON dosyalarına göre dinamik olarak listelenir (`core/i18n.py`). Sistem dili çalışma zamanında algılanarak dil listesinin (combobox) en üstünde, dinamik olarak yerelleştirilmiş `(Sistem)` / `(System)` etiketiyle sunulur. Dil seçimi değiştiğinde uygulama yeniden başlatılmaz; `TrayApp.apply_language()` çağrılır, tray menüsü rebuild edilir, Settings dialog kapatılıp yeni dille yeniden açılır (Live UI ilkesi).
+- **Uygulama Dil Seçimi (App Language Selection)**: Desteklenen diller `translations/` dizinindeki JSON dosyalarına göre dinamik olarak listelenir (`core/i18n.py`). Sistem dili çalışma zamanında algılanarak dil listesinin (combobox) en üstünde, dinamik olarak yerelleştirilmiş `(Sistem)` / `(System)` etiketiyle sunulur. Dil seçimi değiştiğinde uygulama yeniden başlatılmaz; `TrayApp.apply_language()` çağrılır, tray menüsü yeniden kurulur ve ayar penceresinin sekmeleri yeni dille yerinde yeniden kurulur (Live UI ilkesi).
 
 ## Anti-Patterns ve Yasaklar (Aşırı Mühendisliğe Karşı)
 Projenin basitliğini, düz yapısını (flat architecture) ve okunabilirliğini korumak esastır. Bu projeyi geliştiren AI ajanları aşağıdaki pratikleri **KESİNLİKLE dahil etmemelidir**:
@@ -148,7 +149,7 @@ Projenin basitliğini, düz yapısını (flat architecture) ve okunabilirliğini
 2. **Global Event Bus / PubSub Mimarileri Yasaktır:**
    - Olaylar için string tabanlı, izlenmesi zor Publisher/Subscriber mekanizmaları kullanılamaz.
    - **Doğrusu:** Tip güvenli (Type-safe) Qt Sinyalleri (Signals) kullanılmalı ve tüm kablolama (wiring) işlemleri explicit (açıkça görünür) bir şekilde `main.py` içerisinde tek bir merkezde yapılmalıdır. Sinyal kablolamasının 100 satır sürmesi, soyutlanmasından daha iyidir (İzlenebilirlik / Traceability).
-   - **İstisna:** Loglama sistemi (`logging`), altyapısal bir servis olduğu için bu kuraldan muaftır. Her worker için ayrı sinyal kablolamak yerine, `core/log.py` üzerinden "implicit" dağıtım yapılır: bileşenler `get_logger("MIC")` gibi `Katib.<BİLEŞEN>` logger'ı kullanır; dosya handler'ı `setup_logging()` (yazma `QueueListener` thread'inde; kapanışta `stop_logging()`), dashboard handler'ı (`DashboardLogHandler`) `main.py` içinde açıkça (explicit) kurulur. Dikte edilen metin mesaja gömülmez, `extra={"transcript": metin}` ile verilir: dashboard metni gösterir, diske yalnızca uzunluğu yazılır (ADR-0004).
+   - **İstisna:** Loglama sistemi (`logging`), altyapısal bir servis olduğu için bu kuraldan muaftır. Her worker için ayrı sinyal kablolamak yerine, `core/log.py` üzerinden "implicit" dağıtım yapılır: bileşenler `get_logger("MIC")` gibi `Katib.<BİLEŞEN>` logger'ı kullanır; dosya handler'ı `setup_logging()` (yazma `QueueListener` thread'inde; kapanışta `stop_logging()`), ayar penceresinin "Günlük" sekmesini besleyen handler (`LogViewHandler`) `main.py` içinde açıkça (explicit) kurulur. Dikte edilen metin mesaja gömülmez, `extra={"transcript": metin}` ile verilir: "Günlük" sekmesi metni gösterir, diske yalnızca uzunluğu yazılır (ADR-0004).
 3. **Erken Soyutlama (Premature Abstraction):**
    - "Clean Architecture", "SOLID" veya "DRY" kurallarını körü körüne uygulayarak, halihazırda sorunsuz çalışan ve tek dosyada anlaşılan kod bloklarını 5 farklı soyut (abstract) dosyaya parçalamak yasaktır. 
    - **Doğrusu:** Sadece aynı kod 3'ten fazla kez tekrar ederse veya test edilebilirliği kesin olarak engelliyorsa refactor (ayrıştırma) yapılmalıdır.

@@ -13,38 +13,23 @@
     },
     "tray": {
         "menu": {
-            "dashboard": "控制台",
             "settings": "设置",
             "user_guide": "用户指南",
+            "copy_transcript": "复制最后一次转写",
             "quit": "退出"
         }
     },
-    "dashboard": {
-        "title": "控制台",
-        "copy_tooltip": "复制最后一次转写",
-        "copied_tooltip": "已复制！",
-        "console_tooltip": "显示/隐藏控制台",
-        "settings_tooltip": "设置",
-        "no_mic_found": "未找到麦克风。",
-        "model_missing_guidance": "未找到模型。请前往设置 → 模型下载或选择现有文件夹。",
-        "device_refreshed": "设备列表已更改，正在刷新..."
-    },
     "settings": {
         "title": "设置",
-        "group_general": "常规",
-        "group_model": "模型",
-        "group_processing": "处理",
         "group_system": "系统",
         "hotkey_label": "快捷键",
         "ai_model_label": "AI 模型",
         "browse": "浏览...",
         "download": "下载",
         "downloading": "...",
-        "path_not_selected": "路径：未选择",
         "save": "保存",
         "user_guide": "用户指南",
         "open_log_folder": "打开日志文件夹",
-        "reset_settings": "重置设置",
         "hotkey_capture": "请按一个键...",
         "invalid_folder_title": "无效文件夹",
         "invalid_folder_msg": "请选择包含 Whisper 模型文件的文件夹。",
@@ -54,11 +39,18 @@
         "log_folder_missing": "日志文件夹尚未创建。",
         "select_folder_dialog": "选择模型文件夹",
         "app_language_label": "应用语言",
-        "theme_label": "主题",
-        "theme_system": "跟随系统",
-        "theme_dark": "深色",
-        "theme_light": "浅色",
-        "injection_method_label": "Text Injection Method"
+        "injection_method_label": "Text Injection Method",
+        "group_log": "日志",
+        "microphone_label": "麦克风",
+        "no_mic_found": "未找到麦克风。",
+        "model_missing_guidance": "未找到模型。请前往设置 → 听写下载或选择现有文件夹。",
+        "speech_language_label": "语音语言",
+        "ai_prompt_label": "AI 提示词",
+        "ai_prompt_tooltip": "为 AI 提供上下文或格式设置说明。",
+        "tab_dictation": "听写",
+        "tab_app": "应用",
+        "last_recording": "上次录音：{seconds} 秒 · 语音 {speech} dB · 噪声 {noise} dB",
+        "last_dictation": "上次听写：{audio} 秒 → {elapsed} 秒"
     },
     "help": {
         "title": "用户指南",
@@ -72,7 +64,7 @@
         "status_writing": "转写中  →  模型处理中",
         "status_warning": "警告    →  显示 3 秒后自动关闭",
         "hotkey_title": "快捷键",
-        "hotkey_desc": "在设置 → 常规中分配任意键。",
+        "hotkey_desc": "在设置 → 听写中分配任意键。",
         "model_title": "模型",
         "model_desc": "平衡速度和精度。较小的模型更快；较大的模型更精准。",
         "model": {
@@ -92,34 +84,21 @@
             "acc_max": "最高"
         },
         "ai_prompt_title": "AI 提示词",
-        "ai_prompt_desc": "使用设置 → 处理 → AI 提示词为模型提供上下文或格式规则：",
+        "ai_prompt_desc": "使用设置 → 听写 → AI 提示词为模型提供上下文或格式规则：",
         "ai_prompt_ex1": "「这是技术文档。」",
         "ai_prompt_ex2": "「仅用小写字母，不加标点。」",
         "trouble_title1": "显示\"无麦克风\"",
-        "trouble_desc1": "从控制台的麦克风列表中选择设备。如果未显示，请拔出并重新连接。",
+        "trouble_desc1": "在设置 → 听写中选择设备。如果未显示，请拔出并重新连接。",
         "trouble_title2": "未识别语音或结果为空",
         "trouble_desc2": "检查麦克风音量和静音状态。非常短的录音（0.5 秒以下）将被跳过。",
         "trouble_title3": "输入了错误的词语",
-        "trouble_desc3": "尝试更大的模型，或在设置 → 处理 → AI 提示词中添加专业术语上下文。",
+        "trouble_desc3": "尝试更大的模型，或在设置 → 听写 → AI 提示词中添加专业术语上下文。",
         "trouble_title4": "应用无法打开 / 托盘图标缺失",
         "trouble_desc4": "应用可能已在后台运行。请在任务管理器中搜索 {app}。",
         "trouble_title5": "语音已识别但未输入文本",
         "trouble_desc5": "说话前请点击目标字段以使其获得焦点。",
         "trouble_title6": "Model Download Error / Network Error",
         "trouble_desc6": "If you are on a corporate network, downloads may be blocked by a firewall. Please contact your IT department for offline deployment."
-    },
-    "schema": {
-        "language": {
-            "label": "语音语言"
-        },
-        "compute_type": {
-            "label": "精度",
-            "tooltip": "更改此项将重新加载模型。"
-        },
-        "initial_prompt": {
-            "label": "AI 提示词",
-            "tooltip": "为 AI 提供上下文或格式设置说明。"
-        }
     },
     "app": {
         "started": "已启动 — 快捷键：{key}",

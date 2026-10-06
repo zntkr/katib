@@ -17,7 +17,7 @@ def _lbl(text: str, muted: bool = False, bold: bool = False, wrap: bool = True) 
     l = QLabel(text)
     l.setWordWrap(wrap)
     l.setMinimumWidth(10)
-    color = p["CLR_TEXT_MUTED"] if muted else p["CLR_TEXT_CONTENT"]
+    color = p["CLR_TEXT_MUTED"] if muted else p["CLR_TEXT"]
     weight = "bold" if bold else "normal"
     l.setStyleSheet(f"color: {color}; font-weight: {weight};")
     return l
@@ -43,7 +43,7 @@ def _accent_block(lines: list[str]) -> QFrame:
     for line in lines:
         lbl = QLabel(line)
         lbl.setFont(font)
-        lbl.setStyleSheet(f"color: {p['CLR_TEXT_CONTENT']};")
+        lbl.setStyleSheet(f"color: {p['CLR_TEXT']};")
         lay.addWidget(lbl)
     return frame
 
@@ -73,7 +73,7 @@ def _table(headers: list[str], rows: list[list[str]]) -> QFrame:
             lbl.setStyleSheet(
                 f"color: {p['CLR_TEXT_MUTED']}; font-size: {FONT_SIZE_SM}pt; font-weight: bold; background: transparent; border: none;"
                 if is_header else
-                f"color: {p['CLR_TEXT_CONTENT']}; font-size: {FONT_SIZE_SM}pt; background: transparent; border: none;"
+                f"color: {p['CLR_TEXT']}; font-size: {FONT_SIZE_SM}pt; background: transparent; border: none;"
             )
             lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
             h.addWidget(lbl)

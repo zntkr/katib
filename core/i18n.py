@@ -73,6 +73,13 @@ def try_t(key: str) -> str:
     return key
 
 
+def upper(text: str) -> str:
+    """str.upper() that knows the UI language: in Turkish i becomes İ, not I."""
+    if _current_lang == "tr":
+        text = text.replace("i", "İ")
+    return text.upper()
+
+
 def system_language_code() -> str:
     import locale
     try:

@@ -18,12 +18,7 @@ def mock_settings(tmp_path):
     path = tmp_path / "settings.json"
     with patch("core.settings.get_settings_path", return_value=path):
         sm = SettingsManager(in_memory=True)
-        # Populate frequently used default settings (expected by legacy tests)
         sm.set("hotkey", "f9")
-        sm.set("language", "auto")
-        sm.set("compute_type", "int8")
-        sm.set("beam_size", 5)
-        sm.set("vad_threshold", 0.5)
         yield sm
 
 @pytest.fixture(scope="session")
@@ -96,9 +91,9 @@ def _cleanup_qthreads():
 
 @pytest.fixture(autouse=True)
 def _detach_log_handlers():
-    """Removes dashboard log handlers that tests attached via tests.log_helpers.on_log_entry."""
+    """Removes the log-view handlers that tests attached via tests.log_helpers.on_log_entry."""
     yield
-    from core.log import DashboardLogHandler
+    from core.log import LogViewHandler
     katib = logging.getLogger("Katib")
-    for h in [h for h in katib.handlers if isinstance(h, DashboardLogHandler)]:
+    for h in [h for h in katib.handlers if isinstance(h, LogViewHandler)]:
         katib.removeHandler(h)

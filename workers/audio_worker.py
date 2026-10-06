@@ -29,6 +29,9 @@ class AudioWorker(BaseWorker):
     devices_ready      = Signal(list)    # list of (label: str, index: int, is_default: bool)
     muted_detected     = Signal()        # mathematical 0.0 (muted) detected
     audio_failed       = Signal()        # recording too short or silent
+    # What was heard, for the settings window: seconds, speech dB, noise-floor dB, and the
+    # i18n key of the reason it was dropped ("" when it went on to be transcribed).
+    recording_analysed = Signal(float, float, float, str)
     mic_unavailable    = Signal()        # hardware unreachable (not found / failed to open / disconnected)
     _stream_lost       = Signal()        # private: hop from the PortAudio thread to this object's thread
 
@@ -164,6 +167,7 @@ class AudioWorker(BaseWorker):
 
         if not chunks_snapshot:
             _log.warning("Recording is empty")
+            self.recording_analysed.emit(0.0, -120.0, -120.0, "osd.recording_too_short")
             self.audio_failed.emit()
             return
 
@@ -172,24 +176,30 @@ class AudioWorker(BaseWorker):
             native_sr = self.audio_source.native_sample_rate
             if native_sr != SAMPLE_RATE:
                 audio = _resample(audio, native_sr, SAMPLE_RATE)
-                
+
             duration = len(audio) / SAMPLE_RATE
-            if duration < MIN_RECORDING_DURATION:
-                _log.warning("Recording too short, skipped")
-                self.audio_failed.emit()
-                return
-                
             from core.audio_analysis import analyse_vad, is_silent
             chunk_duration = len(audio) / SAMPLE_RATE / len(self._rms_history) if self._rms_history else 0.1
             stats = analyse_vad(self._rms_history, chunk_duration)
-            
+
+            def report(problem: str) -> None:
+                self.recording_analysed.emit(duration, stats["speech_db"], stats["noise_db"], problem)
+
+            if duration < MIN_RECORDING_DURATION:
+                _log.warning("Recording too short, skipped")
+                report("osd.recording_too_short")
+                self.audio_failed.emit()
+                return
+
             if is_silent(stats):
                 _log.warning(f"Audio discarded as silence/noise (Noise floor: {stats['noise_db']:.1f} dB, Speech peak: {stats['speech_db']:.1f} dB, Voiced: {stats['voiced_seconds']:.2f}s)")
                 self.error_occurred.emit("osd.audio_too_quiet")
+                report("osd.audio_too_quiet")
                 self.audio_failed.emit()
                 return
-                
+
             _log.log(OK, f"Recording complete ({duration:.1f}s)")
+            report("")
             self.audio_ready.emit(audio)
         except Exception as e:
             _log.error(f"Audio merge error: {e}")

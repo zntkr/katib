@@ -4,7 +4,7 @@
 > her plan kendi kendine yeten bir devir belgesidir. Bir sayıya ya da karara
 > ihtiyacın varsa planı aç, buradan alıntılama.
 
-**Son güncelleme:** 2026-10-03 · **9 plan, 4 kapalı, 5 açık.** (0006–0008 hız/doğruluk incelemesinden, 0009 ADR-0010'dan açıldı.)
+**Son güncelleme:** 2026-10-04 · **10 plan, 4 kapalı, 6 açık.** (0006–0008 hız/doğruluk incelemesinden, 0009 ADR-0010'dan, 0010 ADR-0012'den açıldı.)
 
 ⚠️ Bu tablo elle tutuluyor ve bayatlayabilir. Şüphelendiğinde depodan doğrula:
 
@@ -37,6 +37,7 @@ planı açık gösterebilir; `katla()` bunun içindir.
 | [0005](0005-ses-islerinin-ui-thread-olcumu.md) | Ses işlerinin UI thread'de çalışması | ⏸️ Veri bekliyor | Kullanıcının Windows ölçümü |
 | [0008](0008-model-yuklenince-isinma.md) | Model yüklenince ısınma transkripsiyonu | ⏸️ Faz 1 ✅, doğrulama bekliyor | Faz 2: kullanıcının Windows log'u |
 | [0009](0009-gpu-destegi.md) | GPU desteği (isteğe bağlı hızlandırma) | ⏸️ Faz 1 ✅, karar bekliyor | Faz 2–3: kullanıcı kararı (dağıtım, ayar ekranı) |
+| [0010](0010-tek-pencereli-arayuz.md) | Tek pencereli arayüz (dashboard'un kaldırılması) | ⏸️ Faz 1–3 ✅, doğrulama bekliyor | Faz 4: kullanıcının gerçek uygulamada denemesi |
 
 0001–0004 2026-10-01'de kapandı (aşağıda "Kapalı planlar"). 0006–0008
 `docs/hiz-dogruluk-incelemesi-2026-10-01.md`'nin bulgularıdır; 0009 hedefin

@@ -84,6 +84,44 @@ class TestStopRecording:
         assert not worker._is_recording
         assert len(audio_results) == 1
 
+class TestRecordingAnalysed:
+    """What the settings window is told about every recording (plan 0010): seconds,
+    speech dB, noise-floor dB, and the reason when it was dropped."""
+
+    def _record(self, mock_settings, mock_audio_source, levels):
+        worker = AudioWorker(mock_settings, mock_audio_source)
+        worker.set_device(1)
+        reports = []
+        worker.recording_analysed.connect(lambda *args: reports.append(args))
+        worker.start_recording()
+        feed = mock_audio_source.start.call_args.args[0]  # the callback the audio source calls
+        for level in levels:                              # one 0.1 s block per level
+            feed(np.full(SAMPLE_RATE // 10, level, dtype=np.float32), None)
+        worker.stop_recording()
+        return reports
+
+    def test_a_spoken_recording_is_reported_without_a_problem(self, mock_settings, mock_audio_source):
+        [(seconds, speech_db, noise_db, problem)] = self._record(
+            mock_settings, mock_audio_source, [0.01] * 5 + [0.5] * 5)
+        assert seconds == pytest.approx(1.0)
+        assert speech_db == pytest.approx(-6.0, abs=0.1)
+        assert noise_db == pytest.approx(-40.0, abs=0.1)
+        assert problem == ""
+
+    def test_a_recording_that_is_too_quiet_says_so(self, mock_settings, mock_audio_source):
+        [(_, speech_db, _, problem)] = self._record(mock_settings, mock_audio_source, [0.0005] * 10)
+        assert speech_db == pytest.approx(-66.0, abs=0.1)
+        assert problem == "osd.audio_too_quiet"
+
+    def test_a_recording_that_is_too_short_says_so(self, mock_settings, mock_audio_source):
+        [(seconds, _, _, problem)] = self._record(mock_settings, mock_audio_source, [0.5] * 3)
+        assert seconds == pytest.approx(0.3)
+        assert problem == "osd.recording_too_short"
+
+    def test_an_empty_recording_is_reported_as_too_short(self, mock_settings, mock_audio_source):
+        assert self._record(mock_settings, mock_audio_source, []) == [(0.0, -120.0, -120.0, "osd.recording_too_short")]
+
+
 class TestCallbacks:
     def test_audio_callback_appends_chunks(self, mock_settings, mock_audio_source):
         worker = AudioWorker(mock_settings, mock_audio_source)

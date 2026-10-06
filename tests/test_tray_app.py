@@ -1,599 +1,245 @@
-from core.models import ModelProvider
-"""
-Qt UI component tests.
-_qt_key_to_keyboard, DashboardWindow, log limit, etc.
-Requires the QApplication fixture (conftest.py).
-"""
+"""TrayApp: the tray icon and its menu, the status it shows and what the hotkey does (ADR-0012).
+Also qt_key_to_keyboard, the pure key-name conversion the hotkey capture uses."""
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
-import sys
-sys.modules['keyboard'] = MagicMock()
-from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QSystemTrayIcon
 
+from core.i18n import t
+from core.models import ModelProvider
+from core.settings import (
+    MSG_MIC_UNAVAILABLE, MSG_MODEL_NOT_FOUND, STATE_LISTENING, STATE_LOADING,
+    STATE_PROCESSING, STATE_READY,
+)
+from ui.settings_window import TABS
+from ui.tray_app import TrayApp
+from ui.utils import qt_key_to_keyboard
 
-def _make_icon():
-    px = QPixmap(1, 1)
-    px.fill(Qt.GlobalColor.transparent)
-    return QIcon(px)
+TRAY_AVAILABLE = "ui.tray_app.QSystemTrayIcon.isSystemTrayAvailable"
 
 
 class TestQtKeyToKeyboard:
-    """Tests for the qt_key_to_keyboard() pure conversion function."""
+    @pytest.mark.parametrize("number", range(1, 13))
+    def test_function_keys(self, number):
+        assert qt_key_to_keyboard(getattr(Qt.Key, f"Key_F{number}")) == f"f{number}"
 
-    @pytest.fixture(autouse=True)
-    def _import(self, qapp):
-        from ui.utils import qt_key_to_keyboard
-        self.fn = qt_key_to_keyboard
+    @pytest.mark.parametrize("key, name", [
+        (Qt.Key.Key_Space, "space"), (Qt.Key.Key_Return, "enter"), (Qt.Key.Key_Escape, "esc"),
+        (Qt.Key.Key_Tab, "tab"), (Qt.Key.Key_Backspace, "backspace"), (Qt.Key.Key_Delete, "delete"),
+        (Qt.Key.Key_Insert, "insert"), (Qt.Key.Key_Home, "home"), (Qt.Key.Key_End, "end"),
+        (Qt.Key.Key_PageUp, "page up"), (Qt.Key.Key_PageDown, "page down"),
+        (Qt.Key.Key_Up, "up"), (Qt.Key.Key_Down, "down"), (Qt.Key.Key_Left, "left"), (Qt.Key.Key_Right, "right"),
+    ])
+    def test_named_keys(self, key, name):
+        assert qt_key_to_keyboard(key) == name
 
-    def test_f1_through_f12(self):
-        from PySide6.QtCore import Qt
-        for i in range(1, 13):
-            qt_key = getattr(Qt.Key, f"Key_F{i}")
-            assert self.fn(qt_key) == f"f{i}"
+    def test_letters_and_digits_are_lowercase(self):
+        assert qt_key_to_keyboard(Qt.Key.Key_A) == "a"
+        assert qt_key_to_keyboard(Qt.Key.Key_5) == "5"
 
-    def test_space(self):
-        from PySide6.QtCore import Qt
-        assert self.fn(Qt.Key.Key_Space) == "space"
-
-    def test_enter(self):
-        from PySide6.QtCore import Qt
-        assert self.fn(Qt.Key.Key_Return) == "enter"
-
-    def test_escape(self):
-        from PySide6.QtCore import Qt
-        assert self.fn(Qt.Key.Key_Escape) == "esc"
-
-    def test_tab(self):
-        from PySide6.QtCore import Qt
-        assert self.fn(Qt.Key.Key_Tab) == "tab"
-
-    def test_backspace(self):
-        from PySide6.QtCore import Qt
-        assert self.fn(Qt.Key.Key_Backspace) == "backspace"
-
-    def test_delete(self):
-        from PySide6.QtCore import Qt
-        assert self.fn(Qt.Key.Key_Delete) == "delete"
-
-    def test_home(self):
-        from PySide6.QtCore import Qt
-        assert self.fn(Qt.Key.Key_Home) == "home"
-
-    def test_end(self):
-        from PySide6.QtCore import Qt
-        assert self.fn(Qt.Key.Key_End) == "end"
-
-    def test_arrow_keys(self):
-        from PySide6.QtCore import Qt
-        assert self.fn(Qt.Key.Key_Up)    == "up"
-        assert self.fn(Qt.Key.Key_Down)  == "down"
-        assert self.fn(Qt.Key.Key_Left)  == "left"
-        assert self.fn(Qt.Key.Key_Right) == "right"
-
-    def test_alphanumeric_lowercase(self):
-        assert self.fn(ord("A")) == "a"
-        assert self.fn(ord("Z")) == "z"
-        assert self.fn(ord("0")) == "0"
-        assert self.fn(ord("9")) == "9"
-
-    def test_unknown_key_returns_none(self):
-        assert self.fn(9999) is None
+    def test_a_key_with_no_name_gives_none(self):
+        assert qt_key_to_keyboard(Qt.Key.Key_Control) is None
 
 
-# shared fixture
+def _make(mock_settings) -> TrayApp:
+    """A TrayApp on a machine that has a system tray, whatever the test machine offers."""
+    with patch(TRAY_AVAILABLE, return_value=True):
+        return TrayApp(mock_settings, ModelProvider("."))
+
+
+def _close(app: TrayApp) -> None:
+    app.tray.hide()
+    app.settings_window.close()
+    for window in _help_windows():
+        window.close()
+
+
+def _help_windows() -> list:
+    from PySide6.QtWidgets import QApplication
+    from ui.help_window import HelpWindow
+    return [w for w in QApplication.topLevelWidgets() if isinstance(w, HelpWindow) and w.isVisible()]
+
 
 @pytest.fixture
-def dashboard(qapp, mock_settings):
-    from ui.dashboard import DashboardWindow
-    w = DashboardWindow(mock_settings, ModelProvider("."), icon_idle=_make_icon())
-    yield w
-    w.close()
+def tray(qapp, mock_settings):
+    app = _make(mock_settings)
+    app.audio_worker = MagicMock()
+    app.osd = MagicMock()
+    app.transcription_worker = MagicMock(is_ready=True, is_loading=False)
+    yield app
+    _close(app)
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-
-class TestDashboardLog:
-    def test_append_log_adds_entry(self, dashboard):
-        dashboard.append_log_entry("...", "APP","test message")
-        assert "test message" in dashboard.log_box.toPlainText()
-
-    def test_append_log_adds_timestamp(self, dashboard):
-        dashboard.append_log_entry("...", "APP","timestamp test")
-        content = dashboard.log_box.toPlainText()
-        assert "[" in content and "]" in content
-
-    def test_append_log_100_line_limit(self, dashboard):
-        for i in range(150):
-            dashboard.append_log_entry("...", "APP",f"line {i}")
-        assert dashboard.log_box.document().blockCount() <= 101
-
-    def test_append_multiple_logs(self, dashboard):
-        dashboard.append_log_entry("...", "APP","first")
-        dashboard.append_log_entry("...", "APP","second")
-        content = dashboard.log_box.toPlainText()
-        assert "first" in content
-        assert "second" in content
-
-    def test_log_colors_update_after_theme_change(self, dashboard):
-        from ui.theme import theme_manager, DARK_PALETTE
-        ALT_PALETTE = {**DARK_PALETTE, "CLR_OK": "#aabbcc"}
-        theme_manager.palette = DARK_PALETTE
-        dashboard._update_log_stylesheet()
-        dashboard.append_log_entry("OK", "APP", "message")
-        # Switch to the alternate palette; the log should be re-rendered
-        theme_manager.palette = ALT_PALETTE
-        dashboard._update_log_stylesheet()
-        log_html = dashboard.log_box.toHtml()
-        assert ALT_PALETTE["CLR_OK"] in log_html
-        assert DARK_PALETTE["CLR_OK"] not in log_html
-
-    def test_log_entries_survive_theme_change(self, dashboard):
-        dashboard.append_log_entry("OK", "APP", "message after log")
-        dashboard._update_log_stylesheet()
-        assert "message after log" in dashboard.log_box.toPlainText()
-
-    def test_log_entries_list_capped_at_100(self, dashboard):
-        for i in range(150):
-            dashboard.append_log_entry("...", "APP", f"line {i}")
-        assert len(dashboard._log_entries) <= 100
+def _shows(app: TrayApp, key: str) -> bool:
+    return t(key) in app.tray.toolTip()
 
 
-class TestDashboardStatus:
-    def test_set_status_text(self, dashboard):
-        from core.settings import STATE_LISTENING
-        from core.i18n import t
-        dashboard.set_status(STATE_LISTENING)
-        assert t(STATE_LISTENING) in dashboard.status_label.text()
-
-    def test_set_status_color(self, dashboard):
-        from ui.theme import theme_manager
-        dashboard.set_status("Error", "ERR")
-        assert theme_manager.palette["CLR_TEXT_STATUS"] in dashboard.status_label.text()
-
-    def test_default_status_is_waiting(self, dashboard):
-        from core.settings import STATE_READY
-        from core.i18n import t
-        assert t(STATE_READY) in dashboard.status_label.text()
+def _recording_icon(app: TrayApp) -> bool:
+    return app.tray.icon().cacheKey() != app.icon_idle.cacheKey()
 
 
-class TestDashboardLevel:
-    def test_update_level_zero(self, dashboard):
-        dashboard.update_level(0.0)
-        assert dashboard.level_bar.value() == 0
-
-    def test_update_level_full(self, dashboard):
-        from core.settings import STATE_LISTENING
-        dashboard.set_status(STATE_LISTENING)
-        dashboard.update_level(1.0)
-        assert dashboard.level_bar.value() == 100
-
-    def test_update_level_green_range(self, dashboard):
-        from ui.theme import theme_manager
-        from core.settings import STATE_LISTENING
-        dashboard.set_status(STATE_LISTENING)
-        dashboard.update_level(0.3)
-        assert theme_manager.palette["CLR_OK"] in dashboard.level_bar.styleSheet()
-
-    def test_update_level_yellow_range(self, dashboard):
-        from ui.theme import theme_manager
-        from core.settings import STATE_LISTENING
-        dashboard.set_status(STATE_LISTENING)
-        dashboard.update_level(0.7)
-        assert theme_manager.palette["CLR_WARN"] in dashboard.level_bar.styleSheet()
-
-    def test_update_level_red_range(self, dashboard):
-        from ui.theme import theme_manager
-        from core.settings import STATE_LISTENING
-        dashboard.set_status(STATE_LISTENING)
-        dashboard.update_level(0.95)
-        assert theme_manager.palette["CLR_ERR"] in dashboard.level_bar.styleSheet()
-
-    def test_update_level_clamped(self, dashboard):
-        from core.settings import STATE_LISTENING
-        dashboard.set_status(STATE_LISTENING)
-        dashboard.update_level(1.5)
-        assert dashboard.level_bar.value() == 100
+def _action(app: TrayApp, text_key: str):
+    return next(a for a in app.tray.contextMenu().actions() if a.text() == t(text_key))
 
 
-class TestPopulateDevices:
-    def test_populate_fills_combo(self, dashboard):
-        dashboard.populate_devices([("Microphone A", 0, False), ("★ Microphone B", 2, True)])
-        assert dashboard.mic_combo.count() == 2
+class TestStartup:
+    def test_no_window_opens(self, tray):
+        """ADR-0012: the tray icon and the pill are the interface; nothing opens by itself."""
+        assert not tray.settings_window.isVisible()
+        assert tray.settings_window.btn_quit.isHidden()  # the tray menu is where one quits
 
-    def test_populate_stores_device_index(self, dashboard):
-        dashboard.populate_devices([("★ Microphone A", 3, True)])
-        assert dashboard.mic_combo.itemData(0) == 3
+    def test_status_says_loading_until_the_model_reports(self, tray):
+        assert _shows(tray, STATE_LOADING)
 
-    def test_populate_selects_default(self, dashboard):
-        dashboard.settings.set("mic_index", None)
-        dashboard.populate_devices([("Microphone A", 0, False), ("★ Microphone B", 2, True)])
-        assert dashboard.mic_combo.currentData() == 2
+    def test_a_missing_model_opens_the_settings_where_one_can_be_chosen(self, tray):
+        tray.on_model_missing()
+        assert tray.settings_window.isVisible()
+        assert tray.settings_window.tabs.currentIndex() == TABS.index("dictation")
 
-    def test_populate_empty_list_clears_combo(self, dashboard):
-        dashboard.populate_devices([("Old", 0, False)])
-        dashboard.populate_devices([])
-        assert dashboard.mic_combo.count() == 0
-
-    def test_populate_clears_previous_items(self, dashboard):
-        dashboard.populate_devices([("Old", 0, False)])
-        dashboard.populate_devices([("New A", 1, True), ("New B", 2, False)])
-        assert dashboard.mic_combo.count() == 2
-        assert dashboard.mic_combo.itemText(0) == "New A"
-
-    def test_refresh_button_emits_signal(self, dashboard):
-        received = []
-        dashboard.refresh_devices_requested.connect(lambda: received.append(1))
-        dashboard._populate_devices()
-        assert len(received) == 1
-
-    def test_populate_emits_device_changed_for_selected(self, dashboard):
-        """When the combo is populated, the selected device should be signalled via device_changed."""
-        changed = []
-        dashboard.device_changed.connect(changed.append)
-        dashboard.populate_devices([("★ Microphone", 42, True)])
-        assert changed == [42]
-
-    def test_populate_no_items_does_not_emit_device_changed(self, dashboard):
-        """When an empty list is received, device_changed should not be emitted."""
-        changed = []
-        dashboard.device_changed.connect(changed.append)
-        dashboard.populate_devices([])
-        assert changed == []
+    def test_workers_are_attached_after_construction(self, qapp, mock_settings):
+        app = _make(mock_settings)
+        audio, transcription, osd = MagicMock(), MagicMock(), MagicMock()
+        app.attach_workers(audio_worker=audio, transcription_worker=transcription, osd=osd)
+        assert (app.audio_worker, app.transcription_worker, app.osd) == (audio, transcription, osd)
+        _close(app)
 
 
-class TestTrayApp:
-    def test_tray_app_creates_dashboard(self, qapp, mock_settings):
-        from ui.tray_app import TrayApp
-        tray = TrayApp(mock_settings, ModelProvider("."))
-        assert tray.dashboard is not None
-        tray.tray.hide()
-        tray.dashboard.close()
+class TestMenu:
+    def test_offers_settings_guide_copy_and_quit(self, tray):
+        texts = [a.text() for a in tray.tray.contextMenu().actions() if not a.isSeparator()]
+        assert texts == ["Settings", "User Guide", "Copy last transcript", "Quit"]
 
-    def test_set_recording_true(self, qapp, mock_settings):
-        from ui.tray_app import TrayApp
-        tray = TrayApp(mock_settings, ModelProvider("."))
-        tray.set_recording(True)
-        from core.settings import STATE_LISTENING
-        from core.i18n import t
-        assert t(STATE_LISTENING) in tray.dashboard.status_label.text()
-        tray.tray.hide()
-        tray.dashboard.close()
+    def test_settings_opens_the_settings_window(self, tray):
+        _action(tray, "tray.menu.settings").trigger()
+        assert tray.settings_window.isVisible()
 
-    def test_set_recording_false(self, qapp, mock_settings):
-        from ui.tray_app import TrayApp
-        tray = TrayApp(mock_settings, ModelProvider("."))
-        from core.settings import STATE_READY
-        tray.on_model_status(STATE_READY, "OK")
-        tray.set_recording(True)
-        tray.set_recording(False)
-        from core.i18n import t
-        assert t(STATE_READY) in tray.dashboard.status_label.text()
-        tray.tray.hide()
-        tray.dashboard.close()
+    def test_double_click_opens_the_settings_window(self, tray):
+        tray.tray.activated.emit(QSystemTrayIcon.ActivationReason.DoubleClick)
+        assert tray.settings_window.isVisible()
 
-    def test_on_tray_activated(self, qapp, mock_settings):
-        from ui.tray_app import TrayApp
-        from PySide6.QtWidgets import QSystemTrayIcon
-        tray = TrayApp(mock_settings, ModelProvider("."))
-        with patch.object(tray, "_show_dashboard") as mock_show:
-            tray._on_tray_activated(QSystemTrayIcon.ActivationReason.DoubleClick)
-            mock_show.assert_called_once()
-            tray._on_tray_activated(QSystemTrayIcon.ActivationReason.Trigger)
-            mock_show.assert_called_once()  # Should only trigger on double-click
-        tray.tray.hide()
-        tray.dashboard.close()
+    def test_a_single_click_opens_nothing(self, tray):
+        tray.tray.activated.emit(QSystemTrayIcon.ActivationReason.Trigger)
+        assert not tray.settings_window.isVisible()
 
-    def test_show_dashboard(self, qapp, mock_settings):
-        from ui.tray_app import TrayApp
-        tray = TrayApp(mock_settings, ModelProvider("."))
-        tray._show_dashboard()
-        assert tray.dashboard.isVisible()
-        tray.tray.hide()
-        tray.dashboard.close()
+    def test_user_guide_opens_one_help_window(self, tray):
+        _action(tray, "tray.menu.user_guide").trigger()
+        _action(tray, "tray.menu.user_guide").trigger()
+        assert len(_help_windows()) == 1
 
-    def test_on_hotkey_pressed(self, qapp, mock_settings):
-        from ui.tray_app import TrayApp
-        tray = TrayApp(mock_settings, ModelProvider("."))
-        tray.audio_worker = MagicMock()
+    def test_copy_is_offered_once_something_was_dictated(self, tray):
+        assert not _action(tray, "tray.menu.copy_transcript").isEnabled()
+        with patch("ui.tray_app.inject_text"):
+            tray.on_text_ready("merhaba dünya")
+        assert _action(tray, "tray.menu.copy_transcript").isEnabled()
+
+    def test_copy_puts_the_last_dictation_on_the_clipboard(self, tray):
+        with patch("ui.tray_app.inject_text"):
+            tray.on_text_ready("first")
+            tray.on_text_ready("merhaba dünya")
+        with patch("ui.tray_app.QApplication.clipboard") as clipboard:
+            _action(tray, "tray.menu.copy_transcript").trigger()
+        clipboard.return_value.setText.assert_called_once_with("merhaba dünya")
+
+
+class TestDictation:
+    def test_text_is_written_with_the_chosen_method(self, tray, mock_settings):
+        mock_settings.set("injection_method", "keystroke")
+        with patch("ui.tray_app.inject_text") as inject:
+            tray.on_text_ready("merhaba")
+        inject.assert_called_once_with("merhaba", injection_method="keystroke")
+
+    def test_hotkey_press_starts_recording(self, tray):
         tray.on_hotkey_pressed()
         tray.audio_worker.start_recording.assert_called_once()
-        tray.tray.hide()
-        tray.dashboard.close()
-
-    def test_on_hotkey_pressed_model_not_ready_blocks_recording(self, qapp, mock_settings):
-        """Recording should not start if the model is not ready."""
-        from ui.tray_app import TrayApp
-        tray = TrayApp(mock_settings, ModelProvider("."))
-        tray.audio_worker = MagicMock()
-        tray.transcription_worker = MagicMock()
-        tray.transcription_worker.is_ready = False
-        tray.transcription_worker.is_loading = False
-        tray.on_hotkey_pressed()
-        tray.audio_worker.start_recording.assert_not_called()
-        tray.tray.hide()
-        tray.dashboard.close()
-
-    def test_on_hotkey_pressed_model_not_ready_shows_osd_error(self, qapp, mock_settings):
-        """If the model is not ready, the OSD should switch to an error state."""
-        from ui.tray_app import TrayApp
-        tray = TrayApp(mock_settings, ModelProvider("."))
-        tray.transcription_worker = MagicMock()
-        tray.transcription_worker.is_ready = False
-        tray.transcription_worker.is_loading = False
-        tray.osd = MagicMock()
-        tray.on_hotkey_pressed()
-        tray.osd.setStateError.assert_called_once_with("status.no_model")
-        tray.tray.hide()
-        tray.dashboard.close()
-
-    def test_on_hotkey_pressed_model_not_ready_does_not_set_recording_state(self, qapp, mock_settings):
-        """If the model is not ready, the dashboard should not show the 'Listening' state."""
-        from ui.tray_app import TrayApp
-        tray = TrayApp(mock_settings, ModelProvider("."))
-        tray.transcription_worker = MagicMock()
-        tray.transcription_worker.is_ready = False
-        tray.transcription_worker.is_loading = False
-        tray.on_hotkey_pressed()
-        from core.settings import STATE_LISTENING
-        assert STATE_LISTENING not in tray.dashboard.status_label.text()
-        tray.tray.hide()
-        tray.dashboard.close()
-
-    def test_on_hotkey_released(self, qapp, mock_settings):
-        from ui.tray_app import TrayApp
-        tray = TrayApp(mock_settings, ModelProvider("."))
-        tray.audio_worker = MagicMock()
-        tray.on_hotkey_released()
-        tray.audio_worker.stop_recording.assert_called_once()
-        tray.tray.hide()
-        tray.dashboard.close()
-
-    def test_status_mic_unavailable(self, qapp, mock_settings):
-        from ui.tray_app import TrayApp
-        from core.settings import MSG_MIC_UNAVAILABLE
-        from core.i18n import t
-        tray = TrayApp(mock_settings, ModelProvider("."))
-        tray.on_mic_unavailable()
-        assert t(MSG_MIC_UNAVAILABLE) in tray.dashboard.status_label.text()
-        assert t(MSG_MIC_UNAVAILABLE) in tray.tray.toolTip()
-        tray.tray.hide()
-        tray.dashboard.close()
-
-    def test_status_model_not_found(self, qapp, mock_settings):
-        from ui.tray_app import TrayApp
-        from core.settings import MSG_MODEL_NOT_FOUND
-        from core.i18n import t
-        tray = TrayApp(mock_settings, ModelProvider("."))
-        tray.on_model_status(MSG_MODEL_NOT_FOUND, "WARN")
-        assert t(MSG_MODEL_NOT_FOUND) in tray.dashboard.status_label.text()
-        assert t(MSG_MODEL_NOT_FOUND) in tray.tray.toolTip()
-        tray.tray.hide()
-        tray.dashboard.close()
-
-    def test_status_ready(self, qapp, mock_settings):
-        from ui.tray_app import TrayApp
-        from core.settings import STATE_READY
-        from core.i18n import t
-        tray = TrayApp(mock_settings, ModelProvider("."))
-        tray.on_model_status(STATE_READY, "OK")
-        assert t(STATE_READY) in tray.dashboard.status_label.text()
-        assert t(STATE_READY) in tray.tray.toolTip()
-        tray.tray.hide()
-        tray.dashboard.close()
-
-    def test_mic_available_again_shows_model_status(self, qapp, mock_settings):
-        from ui.tray_app import TrayApp
-        from core.settings import STATE_READY
-        from core.i18n import t
-        tray = TrayApp(mock_settings, ModelProvider("."))
-        tray.on_model_status(STATE_READY, "OK")
-        tray.on_mic_unavailable()
-        tray.on_mic_available()
-        assert t(STATE_READY) in tray.dashboard.status_label.text()
-        tray.tray.hide()
-        tray.dashboard.close()
-
-
-
-class TestDashboardKeyPress:
-    def test_escape_hides_window(self, dashboard):
-        from PySide6.QtCore import Qt
-        from PySide6.QtGui import QKeyEvent
-        from PySide6.QtCore import QEvent
-        dashboard.show()
-        event = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Escape, Qt.KeyboardModifier.NoModifier)
-        dashboard.keyPressEvent(event)
-        assert not dashboard.isVisible()
-
-    def test_other_key_does_not_hide(self, dashboard):
-        from PySide6.QtCore import Qt
-        from PySide6.QtGui import QKeyEvent
-        from PySide6.QtCore import QEvent
-        dashboard.show()
-        event = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_A, Qt.KeyboardModifier.NoModifier)
-        dashboard.keyPressEvent(event)
-        assert dashboard.isVisible()
-
-
-class TestDashboardLoadingIndicator:
-    def test_set_loading_indicator_true_shows_spinner(self, dashboard):
-        dashboard.set_loading_indicator(True)
-        assert dashboard.level_bar.maximum() == 0  # Indeterminate mode
-
-    def test_set_loading_indicator_false_hides_spinner(self, dashboard):
-        dashboard.set_loading_indicator(True)
-        dashboard.set_loading_indicator(False)
-        assert dashboard.level_bar.maximum() == 100 # Normal mode
-
-
-
-class TestDashboardExtras:
-    def test_apply_dark_mode_exception(self, qapp, mock_settings):
-        from ui.dashboard import DashboardWindow
-        with patch("ui.dashboard.apply_dark_mode_to_window", side_effect=Exception("No DWM")):
-            w = DashboardWindow(mock_settings, ModelProvider("."), icon_idle=_make_icon())
-            assert w is not None
-
-
-    def test_populate_devices_early_return(self, dashboard):
-        items = [("A", 1, True)]
-        dashboard.populate_devices(items)
-        with patch.object(dashboard.mic_combo, "blockSignals") as mock_block:
-            dashboard.populate_devices(items)
-            mock_block.assert_not_called() 
-
-    def test_public_methods(self, dashboard):
-        assert dashboard.selected_device_index() is None
-        dashboard.show_help()
-        assert dashboard._help_window.isVisible()
-        received_hotkeys = []
-        dashboard.hotkey_changed.connect(received_hotkeys.append)
-        dashboard._on_hotkey_from_dialog("F12")
-        assert len(received_hotkeys) == 1
-        assert received_hotkeys[0] == "F12"
-
-class TestTrayAppWithoutSystemTray:
-    """No system tray at startup, e.g. autostart before Explorer is ready."""
-
-    @pytest.fixture
-    def tray(self, qapp, mock_settings):
-        from ui.tray_app import TrayApp
-        with patch("ui.tray_app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
-            t = TrayApp(mock_settings, ModelProvider("."))
-        yield t
-        t.tray.hide()
-        t.dashboard.close()
-
-    def test_hotkey_starts_recording(self, tray):
-        tray.audio_worker = MagicMock()
-        tray.on_hotkey_pressed()
-        tray.audio_worker.start_recording.assert_called_once()
+        tray.osd.setStateRecording.assert_called_once()
+        assert _shows(tray, STATE_LISTENING) and _recording_icon(tray)
 
     def test_hotkey_release_stops_recording(self, tray):
-        tray.audio_worker = MagicMock()
+        tray.on_hotkey_pressed()
         tray.on_hotkey_released()
         tray.audio_worker.stop_recording.assert_called_once()
+        assert not _shows(tray, STATE_LISTENING) and not _recording_icon(tray)
 
-    def test_mic_status_updates_do_not_crash(self, tray):
-        tray.on_mic_unavailable()
-        tray.on_mic_available()
-
-    def test_quit_button_added_and_retry_scheduled(self, tray):
-        assert tray._no_tray_quit_btn is not None
-        assert tray._tray_retry_timer.isActive()
-
-    def test_tray_appears_when_it_becomes_available(self, tray):
-        with patch("ui.tray_app.QSystemTrayIcon.isSystemTrayAvailable", return_value=True), \
-             patch.object(tray.tray, "show") as mock_show:
-            tray._retry_tray()
-        mock_show.assert_called_once()
-        assert tray._no_tray_quit_btn is None
-        assert not tray._tray_retry_timer.isActive()
-
-    def test_retry_gives_up_after_limit(self, tray):
-        with patch("ui.tray_app.QSystemTrayIcon.isSystemTrayAvailable", return_value=False):
-            for _ in range(tray.TRAY_RETRY_LIMIT):
-                tray._retry_tray()
-        assert not tray._tray_retry_timer.isActive()
-        assert tray._no_tray_quit_btn is not None  # still the only way to quit
-
-    def test_apply_language_without_tray(self, tray):
-        tray.apply_language("en")
-        tray.set_recording(True)
-
-
-class TestTrayAppModelLoading:
-    @pytest.fixture
-    def tray(self, qapp, mock_settings):
-        from ui.tray_app import TrayApp
-        t = TrayApp(mock_settings, ModelProvider("."))
-        t.audio_worker = MagicMock()
-        t.osd = MagicMock()
-        t.transcription_worker = MagicMock(is_ready=False, is_loading=True)
-        yield t
-        t.tray.hide()
-        t.dashboard.close()
-
-    def test_hotkey_while_loading_says_loading_not_missing(self, tray):
-        from core.settings import STATE_LOADING
+    def test_hotkey_while_the_model_loads_says_loading(self, tray):
+        tray.transcription_worker = MagicMock(is_ready=False, is_loading=True)
         tray.on_hotkey_pressed()
         tray.osd.setStateError.assert_called_once_with(STATE_LOADING)
         tray.audio_worker.start_recording.assert_not_called()
+        assert not _shows(tray, STATE_LISTENING)
 
-    def test_status_while_loading(self, tray):
-        from core.settings import STATE_LOADING
-        from core.i18n import t
-        tray.on_model_status(STATE_LOADING, "IDLE")
-        assert t(STATE_LOADING) in tray.dashboard.status_label.text()
-        assert t(STATE_LOADING) in tray.tray.toolTip()
+    def test_hotkey_without_a_model_says_no_model(self, tray):
+        tray.transcription_worker = MagicMock(is_ready=False, is_loading=False)
+        tray.on_hotkey_pressed()
+        tray.osd.setStateError.assert_called_once_with(MSG_MODEL_NOT_FOUND)
+        tray.audio_worker.start_recording.assert_not_called()
+
+    def test_level_reaches_the_settings_window_while_recording(self, tray):
+        tray.on_hotkey_pressed()
+        tray.on_level_changed(0.5)
+        assert tray.settings_window.level_bar.value() == 50
+
+    def test_a_level_arriving_after_the_recording_is_dropped(self, tray):
+        tray.on_hotkey_pressed()
+        tray.on_level_changed(0.5)
+        tray.on_hotkey_released()
+        tray.on_level_changed(0.7)
+        assert tray.settings_window.level_bar.value() == 0
 
 
-class TestTrayAppAttachWorkers:
-    def test_attach_workers_sets_references(self, qapp, mock_settings):
-        from ui.tray_app import TrayApp
-        tray = TrayApp(mock_settings, ModelProvider("."))
-        aw, tw, osd = MagicMock(), MagicMock(), MagicMock()
-        tray.attach_workers(audio_worker=aw, transcription_worker=tw, osd=osd)
-        assert (tray.audio_worker, tray.transcription_worker, tray.osd) == (aw, tw, osd)
-        tray.tray.hide()
-        tray.dashboard.close()
+class TestStatus:
+    """TrayApp is the only writer of the tray tooltip and icon; one priority rule decides:
+    recording > processing > download notice > no microphone > model status."""
 
-
-class TestStatusOwnership:
-    """TrayApp is the only writer of the dashboard status line; it decides by one priority rule."""
-
-    @pytest.fixture
-    def tray(self, qapp, mock_settings):
-        from ui.tray_app import TrayApp
-        t = TrayApp(mock_settings, ModelProvider("."))
-        yield t
-        t.tray.hide()
-        t.dashboard.close()
-
-    @staticmethod
-    def _shows(tray, key):
-        from core.i18n import t
-        return t(key) in tray.dashboard.status_label.text() and t(key) in tray.tray.toolTip()
-
-    def test_model_ready_does_not_hide_missing_microphone(self, tray):
-        """The original bug: started without a mic, the model finished loading and showed 'Ready'."""
-        from core.settings import MSG_MIC_UNAVAILABLE, STATE_READY
-        tray.on_mic_unavailable()
+    def test_model_status_is_shown(self, tray):
         tray.on_model_status(STATE_READY, "OK")
-        assert self._shows(tray, MSG_MIC_UNAVAILABLE)
-
-    def test_finished_transcription_does_not_hide_missing_microphone(self, tray):
-        from core.settings import MSG_MIC_UNAVAILABLE, STATE_READY
-        tray.on_model_status(STATE_READY, "OK")
-        tray.on_transcription_started()
-        tray.on_mic_unavailable()
-        tray.on_transcription_finished()
-        assert self._shows(tray, MSG_MIC_UNAVAILABLE)
-
-    def test_processing_shown_while_transcribing(self, tray):
-        from core.settings import STATE_PROCESSING, STATE_READY
-        tray.on_model_status(STATE_READY, "OK")
-        tray.on_transcription_started()
-        assert self._shows(tray, STATE_PROCESSING)
-        tray.on_transcription_finished()
-        assert self._shows(tray, STATE_READY)
+        assert _shows(tray, STATE_READY)
+        tray.on_model_status(MSG_MODEL_NOT_FOUND, "WARN")
+        assert _shows(tray, MSG_MODEL_NOT_FOUND)
 
     def test_model_error_is_not_reported_as_missing_model(self, tray):
         tray.on_model_status("status.model_error", "ERR")
-        assert self._shows(tray, "status.model_error")
+        assert _shows(tray, "status.model_error")
+
+    def test_missing_microphone_is_shown(self, tray):
+        tray.on_mic_unavailable()
+        assert _shows(tray, MSG_MIC_UNAVAILABLE)
+
+    def test_model_ready_does_not_hide_missing_microphone(self, tray):
+        """The original bug: started without a mic, the model finished loading and showed 'Ready'."""
+        tray.on_mic_unavailable()
+        tray.on_model_status(STATE_READY, "OK")
+        assert _shows(tray, MSG_MIC_UNAVAILABLE)
+
+    def test_microphone_coming_back_shows_the_model_status_again(self, tray):
+        tray.on_model_status(STATE_READY, "OK")
+        tray.on_mic_unavailable()
+        tray.on_mic_available()
+        assert _shows(tray, STATE_READY)
+
+    def test_finished_transcription_does_not_hide_missing_microphone(self, tray):
+        tray.on_model_status(STATE_READY, "OK")
+        tray.on_transcription_started()
+        tray.on_mic_unavailable()
+        tray.on_transcription_finished()
+        assert _shows(tray, MSG_MIC_UNAVAILABLE)
+
+    def test_processing_shown_while_transcribing(self, tray):
+        tray.on_model_status(STATE_READY, "OK")
+        tray.on_transcription_started()
+        assert _shows(tray, STATE_PROCESSING)
+        tray.on_transcription_finished()
+        assert _shows(tray, STATE_READY)
 
     def test_mic_failure_when_recording_starts_shows_no_mic(self, tray):
-        from core.settings import MSG_MIC_UNAVAILABLE
         tray.set_recording(True)
         tray.on_mic_unavailable()
-        assert self._shows(tray, MSG_MIC_UNAVAILABLE)
+        assert _shows(tray, MSG_MIC_UNAVAILABLE) and not _recording_icon(tray)
 
     def test_recording_wins_over_model_updates(self, tray):
-        from core.settings import STATE_LISTENING, STATE_LOADING
         tray.set_recording(True)
         tray.on_model_status(STATE_LOADING, "IDLE")
-        assert self._shows(tray, STATE_LISTENING)
+        assert _shows(tray, STATE_LISTENING)
 
     def test_recording_keeps_notice_while_download_runs(self, tray):
         """Plan 0003 Faz 1: dictating during a download must not hide 'Downloading...'."""
@@ -601,45 +247,105 @@ class TestStatusOwnership:
         tray.on_download_status("status.downloading_model", "INFO")
         tray.set_recording(True)
         tray.set_recording(False)
-        assert self._shows(tray, "status.downloading_model")
+        assert _shows(tray, "status.downloading_model")
 
     def test_recording_clears_finished_download_error(self, tray):
-        from core.settings import STATE_READY
         tray.on_model_status(STATE_READY, "OK")
         tray.on_download_state(True)
         tray.on_download_status("status.download_error", "ERR")
         tray.on_download_state(False)
         tray.set_recording(True)
         tray.set_recording(False)
-        assert self._shows(tray, STATE_READY)
-
-    def test_language_change_keeps_no_mic_tooltip(self, tray):
-        """Plan 0003 Faz 2: rebuilding the tray must not reset it to 'Ready'."""
-        from core.settings import MSG_MIC_UNAVAILABLE
-        tray.on_mic_unavailable()
-        tray.apply_language("en")
-        assert self._shows(tray, MSG_MIC_UNAVAILABLE)
-
-    def test_language_change_while_recording_keeps_rec_icon(self, tray):
-        tray.set_recording(True)
-        tray.apply_language("en")
-        assert tray.tray.icon().cacheKey() == tray._icon_rec.cacheKey()
+        assert _shows(tray, STATE_READY)
 
     def test_download_notice_until_newer_model_status(self, tray):
-        from core.settings import STATE_READY
         tray.on_download_status("status.downloading_model", "INFO")
-        assert self._shows(tray, "status.downloading_model")
+        assert _shows(tray, "status.downloading_model")
         tray.on_download_status("status.download_error", "ERR")
-        assert self._shows(tray, "status.download_error")
+        assert _shows(tray, "status.download_error")
         tray.on_model_status(STATE_READY, "OK")
-        assert self._shows(tray, STATE_READY)
+        assert _shows(tray, STATE_READY)
 
 
-def test_status_says_loading_until_the_model_reports(qapp, mock_settings):
-    from ui.tray_app import TrayApp
-    from core.settings import STATE_LOADING
-    from core.i18n import t
-    tray = TrayApp(mock_settings, ModelProvider("."))
-    assert t(STATE_LOADING) in tray.dashboard.status_label.text()
-    tray.tray.hide()
-    tray.dashboard.close()
+class TestLanguageChange:
+    def test_menu_and_settings_window_follow_the_language(self, tray):
+        tray.apply_language("tr")
+        texts = [a.text() for a in tray.tray.contextMenu().actions() if not a.isSeparator()]
+        assert texts[0] == "Ayarlar"
+        assert tray.settings_window.tabs.tabText(TABS.index("dictation")) == "Dikte"
+        tray.osd.refresh_language.assert_called_once()
+
+    def test_keeps_no_mic_tooltip(self, tray):
+        """Plan 0003 Faz 2: rebuilding the tray must not reset it to 'Ready'."""
+        tray.on_mic_unavailable()
+        tray.apply_language("en")
+        assert _shows(tray, MSG_MIC_UNAVAILABLE)
+
+    def test_keeps_the_recording_icon(self, tray):
+        tray.set_recording(True)
+        tray.apply_language("en")
+        assert _recording_icon(tray)
+
+    def test_keeps_the_copy_action_available(self, tray):
+        with patch("ui.tray_app.inject_text"):
+            tray.on_text_ready("merhaba")
+        tray.apply_language("en")
+        assert _action(tray, "tray.menu.copy_transcript").isEnabled()
+
+    def test_the_user_guide_is_built_again_in_the_new_language(self, tray):
+        tray.show_help()
+        tray.apply_language("tr")
+        assert _help_windows() == []
+        tray.show_help()
+        assert ["Kullanım Kılavuzu" in w.windowTitle() for w in _help_windows()] == [True]
+
+
+class TestWithoutSystemTray:
+    """No system tray at startup, e.g. autostart before Explorer has created the taskbar."""
+
+    @pytest.fixture
+    def tray(self, qapp, mock_settings, monkeypatch):
+        monkeypatch.setattr(TrayApp, "TRAY_RETRY_LIMIT", 3)
+        with patch(TRAY_AVAILABLE, return_value=False):
+            app = TrayApp(mock_settings, ModelProvider("."))
+            app.audio_worker = MagicMock()
+            yield app
+        _close(app)
+
+    def test_the_settings_window_opens_as_the_only_way_in_and_out(self, tray):
+        window = tray.settings_window
+        assert window.isVisible()
+        assert window.tabs.currentIndex() == TABS.index("app")
+        assert window.btn_quit.isVisible()
+
+    def test_the_hotkey_still_works(self, tray):
+        tray.on_hotkey_pressed()
+        tray.audio_worker.start_recording.assert_called_once()
+        tray.on_mic_unavailable()
+        tray.on_mic_available()
+
+    @staticmethod
+    def _retry(tray, times: int = 1) -> None:
+        """The retry timer firing, without waiting for the clock."""
+        for _ in range(times):
+            tray._tray_retry_timer.timeout.emit()
+
+    def test_it_keeps_looking_while_there_is_no_tray(self, tray):
+        self._retry(tray, 2)
+        assert tray._tray_retry_timer.isActive()
+
+    def test_the_icon_appears_once_the_tray_exists(self, tray):
+        with patch(TRAY_AVAILABLE, return_value=True), patch.object(tray.tray, "show") as show:
+            self._retry(tray)
+        show.assert_called_once()
+        assert not tray._tray_retry_timer.isActive()
+        assert tray.settings_window.btn_quit.isHidden()  # the tray menu quits from now on
+
+    def test_it_stops_looking_after_the_retry_limit(self, tray):
+        self._retry(tray, 3)
+        assert not tray._tray_retry_timer.isActive()
+
+    def test_language_change_works_without_a_tray(self, tray):
+        tray.apply_language("en")
+        tray.set_recording(True)
+        assert _shows(tray, STATE_LISTENING)

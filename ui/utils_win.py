@@ -1,5 +1,4 @@
 import ctypes
-from ctypes import wintypes
 
 def apply_dark_mode_to_window(hwnd: int) -> None:
     """
@@ -20,17 +19,3 @@ def apply_dark_mode_to_window(hwnd: int) -> None:
     except Exception:
         # Silently ignore on older Windows versions (Win7, etc.) that don't support the API.
         pass
-
-def get_dwm_visual_bounds(hwnd: int) -> tuple[int, int, int, int] | None:
-    """Returns visual (DWM) bounds: left, top, right, bottom."""
-    try:
-        DWMWA_EXTENDED_FRAME_BOUNDS = 9
-        rect = wintypes.RECT()
-        res = ctypes.windll.dwmapi.DwmGetWindowAttribute(
-            hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, ctypes.byref(rect), ctypes.sizeof(rect)
-        )
-        if res == 0:
-            return (rect.left, rect.top, rect.right, rect.bottom)
-    except Exception:
-        pass
-    return None

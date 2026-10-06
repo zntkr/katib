@@ -1,7 +1,7 @@
 """
 ADR-0004: one logging path for every component. Seams under test:
   - the log file written by main.setup_logging()
-  - DashboardLogHandler, which feeds the dashboard log box
+  - LogViewHandler, which feeds the log tab of the settings window
 """
 import logging
 from unittest.mock import patch
@@ -74,11 +74,11 @@ class TestLogFile:
         assert _read(log_file).count("only once") == 1
 
 
-class TestDashboardLogHandler:
+class TestLogViewHandler:
     @pytest.fixture
     def entries(self, qapp):
-        from core.log import DashboardLogHandler
-        handler = DashboardLogHandler()
+        from core.log import LogViewHandler
+        handler = LogViewHandler()
         received = []
         handler.bridge.entry.connect(lambda lvl, comp, msg: received.append((lvl, comp, msg)))
         logging.getLogger("Katib").addHandler(handler)
@@ -92,11 +92,11 @@ class TestDashboardLogHandler:
         get_logger("MIC").log(level, "Device → %s", "USB Mic")
         assert entries == [(shown_as, "MIC", "Device → USB Mic")]
 
-    def test_dashboard_shows_the_transcript_text(self, entries):
+    def test_the_log_view_shows_the_transcript_text(self, entries):
         get_logger("STT").log(OK, "Transcript", extra={"transcript": "merhaba dünya"})
         assert entries == [("OK", "STT", "Transcript: 'merhaba dünya'")]
 
-    def test_app_logger_and_libraries_stay_out_of_the_dashboard(self, entries):
+    def test_app_logger_and_libraries_stay_out_of_the_log_view(self, entries):
         logging.getLogger("Katib").info("=== Katib Starting ===")
         logging.getLogger("faster_whisper").warning("library noise")
         assert entries == []

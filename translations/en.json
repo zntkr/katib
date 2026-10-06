@@ -13,38 +13,23 @@
     },
     "tray": {
         "menu": {
-            "dashboard": "Dashboard",
             "settings": "Settings",
             "user_guide": "User Guide",
+            "copy_transcript": "Copy last transcript",
             "quit": "Quit"
         }
     },
-    "dashboard": {
-        "title": "Dashboard",
-        "copy_tooltip": "Copy last transcript",
-        "copied_tooltip": "Copied!",
-        "console_tooltip": "Show/Hide Console",
-        "settings_tooltip": "Settings",
-        "no_mic_found": "No microphone found.",
-        "model_missing_guidance": "No model found. Go to Settings → Model to download or select an existing folder.",
-        "device_refreshed": "Device list changed, refreshing..."
-    },
     "settings": {
         "title": "Settings",
-        "group_general": "General",
-        "group_model": "Model",
-        "group_processing": "Processing",
         "group_system": "System",
         "hotkey_label": "Hotkey",
         "ai_model_label": "AI Model",
         "browse": "Browse...",
         "download": "Download",
         "downloading": "...",
-        "path_not_selected": "Path: Not selected",
         "save": "Save",
         "user_guide": "User Guide",
         "open_log_folder": "Open Log Folder",
-        "reset_settings": "Reset Settings",
         "hotkey_capture": "Press a key...",
         "invalid_folder_title": "Invalid Folder",
         "invalid_folder_msg": "Please select a folder containing Whisper model files.",
@@ -54,11 +39,18 @@
         "log_folder_missing": "Log folder has not been created yet.",
         "select_folder_dialog": "Select Model Folder",
         "app_language_label": "App Language",
-        "theme_label": "Theme",
-        "theme_system": "System",
-        "theme_dark": "Dark",
-        "theme_light": "Light",
-        "injection_method_label": "Text Injection Method"
+        "injection_method_label": "Text Injection Method",
+        "group_log": "Log",
+        "microphone_label": "Microphone",
+        "no_mic_found": "No microphone found.",
+        "model_missing_guidance": "No model found. Go to Settings → Dictation to download or select an existing folder.",
+        "speech_language_label": "Speech Language",
+        "ai_prompt_label": "AI Prompt",
+        "ai_prompt_tooltip": "Provide context or formatting instructions to the AI.",
+        "tab_dictation": "Dictation",
+        "tab_app": "App",
+        "last_recording": "Last recording: {seconds} s · speech {speech} dB · noise {noise} dB",
+        "last_dictation": "Last dictation: {audio} s → {elapsed} s"
     },
     "help": {
         "title": "User Guide",
@@ -72,7 +64,7 @@
         "status_writing": "WRITING  →  model processing",
         "status_warning": "WARNING  →  shown 3 sec, auto-dismisses",
         "hotkey_title": "Hotkey",
-        "hotkey_desc": "Assign any key in Settings → General.",
+        "hotkey_desc": "Assign any key in Settings → Dictation.",
         "model_title": "Model",
         "model_desc": "Balance speed and accuracy. Smaller models are faster; larger models are more accurate.",
         "model": {
@@ -92,34 +84,21 @@
             "acc_max": "Maximum"
         },
         "ai_prompt_title": "AI Prompt",
-        "ai_prompt_desc": "Use Settings → Processing → AI Prompt to give the model context or formatting rules:",
+        "ai_prompt_desc": "Use Settings → Dictation → AI Prompt to give the model context or formatting rules:",
         "ai_prompt_ex1": "\"This is technical documentation.\"",
         "ai_prompt_ex2": "\"Use lowercase only, no punctuation.\"",
         "trouble_title1": "\"No Microphone\" is shown",
-        "trouble_desc1": "Select your device from the microphone list in the dashboard. If it doesn't appear, unplug and reconnect it.",
+        "trouble_desc1": "Select your device under Settings → Dictation. If it doesn't appear, unplug and reconnect it.",
         "trouble_title2": "Speech not recognized or empty result",
         "trouble_desc2": "Check your microphone volume and mute status. Very short recordings (under 0.5 sec) are skipped.",
         "trouble_title3": "Wrong words are typed",
-        "trouble_desc3": "Try a larger model, or add domain-specific context in Settings → Processing → AI Prompt.",
+        "trouble_desc3": "Try a larger model, or add domain-specific context in Settings → Dictation → AI Prompt.",
         "trouble_title4": "App won't open / tray icon missing",
         "trouble_desc4": "The app may already be running in the background. Search for {app} in Task Manager.",
         "trouble_title5": "Text not typed but speech was recognized",
         "trouble_desc5": "Click the target field before speaking so it has focus.",
         "trouble_title6": "Model Download Error / Network Error",
         "trouble_desc6": "If you are on a corporate network, downloads may be blocked by a firewall. Please contact your IT department for offline deployment."
-    },
-    "schema": {
-        "language": {
-            "label": "Speech Language"
-        },
-        "compute_type": {
-            "label": "Precision",
-            "tooltip": "Changing this reloads the model."
-        },
-        "initial_prompt": {
-            "label": "AI Prompt",
-            "tooltip": "Provide context or formatting instructions to the AI."
-        }
     },
     "app": {
         "started": "Started — hotkey: {key}",

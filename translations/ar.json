@@ -13,38 +13,23 @@
     },
     "tray": {
         "menu": {
-            "dashboard": "لوحة التحكم",
             "settings": "الإعدادات",
             "user_guide": "دليل المستخدم",
+            "copy_transcript": "نسخ آخر نص",
             "quit": "إنهاء"
         }
     },
-    "dashboard": {
-        "title": "لوحة التحكم",
-        "copy_tooltip": "نسخ آخر نص",
-        "copied_tooltip": "تم النسخ!",
-        "console_tooltip": "إظهار/إخفاء الطرفية",
-        "settings_tooltip": "الإعدادات",
-        "no_mic_found": "لم يُعثر على ميكروفون.",
-        "model_missing_guidance": "لم يُعثر على نموذج. انتقل إلى الإعدادات ← النموذج للتنزيل أو تحديد مجلد موجود.",
-        "device_refreshed": "تغيرت قائمة الأجهزة، جارٍ التحديث..."
-    },
     "settings": {
         "title": "الإعدادات",
-        "group_general": "عام",
-        "group_model": "النموذج",
-        "group_processing": "المعالجة",
         "group_system": "النظام",
         "hotkey_label": "مفتاح الاختصار",
         "ai_model_label": "نموذج الذكاء الاصطناعي",
         "browse": "استعراض...",
         "download": "تنزيل",
         "downloading": "...",
-        "path_not_selected": "المسار: غير محدد",
         "save": "حفظ",
         "user_guide": "دليل المستخدم",
         "open_log_folder": "فتح مجلد السجلات",
-        "reset_settings": "إعادة ضبط الإعدادات",
         "hotkey_capture": "اضغط مفتاحاً...",
         "invalid_folder_title": "مجلد غير صالح",
         "invalid_folder_msg": "يرجى تحديد مجلد يحتوي على ملفات نموذج Whisper.",
@@ -54,11 +39,18 @@
         "log_folder_missing": "لم يتم إنشاء مجلد السجلات بعد.",
         "select_folder_dialog": "تحديد مجلد النموذج",
         "app_language_label": "لغة التطبيق",
-        "theme_label": "المظهر",
-        "theme_system": "النظام",
-        "theme_dark": "داكن",
-        "theme_light": "فاتح",
-        "injection_method_label": "Text Injection Method"
+        "injection_method_label": "Text Injection Method",
+        "group_log": "السجل",
+        "microphone_label": "الميكروفون",
+        "no_mic_found": "لم يُعثر على ميكروفون.",
+        "model_missing_guidance": "لم يُعثر على نموذج. انتقل إلى الإعدادات ← الإملاء للتنزيل أو تحديد مجلد موجود.",
+        "speech_language_label": "لغة الكلام",
+        "ai_prompt_label": "موجّه الذكاء الاصطناعي",
+        "ai_prompt_tooltip": "أعطِ النموذج سياقاً أو تعليمات تنسيق.",
+        "tab_dictation": "الإملاء",
+        "tab_app": "التطبيق",
+        "last_recording": "آخر تسجيل: {seconds} ث · الكلام {speech} dB · الضجيج {noise} dB",
+        "last_dictation": "آخر إملاء: {audio} ث ← {elapsed} ث"
     },
     "help": {
         "title": "دليل المستخدم",
@@ -72,7 +64,7 @@
         "status_writing": "WRITING  →  معالجة النموذج",
         "status_warning": "تحذير  →  يظهر ٣ ثوانٍ، يُغلق تلقائياً",
         "hotkey_title": "مفتاح الاختصار",
-        "hotkey_desc": "عيّن أي مفتاح في الإعدادات ← عام.",
+        "hotkey_desc": "عيّن أي مفتاح في الإعدادات ← الإملاء.",
         "model_title": "النموذج",
         "model_desc": "وازن بين السرعة والدقة. النماذج الأصغر أسرع؛ والنماذج الأكبر أكثر دقة.",
         "model": {
@@ -92,34 +84,21 @@
             "acc_max": "قصوى"
         },
         "ai_prompt_title": "موجّه الذكاء الاصطناعي",
-        "ai_prompt_desc": "استخدم الإعدادات ← المعالجة ← موجّه الذكاء الاصطناعي لإعطاء النموذج سياقاً أو قواعد تنسيق:",
+        "ai_prompt_desc": "استخدم الإعدادات ← الإملاء ← موجّه الذكاء الاصطناعي لإعطاء النموذج سياقاً أو قواعد تنسيق:",
         "ai_prompt_ex1": "\"هذه وثيقة تقنية.\"",
         "ai_prompt_ex2": "\"استخدم أحرفاً صغيرة فقط، بدون ترقيم.\"",
         "trouble_title1": "تظهر رسالة \"لا يوجد ميكروفون\"",
-        "trouble_desc1": "حدد جهازك من قائمة الميكروفون في لوحة التحكم. إن لم يظهر، افصله وأعد توصيله.",
+        "trouble_desc1": "حدد جهازك من الإعدادات ← الإملاء. إن لم يظهر، افصله وأعد توصيله.",
         "trouble_title2": "لم يُتعرف على الكلام أو النتيجة فارغة",
         "trouble_desc2": "تحقق من مستوى صوت الميكروفون وحالة كتمه. التسجيلات القصيرة جداً (أقل من ٠٫٥ ثانية) تُتجاهل.",
         "trouble_title3": "تُكتب كلمات خاطئة",
-        "trouble_desc3": "جرّب نموذجاً أكبر، أو أضف سياقاً متخصصاً في الإعدادات ← المعالجة ← موجّه الذكاء الاصطناعي.",
+        "trouble_desc3": "جرّب نموذجاً أكبر، أو أضف سياقاً متخصصاً في الإعدادات ← الإملاء ← موجّه الذكاء الاصطناعي.",
         "trouble_title4": "التطبيق لا يفتح / رمز علبة النظام مفقود",
         "trouble_desc4": "قد يكون التطبيق يعمل بالفعل في الخلفية. ابحث عن {app} في إدارة المهام.",
         "trouble_title5": "لم يُكتب النص رغم التعرف على الكلام",
         "trouble_desc5": "انقر على الحقل المستهدف قبل التحدث حتى يكون التركيز عليه.",
         "trouble_title6": "Model Download Error / Network Error",
         "trouble_desc6": "If you are on a corporate network, downloads may be blocked by a firewall. Please contact your IT department for offline deployment."
-    },
-    "schema": {
-        "language": {
-            "label": "لغة الكلام"
-        },
-        "compute_type": {
-            "label": "الدقة",
-            "tooltip": "تغيير هذا يعيد تحميل النموذج."
-        },
-        "initial_prompt": {
-            "label": "موجّه الذكاء الاصطناعي",
-            "tooltip": "أعطِ النموذج سياقاً أو تعليمات تنسيق."
-        }
     },
     "app": {
         "started": "بدأ — مفتاح الاختصار: {key}",

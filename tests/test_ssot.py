@@ -1,91 +1,26 @@
-"""
-SSOT/DRY refactoring tests.
-Issue #4: FONT_SIZE_SM, Issue #5: WIDGET_WIDTH_SM, Issue #6: log level mapping.
-"""
+"""Single-source-of-truth guards: values that must come from ui/theme.py, not from literals."""
 import pathlib
-from PySide6.QtGui import QIcon, QPixmap
-from PySide6.QtCore import Qt
+
+import pytest
 
 ROOT = pathlib.Path(__file__).parent.parent
 
 
-def _dummy_icon() -> QIcon:
-    px = QPixmap(16, 16)
-    px.fill(Qt.GlobalColor.transparent)
-    return QIcon(px)
-
-
 class TestFontSizeSM:
-    """Issue #4: 8pt string literal → FONT_SIZE_SM constant."""
-
     def test_font_size_sm_constant_exists(self):
         from ui.theme import FONT_SIZE_SM
         assert FONT_SIZE_SM == 8
 
-    def test_no_hardcoded_8pt_in_theme_stylesheet(self):
-        src = (ROOT / "ui" / "theme.py").read_text(encoding="utf-8")
-        assert "font-size: 8pt" not in src, \
-            "ui/theme.py: use FONT_SIZE_SM constant instead of the 8pt literal"
-
-    def test_no_hardcoded_8pt_in_settings_dialog(self):
-        src = (ROOT / "ui" / "settings_dialog.py").read_text(encoding="utf-8")
-        assert "font-size: 8pt" not in src, \
-            "ui/settings_dialog.py: use FONT_SIZE_SM constant instead of the 8pt literal"
+    @pytest.mark.parametrize("path", ["ui/theme.py", "ui/settings_window.py", "ui/help_window.py"])
+    def test_no_hardcoded_8pt(self, path):
+        src = (ROOT / path).read_text(encoding="utf-8")
+        assert "font-size: 8pt" not in src, f"{path}: use FONT_SIZE_SM instead of the 8pt literal"
 
 
-class TestWidgetWidthSM:
-    """Issue #5: setFixedWidth(80) → WIDGET_WIDTH_SM constant."""
-
-    def test_widget_width_sm_constant_exists(self):
-        from ui.theme import WIDGET_WIDTH_SM
-        assert WIDGET_WIDTH_SM == 80
-
-    def test_no_hardcoded_width_80_in_settings_dialog(self):
-        src = (ROOT / "ui" / "settings_dialog.py").read_text(encoding="utf-8")
-        assert "setFixedWidth(80)" not in src, \
-            "ui/settings_dialog.py: do not hardcode 80 — use WIDGET_WIDTH_SM or the grid system"
-
-
-class TestLevelPaletteMapping:
-    """Issue #6: Log level → color/CSS mapping must be derived from a single source."""
-
-    def test_level_palette_key_constant_exists(self):
-        import ui.dashboard as mod
-        assert hasattr(mod, "_LEVEL_PALETTE_KEY"), \
-            "ui/dashboard.py: _LEVEL_PALETTE_KEY must be a module-level constant"
-
-    def test_level_palette_key_covers_all_levels(self):
-        from ui.dashboard import _LEVEL_PALETTE_KEY
-        expected = {"OK", "ERR", "WARN", "WRN", "IDLE", "...", "INFO", "↓"}
-        assert expected == set(_LEVEL_PALETTE_KEY.keys())
-
-    def test_level_palette_key_values_are_valid_palette_keys(self):
-        from ui.dashboard import _LEVEL_PALETTE_KEY
-        from ui.theme import DARK_PALETTE
-        for level, palette_key in _LEVEL_PALETTE_KEY.items():
-            assert palette_key in DARK_PALETTE, \
-                f"_LEVEL_PALETTE_KEY[{level!r}] = {palette_key!r} is not present in the palette"
-
-    def test_set_status_colors_match_level_palette_key(self, qapp, mock_settings):
-        from ui.dashboard import DashboardWindow as Dashboard, _LEVEL_PALETTE_KEY
-        from ui.theme import theme_manager
-        from unittest.mock import patch
-        with patch("ui.utils.colorize_svg_icon") as mock_colorize:
-            mock_colorize.return_value = _dummy_icon()
-            from core.models import ModelProvider
-            d = Dashboard(mock_settings, ModelProvider("."), icon_idle=_dummy_icon())
-            p = theme_manager.palette
-            for level, palette_key in _LEVEL_PALETTE_KEY.items():
-                d.set_status("test", level)
-                expected_color = p[palette_key]
-                assert mock_colorize.call_args[0][1] == expected_color, \
-                    f"set_status(level={level!r}) did not produce the expected icon color ({expected_color})"
-
-    def test_make_log_html_line_produces_inline_styles_for_all_levels(self, qapp, mock_settings):
-        from ui.dashboard import DashboardWindow as Dashboard, _LEVEL_PALETTE_KEY
-        from core.models import ModelProvider
-        d = Dashboard(mock_settings, ModelProvider("."), icon_idle=_dummy_icon())
-        for level in _LEVEL_PALETTE_KEY:
-            html = d._make_log_html_line(level, "TST", "message", "00:00:00")
-            assert "style=" in html and "color:" in html, \
-                f"_make_log_html_line(level={level!r}) did not produce inline color styles"
+class TestColours:
+    @pytest.mark.parametrize("path", ["main.py", "ui/settings_window.py", "ui/help_window.py",
+                                      "ui/osd.py", "ui/tray_app.py", "ui/components.py"])
+    def test_no_colour_literals_outside_the_palette(self, path):
+        import re
+        src = (ROOT / path).read_text(encoding="utf-8")
+        assert re.findall(r"#[0-9a-fA-F]{6}\b", src) == [], f"{path}: take colours from ui/theme.py"

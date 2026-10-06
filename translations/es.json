@@ -13,38 +13,23 @@
     },
     "tray": {
         "menu": {
-            "dashboard": "Panel",
             "settings": "Ajustes",
             "user_guide": "Guía de usuario",
+            "copy_transcript": "Copiar última transcripción",
             "quit": "Salir"
         }
     },
-    "dashboard": {
-        "title": "Panel",
-        "copy_tooltip": "Copiar última transcripción",
-        "copied_tooltip": "¡Copiado!",
-        "console_tooltip": "Mostrar/Ocultar consola",
-        "settings_tooltip": "Ajustes",
-        "no_mic_found": "No se encontró micrófono.",
-        "model_missing_guidance": "No se encontró modelo. Ve a Ajustes → Modelo para descargar o seleccionar una carpeta.",
-        "device_refreshed": "Lista de dispositivos actualizada..."
-    },
     "settings": {
         "title": "Ajustes",
-        "group_general": "General",
-        "group_model": "Modelo",
-        "group_processing": "Procesamiento",
         "group_system": "Sistema",
         "hotkey_label": "Atajo de teclado",
         "ai_model_label": "Modelo de IA",
         "browse": "Explorar...",
         "download": "Descargar",
         "downloading": "...",
-        "path_not_selected": "Ruta: No seleccionada",
         "save": "Guardar",
         "user_guide": "Guía de usuario",
         "open_log_folder": "Abrir carpeta de registros",
-        "reset_settings": "Restablecer ajustes",
         "hotkey_capture": "Presiona una tecla...",
         "invalid_folder_title": "Carpeta no válida",
         "invalid_folder_msg": "Selecciona una carpeta con archivos del modelo Whisper.",
@@ -54,11 +39,18 @@
         "log_folder_missing": "La carpeta de registros aún no se ha creado.",
         "select_folder_dialog": "Seleccionar carpeta de modelo",
         "app_language_label": "Idioma de la app",
-        "theme_label": "Tema",
-        "theme_system": "Sistema",
-        "theme_dark": "Oscuro",
-        "theme_light": "Claro",
-        "injection_method_label": "Text Injection Method"
+        "injection_method_label": "Text Injection Method",
+        "group_log": "Registro",
+        "microphone_label": "Micrófono",
+        "no_mic_found": "No se encontró micrófono.",
+        "model_missing_guidance": "No se encontró modelo. Ve a Ajustes → Dictado para descargar o seleccionar una carpeta.",
+        "speech_language_label": "Idioma de habla",
+        "ai_prompt_label": "Prompt de IA",
+        "ai_prompt_tooltip": "Proporciona contexto o instrucciones de formato a la IA.",
+        "tab_dictation": "Dictado",
+        "tab_app": "Aplicación",
+        "last_recording": "Última grabación: {seconds} s · voz {speech} dB · ruido {noise} dB",
+        "last_dictation": "Último dictado: {audio} s → {elapsed} s"
     },
     "help": {
         "title": "Guía de usuario",
@@ -72,7 +64,7 @@
         "status_writing": "ESCRIBIENDO  →  modelo procesando",
         "status_warning": "AVISO        →  se muestra 3 seg, se cierra automáticamente",
         "hotkey_title": "Atajo de teclado",
-        "hotkey_desc": "Asigna cualquier tecla en Ajustes → General.",
+        "hotkey_desc": "Asigna cualquier tecla en Ajustes → Dictado.",
         "model_title": "Modelo",
         "model_desc": "Equilibra velocidad y precisión. Los modelos pequeños son más rápidos; los grandes son más precisos.",
         "model": {
@@ -92,34 +84,21 @@
             "acc_max": "Máxima"
         },
         "ai_prompt_title": "Prompt de IA",
-        "ai_prompt_desc": "Usa Ajustes → Procesamiento → Prompt de IA para dar contexto o reglas de formato al modelo:",
+        "ai_prompt_desc": "Usa Ajustes → Dictado → Prompt de IA para dar contexto o reglas de formato al modelo:",
         "ai_prompt_ex1": "\"Esto es documentación técnica.\"",
         "ai_prompt_ex2": "\"Solo minúsculas, sin puntuación.\"",
         "trouble_title1": "Se muestra \"Sin micrófono\"",
-        "trouble_desc1": "Selecciona tu dispositivo en la lista del panel. Si no aparece, desconéctalo y vuelve a conectarlo.",
+        "trouble_desc1": "Selecciona tu dispositivo en Ajustes → Dictado. Si no aparece, desconéctalo y vuelve a conectarlo.",
         "trouble_title2": "No se reconoce el habla o el resultado está vacío",
         "trouble_desc2": "Comprueba el volumen y el estado de silencio del micrófono. Las grabaciones muy cortas (menos de 0,5 seg) se omiten.",
         "trouble_title3": "Se escriben palabras incorrectas",
-        "trouble_desc3": "Prueba un modelo más grande o añade contexto específico en Ajustes → Procesamiento → Prompt de IA.",
+        "trouble_desc3": "Prueba un modelo más grande o añade contexto específico en Ajustes → Dictado → Prompt de IA.",
         "trouble_title4": "La app no abre / falta el icono en la bandeja",
         "trouble_desc4": "La app puede estar ejecutándose en segundo plano. Busca {app} en el Administrador de tareas.",
         "trouble_title5": "El habla fue reconocida pero no se escribió el texto",
         "trouble_desc5": "Haz clic en el campo de destino antes de hablar para que tenga el foco.",
         "trouble_title6": "Model Download Error / Network Error",
         "trouble_desc6": "If you are on a corporate network, downloads may be blocked by a firewall. Please contact your IT department for offline deployment."
-    },
-    "schema": {
-        "language": {
-            "label": "Idioma de habla"
-        },
-        "compute_type": {
-            "label": "Precisión",
-            "tooltip": "Cambiar esto recarga el modelo."
-        },
-        "initial_prompt": {
-            "label": "Prompt de IA",
-            "tooltip": "Proporciona contexto o instrucciones de formato a la IA."
-        }
     },
     "app": {
         "started": "Iniciado — atajo: {key}",

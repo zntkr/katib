@@ -4,7 +4,6 @@ import json
 import logging
 from pathlib import Path
 from typing import Any
-from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
 
@@ -74,38 +73,31 @@ COMPUTE_TYPE_OPTIONS_CPU  = ("int8", "int8_float32", "float32")
 COMPUTE_TYPE_OPTIONS_CUDA = ("float16", "int8_float16", "float32")
 COMPUTE_DEVICE_OPTIONS    = ("auto", "cpu", "cuda")  # auto: GPU when usable, else CPU (ADR-0010)
 
-@dataclass
-class SettingDef:
-    key: str
-    type_: type
-    default: Any
-    ui_group: str
-    ui_label: str
-    ui_widget: str  # 'spinbox', 'doublespinbox', 'combobox', 'checkbox', 'lineedit', 'custom'
-    ui_kwargs: dict = field(default_factory=dict)
-    tooltip: str = ""
+# Choices the settings window offers: (label, stored value).
+INJECTION_METHODS = (("Clipboard (Fast)", "clipboard"), ("Keystroke (Safe)", "keystroke"))
+SPEECH_LANGUAGES = (
+    ("Auto Detect", "auto"), ("Arabic", "ar"), ("Chinese", "zh"), ("English", "en"), ("French", "fr"),
+    ("German", "de"), ("Greek", "el"), ("Hindi", "hi"), ("Indonesian", "id"), ("Italian", "it"),
+    ("Japanese", "ja"), ("Korean", "ko"), ("Persian", "fa"), ("Portuguese", "pt"), ("Russian", "ru"),
+    ("Spanish", "es"), ("Turkish", "tr"), ("Urdu", "ur"),
+)
 
-SETTINGS_SCHEMA = [
-    SettingDef("hotkey", str, "F9", "General", "settings.hotkey_label", "custom"),
-    SettingDef("app_language", str, "", "General", "settings.app_language_label", "custom"),
-    SettingDef("theme", str, "system", "General", "settings.theme_label", "custom"),
-    SettingDef("model_dir", str, str(DEFAULT_DOWNLOAD_PARENT), "Model", "Model Path", "custom"),
-    SettingDef("device_index", int, None, "Audio", "Microphone", "custom"),
-    SettingDef("selected_model_repo", str, "Systran/faster-whisper-small", "Model", "Selected Model", "custom"),
-    SettingDef("injection_method", str, "clipboard", "General", "settings.injection_method_label", "combobox",
-               {"options": [("Clipboard (Fast)", "clipboard"), ("Keystroke (Safe)", "keystroke")], "full_width": True}),
-
-    # Auto-generated UI settings:
-    SettingDef("language", str, "auto", "Processing", "schema.language.label", "combobox",
-               {"options": [("Auto Detect", "auto"), ("Arabic", "ar"), ("Chinese", "zh"), ("English", "en"), ("French", "fr"), ("German", "de"), ("Greek", "el"), ("Hindi", "hi"), ("Indonesian", "id"), ("Italian", "it"), ("Japanese", "ja"), ("Korean", "ko"), ("Persian", "fa"), ("Portuguese", "pt"), ("Russian", "ru"), ("Spanish", "es"), ("Turkish", "tr"), ("Urdu", "ur")], "full_width": True}),
-    SettingDef("compute_type", str, "int8", "Processing", "schema.compute_type.label", "custom",
-               {"full_width": True}, tooltip="schema.compute_type.tooltip"),
-    SettingDef("compute_device", str, "auto", "Processing", "Compute Device", "custom"),
-
-    SettingDef("initial_prompt", str, "",
-               "Processing", "schema.initial_prompt.label", "lineedit",
-               {"full_width": True}, "schema.initial_prompt.tooltip")
-]
+# Every setting and its default: the single list of what settings.json may hold.
+# Nothing here describes the UI; the settings window builds its widgets by hand (ADR-0012).
+DEFAULTS: dict[str, Any] = {
+    "hotkey": "F9",
+    "app_language": "",
+    "injection_method": "clipboard",
+    "device_index": None,
+    "device_name": "",
+    "model_dir": str(DEFAULT_DOWNLOAD_PARENT),
+    "selected_model_repo": "Systran/faster-whisper-small",
+    "language": "auto",
+    "compute_type": "int8",
+    "compute_device": "auto",
+    "initial_prompt": "",
+    "initial_prompts": None,  # {speech language: prompt}, filled as the user saves prompts
+}
 
 
 def get_settings_path() -> Path:
@@ -197,12 +189,8 @@ class SettingsManager:
     
     def __init__(self, in_memory: bool = False):
         self.in_memory = in_memory
-        self._cache: dict[str, Any] = {}
-        
-        # Populate defaults from schema
-        for s in SETTINGS_SCHEMA:
-            self._cache[s.key] = s.default
-            
+        self._cache: dict[str, Any] = dict(DEFAULTS)
+
         if not self.in_memory:
             self._load()
             
@@ -223,10 +211,9 @@ class SettingsManager:
     def save(self):
         if self.in_memory:
             return
-        # Only values that differ from the schema default are written, so a default
+        # Only values that differ from the default are written, so a default
         # changed in a later version still reaches existing users.
-        defaults = {s.key: s.default for s in SETTINGS_SCHEMA}
-        data = {k: v for k, v in self._cache.items() if k not in defaults or v != defaults[k]}
+        data = {k: v for k, v in self._cache.items() if k not in DEFAULTS or v != DEFAULTS[k]}
         path = get_settings_path()
         try:
             with open(path, "w", encoding="utf-8") as f:
@@ -235,8 +222,7 @@ class SettingsManager:
             logger.error("Settings could not be saved: %s", e)
             
     def get(self, key: str, default: Any = None) -> Any:
-        schema_default = next((s.default for s in SETTINGS_SCHEMA if s.key == key), default)
-        val = self._cache.get(key, schema_default)
+        val = self._cache.get(key, DEFAULTS.get(key, default))
 
         if key == "language" and val == "auto":
             return None
@@ -262,10 +248,4 @@ class SettingsManager:
             return
         for key, value in mapping.items():
             self.set(key, value, _save=False)
-        self.save()
-
-    def reset_processing_settings(self):
-        for s in SETTINGS_SCHEMA:
-            if s.ui_group == "Processing":
-                self._cache[s.key] = s.default
         self.save()

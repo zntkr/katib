@@ -73,13 +73,6 @@ class TestSettingsManager:
         sm.set("compute_device", "quantum")
         assert sm.get("compute_device") == "auto"
 
-    def test_reset_processing_settings(self, settings_file):
-        sm = SettingsManager()
-        sm.set("language", "auto")
-        sm.reset_processing_settings()
-        assert sm.get("language") is None  # resets to default (auto), get() produces None
-
-
 class TestDefaults:
     def test_transcription_language_defaults_to_auto(self):
         assert SettingsManager(in_memory=True).get("language") is None  # "auto"
@@ -100,21 +93,29 @@ class TestDefaults:
         assert json.loads(settings_file.read_text(encoding="utf-8")) == {}
 
     def test_unknown_keys_are_kept(self, settings_file):
-        settings_file.write_text(json.dumps({"device_name": "USB Mic"}), encoding="utf-8")
+        settings_file.write_text(json.dumps({"from_a_newer_version": "kept"}), encoding="utf-8")
         sm = SettingsManager()
         sm.set("hotkey", "f10")
         data = json.loads(settings_file.read_text(encoding="utf-8"))
-        assert data["device_name"] == "USB Mic"
+        assert data["from_a_newer_version"] == "kept"
 
     def test_changed_default_reaches_existing_users(self, settings_file):
         from core import settings as settings_mod
         SettingsManager().set("hotkey", "f10")
-        schema = [s for s in settings_mod.SETTINGS_SCHEMA]
-        patched = [settings_mod.SettingDef(s.key, s.type_, "new-default" if s.key == "theme" else s.default,
-                                           s.ui_group, s.ui_label, s.ui_widget, s.ui_kwargs, s.tooltip)
-                   for s in schema]
-        with patch.object(settings_mod, "SETTINGS_SCHEMA", patched):
-            assert SettingsManager().get("theme") == "new-default"
+        with patch.dict(settings_mod.DEFAULTS, {"injection_method": "new-default"}):
+            assert SettingsManager().get("injection_method") == "new-default"
+
+    def test_every_setting_the_app_reads_has_a_default(self):
+        """DEFAULTS is the single list of settings: a key used in the code but missing here
+        would silently read as None and always be written to settings.json."""
+        import re
+        from core.settings import DEFAULTS
+        root = Path(__file__).resolve().parent.parent
+        used = set()
+        for folder in ("core", "workers", "ui"):
+            for source in (root / folder).glob("*.py"):
+                used.update(re.findall(r'settings\.(?:get|set)\(\s*"(\w+)"', source.read_text(encoding="utf-8")))
+        assert used - set(DEFAULTS) == set()
 
 
 # set_many
@@ -129,10 +130,10 @@ class TestSetMany:
 
     def test_sets_multiple_keys_atomically(self, settings_file):
         sm = SettingsManager()
-        sm.set_many({"hotkey": "f10", "beam_size": 3})
+        sm.set_many({"hotkey": "f10", "injection_method": "keystroke"})
         sm2 = SettingsManager()
         assert sm2.get("hotkey") == "f10"
-        assert sm2.get("beam_size") == 3
+        assert sm2.get("injection_method") == "keystroke"
 
     def test_language_none_stored_as_auto(self, settings_file):
         sm = SettingsManager()

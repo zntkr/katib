@@ -1,202 +1,237 @@
-"""
-Comprehensive tests for ui/osd.py.
-"""
+"""The pill (ui/osd.py): what it shows while recording, while the model works and for a
+message, and the level wave inside it."""
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import patch, MagicMock
-from PySide6.QtCore import Qt
+
+from ui.osd import LevelWave, MinimalOSD, loudness
+from ui.theme import theme_manager
+
+
+def _settle(wave: LevelWave, frames: int = 60) -> None:
+    for _ in range(frames):
+        wave.advance()
 
 
 @pytest.fixture
 def osd(qapp):
-    from ui.osd import MinimalOSD
     widget = MinimalOSD()
-    yield widget
+    with patch.object(widget, "position_osd"):  # keep the pill where it is during tests
+        yield widget
     widget.close()
     widget.deleteLater()
 
 
-class TestMinimalOSDInit:
-
-    def test_widget_is_created(self, osd):
-        assert osd is not None
-
-class TestBuildUI:
-
-    def test_icon_label_exists(self, osd):
-        assert hasattr(osd, "icon_label")
-        assert osd.icon_label is not None
-
-    def test_text_label_exists(self, osd):
-        assert hasattr(osd, "text_label")
-        assert osd.text_label is not None
-
-    def test_container_exists(self, osd):
-        assert hasattr(osd, "container")
-        assert osd.container is not None
+@pytest.fixture
+def wave(qapp):
+    widget = LevelWave()
+    widget.set_mode("level", theme_manager.palette["CLR_ERR"])
+    yield widget
+    widget.deleteLater()
 
 
-class TestSetupAnimations:
+class TestLoudness:
+    """The worker reports rms × 5, capped at 1. The wave shows it on a dB scale so a quiet
+    microphone still moves: −60 dB is silence, −10 dB is full height."""
 
-    def test_fade_anim_created(self, osd):
-        assert hasattr(osd, "fade_anim")
-        assert osd.fade_anim is not None
+    def test_silence_is_zero(self):
+        assert loudness(0.0) == 0.0
 
-    def test_pulse_timer_created(self, osd):
-        assert hasattr(osd, "pulse_timer")
-        assert osd.pulse_timer is not None
+    def test_a_quiet_microphone_is_still_visible(self):
+        assert 0.15 < loudness(0.0035 * 5) < 0.35      # rms −49 dB, the weak headset of 2026-10-03
+
+    def test_normal_speech_is_well_up(self):
+        assert 0.6 < loudness(0.05 * 5) < 0.8          # rms −26 dB
+
+    def test_the_cap_is_near_the_top(self):
+        assert loudness(1.0) > 0.9
+
+    def test_louder_is_never_lower(self):
+        values = [loudness(level / 100) for level in range(0, 101)]
+        assert values == sorted(values)
+
+    def test_stays_between_zero_and_one(self):
+        assert loudness(-3.0) == 0.0
+        assert loudness(50.0) == 1.0
 
 
-class TestPulseEffect:
+class TestLevelWave:
+    def test_starts_flat(self, wave):
+        assert wave.bars == [0.0] * LevelWave.BARS
 
-    def test_pulse_val_changes(self, osd):
-        osd.update_level(0.0)
-        osd._pulse_val = 1.0
-        before = osd._pulse_val
-        osd._pulse_effect()
-        assert osd._pulse_val < before
+    def test_a_level_rises_at_the_right_edge(self, wave):
+        wave.push_level(0.25)
+        _settle(wave)
+        assert wave.bars[-1] == pytest.approx(loudness(0.25), abs=0.01)
+        assert wave.bars[:-1] == pytest.approx([0.0] * (LevelWave.BARS - 1), abs=0.01)
 
-    def test_update_level_bounds(self, osd):
+    def test_older_levels_move_left(self, wave):
+        wave.push_level(1.0)
+        wave.push_level(0.0)
+        _settle(wave)
+        assert wave.bars[-2] == pytest.approx(loudness(1.0), abs=0.01)
+        assert wave.bars[-1] == pytest.approx(0.0, abs=0.01)
+
+    def test_the_oldest_level_drops_off_the_left_edge(self, wave):
+        wave.push_level(1.0)
+        for _ in range(LevelWave.BARS):
+            wave.push_level(0.0)
+        _settle(wave)
+        assert max(wave.bars) == pytest.approx(0.0, abs=0.01)
+
+    def test_bars_ease_towards_the_level(self, wave):
+        wave.push_level(1.0)
+        wave.advance()
+        assert 0.0 < wave.bars[-1] < loudness(1.0)
+
+    def test_busy_mode_moves_by_itself(self, wave):
+        wave.set_mode("busy", theme_manager.palette["CLR_INFO"])
+        _settle(wave, 10)
+        first = list(wave.bars)
+        _settle(wave, 5)
+        assert wave.bars != first
+        assert len(set(round(bar, 3) for bar in wave.bars)) > 1   # a wave, not a flat block
+
+    def test_busy_mode_ignores_the_microphone(self, wave):
+        wave.set_mode("busy", theme_manager.palette["CLR_INFO"])
+        wave.push_level(1.0)
+        _settle(wave)
+        assert max(wave.bars) < 0.9
+
+    def test_changing_mode_starts_from_flat(self, wave):
+        wave.push_level(1.0)
+        _settle(wave)
+        wave.set_mode("dot", theme_manager.palette["CLR_WARN"])
+        assert wave.bars == [0.0] * LevelWave.BARS
+
+    @pytest.mark.parametrize("mode", ["level", "busy", "dot"])
+    def test_paints_in_every_mode(self, wave, mode):
+        wave.set_mode(mode, theme_manager.palette["CLR_ERR"])
+        wave.push_level(0.5)
+        _settle(wave, 5)
+        assert not wave.grab().isNull()
+
+
+class TestRecording:
+    def test_shows_the_level_wave_in_the_recording_colour(self, osd):
+        osd.setStateRecording()
+        assert osd.wave.mode == "level"
+        assert osd.wave.colour.name() == theme_manager.palette["CLR_ERR"].lower()
+        assert osd.text_label.text() == "LISTENING..."
+        assert osd.wave_timer.isActive()
+        assert osd.isVisible()
+
+    def test_the_microphone_level_moves_the_wave(self, osd):
+        osd.setStateRecording()
+        osd.update_level(0.5)
+        _settle(osd.wave)
+        assert osd.wave.bars[-1] == pytest.approx(loudness(0.5), abs=0.01)
+
+    def test_a_new_recording_starts_with_a_flat_wave(self, osd):
+        osd.setStateRecording()
+        osd.update_level(1.0)
+        _settle(osd.wave)
+        osd.setStateRecording()
+        assert osd.wave.bars == [0.0] * LevelWave.BARS
+
+    def test_level_is_kept_within_bounds(self, osd):
         osd.update_level(-5.0)
         assert osd.current_level == 0.0
-        
         osd.update_level(10.0)
         assert osd.current_level == 1.0
-        
-        osd.update_level(0.5)
-        assert osd.current_level == 0.5
 
 
-class TestUpdateColors:
+class TestProcessing:
+    def test_shows_a_moving_wave_in_the_info_colour(self, osd):
+        osd.setStateRecording()
+        osd.setStateProcessing()
+        assert osd.wave.mode == "busy"
+        assert osd.wave.colour.name() == theme_manager.palette["CLR_INFO"].lower()
+        assert osd.text_label.text() == "WRITING"
+        assert osd.wave_timer.isActive()
 
-    def test_update_colors_applies_stylesheet(self, osd):
-        osd._update_colors()
-        ss = osd.container.styleSheet()
-        assert "OSDContainer" in ss
-
-    def test_update_colors_with_text_label(self, osd):
-        osd._update_colors()
-        assert osd.text_label.styleSheet() != ""
-
-class TestSetStateRecording:
-
-    def test_icon_has_pixmap(self, osd):
-        with patch.object(osd, "show_osd"):
-            osd.setStateRecording()
-        assert not osd.icon_label.pixmap().isNull()
-
-    def test_pulse_timer_started(self, osd):
-        with patch.object(osd, "show_osd"):
-            osd.setStateRecording()
-        assert osd.pulse_timer.isActive()
-        osd.pulse_timer.stop()
+    def test_late_microphone_levels_do_not_disturb_it(self, osd):
+        osd.setStateProcessing()
+        osd.update_level(1.0)
+        _settle(osd.wave)
+        assert max(osd.wave.bars) < 0.9
 
 
-class TestSetStateProcessing:
-
-    def test_icon_has_pixmap(self, osd):
-        with patch.object(osd, "show_osd"):
-            osd.setStateProcessing()
-        assert not osd.icon_label.pixmap().isNull()
-
-    def test_pulse_timer_stopped(self, osd):
-        with patch.object(osd, "show_osd"):
-            osd.setStateRecording()  # start timer first
-            osd.setStateProcessing()
-        assert not osd.pulse_timer.isActive()
-
-
-class TestSetStateError:
-
-    def test_text_is_uppercased(self, osd):
-        with patch.object(osd, "show_osd"):
-            osd.setStateError("test error")
+class TestMessage:
+    def test_shows_a_still_dot_and_the_text_in_capitals(self, osd):
+        osd.setStateRecording()
+        osd.setStateError("test error")
+        assert osd.wave.mode == "dot"
+        assert osd.wave.colour.name() == theme_manager.palette["CLR_WARN"].lower()
         assert osd.text_label.text() == "TEST ERROR"
+        assert not osd.wave_timer.isActive()
 
-    def test_pulse_timer_stopped(self, osd):
-        with patch.object(osd, "show_osd"):
-            osd.setStateRecording()
-            osd.setStateError("err")
-        assert not osd.pulse_timer.isActive()
+    def test_translates_a_known_key(self, osd):
+        osd.setStateError("osd.mic_muted")
+        assert osd.text_label.text() == "MICROPHONE IS MUTED"
 
-    def test_icon_has_pixmap(self, osd):
-        with patch.object(osd, "show_osd"):
-            osd.setStateError("err")
-        assert not osd.icon_label.pixmap().isNull()
-
-    def test_long_message_truncated_at_60_chars(self, osd):
-        msg = "a" * 70
-        with patch.object(osd, "show_osd"):
-            osd.setStateError(msg)
+    def test_long_text_is_cut_at_60_characters(self, osd):
+        osd.setStateError("a" * 70)
         assert len(osd.text_label.text()) == 60
 
-    def test_message_within_60_chars_not_truncated(self, osd):
-        msg = "microphone connection lost, please check the connection"
-        with patch.object(osd, "show_osd"):
-            osd.setStateError(msg)
-        assert osd.text_label.text() == msg.upper()
+    def test_stays_up_while_the_message_is_shown(self, osd):
+        osd.setStateError("err")
+        osd.hide_osd()                      # e.g. the recording ended meanwhile
+        assert osd.fade_anim.endValue() != 0
 
 
-class TestShowOsd:
-
-    def test_sets_window_opacity_to_zero_then_shows(self, osd, qapp):
-        with patch.object(osd, "position_osd"):
-            osd.show_osd()
-        # After show_osd the animation runs toward 1; window must be visible
+class TestShowAndHide:
+    def test_show_fades_in(self, osd):
+        osd.show_osd()
         assert osd.isVisible()
-        osd.hide()
+        assert osd.fade_anim.endValue() == 1
 
-    def test_early_return_when_visible_and_opaque(self, osd, qapp):
-        with patch.object(osd, "position_osd"):
-            osd.show_osd()
+    def test_showing_again_while_visible_does_not_restart_the_fade(self, osd):
+        osd.show_osd()
         osd.setWindowOpacity(1.0)
-        # Calling again while visible + opacity>0.9 should return early
-        start_count_before = osd.fade_anim.state()
-        with patch.object(osd.fade_anim, "start") as mock_start:
+        with patch.object(osd.fade_anim, "start") as start:
             osd.show_osd()
-        mock_start.assert_not_called()
-        osd.hide()
+        start.assert_not_called()
 
-
-class TestHideOsd:
-
-    def test_animation_starts_toward_zero(self, osd, qapp):
-        with patch.object(osd, "position_osd"):
-            osd.show_osd()
+    def test_hide_fades_out(self, osd):
+        osd.show_osd()
         osd.setWindowOpacity(1.0)
         osd.hide_osd()
         assert osd.fade_anim.endValue() == 0
 
+    def test_the_wave_stops_once_the_pill_is_hidden(self, osd):
+        osd.setStateRecording()
+        osd.hide_osd()
+        osd.fade_anim.finished.emit()
+        assert not osd.isVisible()
+        assert not osd.wave_timer.isActive()
 
-class TestOnHideFinished:
+    def test_a_finished_fade_in_keeps_the_pill(self, osd):
+        osd.setStateRecording()
+        osd.fade_anim.finished.emit()
+        assert osd.isVisible()
+        assert osd.wave_timer.isActive()
 
-    def test_hide_called_when_end_value_is_zero(self, osd, qapp):
-        with patch.object(osd, "position_osd"):
-            osd.show_osd()
-        osd.fade_anim.setEndValue(0)
-        with patch.object(osd, "hide") as mock_hide:
-            osd._on_hide_finished()
-        mock_hide.assert_called_once()
-
-    def test_hide_not_called_when_end_value_is_one(self, osd, qapp):
-        with patch.object(osd, "position_osd"):
-            osd.show_osd()
-        osd.fade_anim.setEndValue(1)
-        with patch.object(osd, "hide") as mock_hide:
-            osd._on_hide_finished()
-        mock_hide.assert_not_called()
+    def test_closing_stops_every_timer(self, osd):
+        osd.setStateRecording()
+        osd.close()
+        assert not osd.wave_timer.isActive()
 
 
-class TestPositionOsd:
+class TestLanguageAndPosition:
+    def test_text_follows_the_language(self, osd):
+        from core.i18n import set_language, t
+        osd.setStateRecording()
+        english = osd.text_label.text()
+        set_language("tr")
+        osd.refresh_language()
+        assert osd.text_label.text() == "DİNLENİYOR..." != english
 
-    def test_move_is_called(self, osd, qapp):
-        with patch.object(osd, "move") as mock_move:
-            osd.position_osd()
-        mock_move.assert_called_once()
-
-    def test_position_is_screen_relative(self, osd, qapp):
+    def test_sits_at_the_bottom_centre_of_the_screen(self, qapp):
         from PySide6.QtWidgets import QApplication
+        pill = MinimalOSD()
         screen = QApplication.primaryScreen().availableGeometry()
-        osd.position_osd()
-        geo = osd.geometry()
-        assert geo.x() == (screen.width() - osd.width()) // 2
-        assert geo.y() == screen.height() - osd.height() - 48
+        pill.position_osd()
+        assert pill.x() == (screen.width() - pill.width()) // 2
+        assert pill.y() == screen.height() - pill.height() - 48
+        pill.deleteLater()

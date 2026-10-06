@@ -72,3 +72,21 @@ class TestResolveAppLanguage:
 
     def test_none_saved_uses_system_language(self):
         assert resolve_app_language(None, self.AVAILABLE, system_code="de") == "de"
+
+
+class TestUpper:
+    """Capitals for the pill and section titles. Python's own upper() turns the Turkish i into I."""
+
+    def test_turkish_dotted_i_keeps_its_dot(self):
+        from core.i18n import set_language, upper
+        set_language("tr")
+        assert upper("Dinleniyor...") == "DİNLENİYOR..."
+        assert upper("Ses seviyesi çok düşük") == "SES SEVİYESİ ÇOK DÜŞÜK"
+        assert upper("ısınma") == "ISINMA"
+
+    def test_other_languages_use_plain_capitals(self):
+        from core.i18n import set_language, upper
+        set_language("en")
+        assert upper("Listening...") == "LISTENING..."
+        set_language("de")
+        assert upper("wird diktiert") == "WIRD DIKTIERT"
