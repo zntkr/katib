@@ -74,7 +74,7 @@ grep -c "currently_down = keyboard.is_pressed" workers/hotkey_worker.py
 | Tek açılış | Önce `WasapiSettings(auto_convert=True)` ile 16 kHz; olmazsa cihazın kendi hızı ve **o hız bellekte hatırlanır** | Sonraki basışlar tek denemede açılır; yeniden örnekleme de (doğrusal, filtresiz) çoğu cihazda devreden çıkar |
 | Hatırlanan hız nerede | Yalnız `PortAudioSource` örneğinde, cihaz değişince sıfırlanır | `settings.json`'a yazmak kullanıcı verisi değişikliği olurdu (CONTEXT.md kural #8); gereği yok |
 | Tuş | `keyboard.on_press_key` / `on_release_key` olayları | Yoklama gecikmesi ve kaçan kısa dokunuş biter; Linux yolu (`pynput`) zaten olay tabanlı |
-| Ön-kayıt tamponu | **Kullanıcı kararı** (Faz 4) | Bedeli: Katib açıkken Windows'ta "mikrofon kullanımda" simgesi sürekli görünür |
+| Ön-kayıt tamponu | **Kullanıcı kararı** (Faz 4: A / B / C) | Bedeli: mikrofon açıkken Windows'ta "mikrofon kullanımda" simgesi görünür (B: Katib açık olduğu sürece; C: son kullanımdan sonra N dk) |
 
 ---
 
@@ -126,6 +126,59 @@ Seçenekler:
   simgesi; ⚠️ takılı cihaz değişikliği için PortAudio yeniden başlatılırken
   stream durdurulup açılmalı (`refresh_devices()` bugün açık stream varken
   yeniden başlatmayı atlıyor — ADR-0007'yle birlikte tasarlanmalı).
+- **C — İlk basışta uyan, son kullanımdan N dakika sonra uyu** (proje sahibinin
+  önerisi, 2026-10-06; `docs/hiz-incelemesi-2026-10-06.md` §10). Mikrofon ilk
+  basışta bugünkü gibi açılır; kayıt bitince **kapanmaz**, "uyanık" kalır ve son
+  ~300 ms'yi halka tamponda tutar. Sonraki basış açılış beklemeden başlar, tampon
+  kaydın başına eklenir. Son kullanımdan N dakika sonra stream kapanır ("uyur").
+  ⚖️ B'nin kazancını, simgenin yalnız kullanım sırasında ve sonrasında sınırlı süre
+  görünmesi bedeliyle verir. Oturumun ilk basışı bugünkü gibidir (tampon yok).
+
+### Seçenek C — tasarım (seçilirse)
+
+**Durumlar** (`AudioWorker`'da; `PortAudioSource` bugünkü gibi yalnız `start/stop` bilir):
+
+```
+UYKU ──basış──► KAYIT ──bırakış──► UYANIK ──basış──► KAYIT (tampon başa eklenir)
+  ▲                                  │
+  └── N dk boşta / cihaz değişti / stream öldü / kapanış ──┘
+```
+
+- **UYANIK'ta callback** blokları yalnız halka tampona yazar (`collections.deque`,
+  ~300 ms); `level_changed` yaymaz, mute tespiti (Binary Armor) yapmaz — ikisi yalnız
+  KAYIT'ta.
+- **Basış (UYANIK → KAYIT):** kilit altında tampon `_chunks`'ın başına kopyalanır,
+  sonra bloklar `_chunks`'a akar. `_rms_history` tamponun RMS'lerini de içerir.
+- **Uyku zamanlayıcısı:** `stop_recording` sonunda `QTimer` (tek atış, N dk) yeniden
+  kurulur; dolunca `audio_source.stop()`. Kapanışta (`stop()`) zamanlayıcı durur
+  (CONTEXT.md kural #7).
+- **Stream UYANIK'ta ölürse** (uyku/uyanma, cihaz çekildi): `_on_stream_finished`
+  hata yollamaz, OSD'ye "mikrofon koptu" taşımaz; sessizce UYKU'ya geçer, cihaz
+  listesi yine yenilenir. KAYIT'ta ölürse bugünkü davranış.
+- **Cihaz değişikliği / `refresh_devices()`:** önce UYANIK stream kapatılır (UYKU),
+  sonra PortAudio yeniden başlatılır (bugün açık stream varken atlanıyor).
+  `set_device()` farklı cihaza geçince de UYKU.
+- 🛑 ADR-0007 korunur: callback içinde açma/kapama yok; kapatma hep sahibin
+  thread'inde (zamanlayıcı, `refresh_devices`, `set_device`).
+- **Gizlilik:** tampon yalnız bellekte, ~300 ms; diske ve log'a yazılmaz. Basış
+  yoksa hiçbir yere gitmez.
+
+**C için kararlar (kullanıcıya sor):**
+
+| Konu | Öneri | Not |
+|---|---|---|
+| N (uyanık kalma süresi) | Proje sahibinin önerisi **30 dk**; tek sabit, ayar yok | Kablolu/USB mikrofonda sorunsuz. **Bluetooth kulaklıkta** Windows mikrofon açıkken "Hands-Free" profiline geçer → müzik/ses N dk boyunca telefon kalitesinde kalır. BT kullanılıyorsa 2–5 dk |
+| Tampon uzunluğu | 300 ms | Tuşa basarken konuşmaya başlayan kullanıcı için yeter; uzarsa tuş tıkırtısı da girer |
+| Uyanıkken tepsi ipucu | Değişmez | "Mikrofon açık" bilgisini Windows'un kendi simgesi veriyor; Over-UI kuralı |
+
+**C testleri:** (a) bırakıştan sonra stream kapanmaz, N dk sonra kapanır (sahte
+zamanlayıcı); (b) UYANIK'ta basış `audio_source.start`'ı çağırmaz ve tamponu kaydın
+başına ekler; (c) UYANIK'ta `level_changed` ve `muted_detected` yayılmaz; (d) UYANIK'ta
+stream ölünce `error_occurred` yayılmaz, durum UYKU olur; KAYIT'ta ölünce bugünkü
+hata yolu; (e) cihaz değişince UYANIK stream kapanır ve PortAudio yeniden başlatılır;
+(f) kapanışta zamanlayıcı durur. Hepsi bugünkü kodla kırmızı olmalı.
+
+**C efor:** 3–4 sa + Windows doğrulaması (uyku/uyanma, BT kulaklık, USB çek-tak).
 
 ---
 
@@ -151,7 +204,7 @@ kırmızı olmalı. Gerçek gecikme iddiası yalnız Windows ölçümüyle yapı
 
 ## Efor
 
-Faz 1: 30 dk · Faz 2: 1 sa · Faz 3: 1,5 sa · Faz 4 (B seçilirse): 3+ sa
+Faz 1: 30 dk · Faz 2: 1 sa · Faz 3: 1,5 sa · Faz 4 (B seçilirse): 3+ sa · (C seçilirse): 3–4 sa
 
 ---
 
@@ -195,3 +248,11 @@ geçici geri alınarak ayrıca kırmızıya döndürüldü.
 `is_pressed` değiştirici durumunu doğru veriyor mu (konteynerde `keyboard`
 kancası kök yetkisi istiyor, denenemedi); `auto_convert` gerçek sürücüde
 16 kHz açıyor mu (log'da `Microphone opened at` satırı **görünmemeli**).
+
+### 2026-10-06 — Faz 4'e seçenek C eklendi
+
+Proje sahibi "ilk basışta uyan, kayıttan sonra yarım saat uyanık kal" yolunu önerdi.
+Seçenek C olarak tasarımı, kararları ve testleriyle Faz 4'e yazıldı
+(`docs/hiz-incelemesi-2026-10-06.md` §10). Değerlendirme: B'den iyi bir ödünleşim;
+belirleyici bedel Bluetooth kulaklıkta ses kalitesinin N dk düşmesi. Kod değişikliği yok;
+Faz 4 hâlâ Faz 1 ölçümünü ve A/B/C kararını bekliyor.

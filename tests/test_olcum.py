@@ -4,11 +4,15 @@ app's real decision chain. Whisper is faked; no model needed.
 """
 import wave
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from scripts.olcum import Ayarlar, degerlendir, kelime_hata_orani, olc, rapor, wav_oku
+from scripts.olcum import (
+    Ayarlar, Sonuc, cozumleme, degerlendir, kelime_hata_orani, main, model_ac, olc, rapor,
+    sure_ozeti, wav_oku,
+)
+from workers.transcription_worker import TRANSCRIBE_OPTIONS
 
 SR = 16000
 
@@ -113,3 +117,238 @@ class TestOlcVeRapor:
         sonuclar = olc(tmp_path, _model(" Gizli cümle."), Ayarlar())
         assert "Gizli" not in rapor(sonuclar)
         assert "Gizli" in rapor(sonuclar, metin_goster=True)
+
+
+# ------------------------------------------------------------------ plan 0012 Faz 2
+
+def _sonuc(sure_sn, ms):
+    return Sonuc("a.wav", True, None, 0.0, ms, "", sure_sn)
+
+
+class TestCozumleme:
+    def test_without_overrides_it_is_the_apps_options(self):
+        assert cozumleme(Ayarlar()) == dict(TRANSCRIBE_OPTIONS, vad_filter=True)
+
+    def test_overrides_reach_the_options(self):
+        options = cozumleme(Ayarlar(beam=1, zaman_damgasiz=True, sicaklik=(0.0,), vad=False))
+        assert options["beam_size"] == 1
+        assert options["without_timestamps"] is True
+        assert options["temperature"] == 0.0
+        assert options["vad_filter"] is False
+
+    def test_a_temperature_list_stays_a_list(self):
+        assert cozumleme(Ayarlar(sicaklik=(0.0, 0.4)))["temperature"] == [0.0, 0.4]
+
+    def test_overrides_are_what_whisper_is_called_with(self):
+        model = _model(" Merhaba.")
+        degerlendir(_speech(), model, Ayarlar(beam=1, zaman_damgasiz=True))
+        kwargs = model.transcribe.call_args[1]
+        assert kwargs["beam_size"] == 1 and kwargs["without_timestamps"] is True
+
+
+class TestTekrar:
+    def test_each_recording_runs_n_times_and_reports_the_median(self):
+        model = _model(" Merhaba.")
+        # start/end pairs: 100 ms, 300 ms, 200 ms → median 200 ms
+        clock = [0.0, 0.1, 1.0, 1.3, 2.0, 2.2]
+        with patch("scripts.olcum.time.perf_counter", side_effect=clock):
+            katman, _, ms = degerlendir(_speech(), model, Ayarlar(tekrar=3))
+        assert katman is None
+        assert model.transcribe.call_count == 3
+        assert ms == pytest.approx(200.0)
+
+
+class TestSureOzeti:
+    def test_times_are_split_by_recording_length(self):
+        sonuclar = [_sonuc(2.0, 100), _sonuc(3.0, 300), _sonuc(20.0, 1500), _sonuc(40.0, 4000)]
+        satirlar = sure_ozeti(sonuclar)
+        assert satirlar[0].startswith("Whisper süresi: medyan 900 ms")
+        assert any("< 5 sn" in line and "medyan 200 ms" in line and "(2 kayıt)" in line for line in satirlar)
+        assert any("15–30 sn" in line and "medyan 1500 ms" in line for line in satirlar)
+        assert any("> 30 sn" in line and "medyan 4000 ms" in line for line in satirlar)
+        assert not any("5–15 sn" in line for line in satirlar)  # empty bucket is left out
+
+    def test_nothing_measured_gives_no_lines(self):
+        assert sure_ozeti([Sonuc("a.wav", True, "sure", 1.0, None, "", 0.3)]) == []
+
+    def test_report_shows_the_recording_length(self, tmp_path):
+        TestOlcVeRapor()._wav(tmp_path / "k.wav", _speech(2.0))
+        (tmp_path / "k.txt").write_text("merhaba", encoding="utf-8")
+        metin = rapor(olc(tmp_path, _model(" Merhaba."), Ayarlar()))
+        assert "  2.0 " in metin and "< 5 sn" in metin
+
+
+class TestModelAc:
+    @pytest.fixture
+    def whisper(self):
+        with patch("faster_whisper.WhisperModel") as cls:
+            yield cls
+
+    def test_auto_without_a_gpu_opens_on_the_cpu_with_the_users_precision(self, whisper):
+        _, cihaz, compute_type = model_ac("m", "auto", None, 0, "int8")
+        assert (cihaz, compute_type) == ("cpu", "int8")
+        assert whisper.call_args[1]["device"] == "cpu"
+
+    def test_auto_with_a_gpu_opens_on_the_gpu(self, whisper):
+        with patch("core.gpu.unavailable_reason", return_value=None), \
+             patch("core.gpu.compute_type", return_value="float16"):
+            _, cihaz, compute_type = model_ac("m", "auto", None, 0, "int8")
+        assert (cihaz, compute_type) == ("cuda", "float16")
+
+    def test_cuda_without_a_gpu_stops_with_the_reason(self, whisper):
+        with pytest.raises(SystemExit, match="disabled in tests"):
+            model_ac("m", "cuda", None, 0, "int8")
+        whisper.assert_not_called()
+
+    def test_threads_and_precision_can_be_forced(self, whisper):
+        model_ac("m", "cpu", "float32", 8, "int8")
+        kwargs = whisper.call_args[1]
+        assert (kwargs["compute_type"], kwargs["cpu_threads"]) == ("float32", 8)
+
+
+class TestMain:
+    @pytest.fixture(autouse=True)
+    def _settings(self, mock_settings):
+        """The real SettingsManager (in memory): main() reads defaults through its get()."""
+        self.settings = mock_settings
+
+    def _run(self, tmp_path, *args):
+        TestOlcVeRapor()._wav(tmp_path / "k.wav", _speech())
+        (tmp_path / "k.txt").write_text("merhaba", encoding="utf-8")
+        model = _model(" Merhaba.")
+        order = MagicMock()
+        with patch("core.settings.SettingsManager", return_value=self.settings), \
+             patch("scripts.olcum.model_ac", return_value=(model, "cpu", "int8")) as ac, \
+             patch("scripts.olcum.warm_up", side_effect=lambda *a: order.warm_up(*a)) as warm, \
+             patch("scripts.olcum.olc", side_effect=lambda *a: order.olc() or []):
+            assert main(["--klasor", str(tmp_path), "--model", "m", *args]) == 0
+        self.model_ac = ac
+        return warm, order
+
+    def test_the_model_is_warmed_up_before_anything_is_measured(self, tmp_path):
+        _, order = self._run(tmp_path)
+        assert [c[0] for c in order.mock_calls if c[0] in ("warm_up", "olc")] == ["warm_up", "olc"]
+
+    def test_auto_language_setting_means_detection(self, tmp_path):
+        self.settings.set("language", "auto")
+        warm, _ = self._run(tmp_path)
+        assert warm.call_args[0][1] is None
+
+    def test_dil_auto_on_the_command_line_means_detection(self, tmp_path):
+        warm, _ = self._run(tmp_path, "--dil", "auto")
+        assert warm.call_args[0][1] is None
+
+    def test_warm_up_uses_the_measured_options(self, tmp_path):
+        warm, _ = self._run(tmp_path, "--dil", "tr", "--beam", "1")
+        model, dil, options = warm.call_args[0]
+        assert dil == "tr" and options["beam_size"] == 1
+
+    def test_the_device_follows_the_apps_compute_device_setting(self, tmp_path):
+        self.settings.set("compute_device", "cpu")
+        self._run(tmp_path)
+        assert self.model_ac.call_args[0][1] == "cpu"
+
+    def test_cihaz_overrides_the_setting(self, tmp_path):
+        self.settings.set("compute_device", "cpu")
+        self._run(tmp_path, "--cihaz", "cuda")
+        assert self.model_ac.call_args[0][1] == "cuda"
+
+
+# ------------------------------------------------------------------ plan 0014 Faz 1: --parcali
+
+from scripts.olcum import parcali_cozumle, parcali_olc, parcali_rapor  # noqa: E402
+
+
+def _echo_model():
+    """Whisper that 'transcribes' a piece as its length in whole seconds, and records prompts."""
+    model = MagicMock()
+
+    def transcribe(audio, **kwargs):
+        return [SimpleNamespace(text=f" p{round(len(audio) / SR)}")], MagicMock()
+    model.transcribe.side_effect = transcribe
+    return model
+
+
+def _cut_once_at(seconds):
+    """A cutter that cuts at `seconds` into the first window long enough, then never again."""
+    state = {"done": False}
+
+    def kesici(audio):
+        if state["done"] or len(audio) < seconds * SR + SR:
+            return None
+        state["done"] = True
+        return int(seconds * SR)
+    return kesici
+
+
+class TestParcaliCozumle:
+    def test_pieces_go_ahead_and_only_the_rest_is_left_for_release(self):
+        audio = np.zeros(20 * SR, dtype=np.float32)
+        metin, parca, kalan_ms, yetisme = parcali_cozumle(audio, _echo_model(), Ayarlar(), kesici=_cut_once_at(9))
+        assert metin == "p9 p11"
+        assert parca == 1
+        assert yetisme >= 0
+
+    def test_the_next_piece_is_prompted_with_the_text_so_far(self):
+        model = _echo_model()
+        audio = np.zeros(20 * SR, dtype=np.float32)
+        parcali_cozumle(audio, model, Ayarlar(prompt="Katib"), kesici=_cut_once_at(9))
+        prompts = [c.kwargs["initial_prompt"] for c in model.transcribe.call_args_list]
+        assert prompts == ["Katib", "Katib p9"]
+
+    def test_without_a_cut_it_is_one_decode_like_today(self):
+        model = _echo_model()
+        metin, parca, _, yetisme = parcali_cozumle(np.zeros(20 * SR, dtype=np.float32), model, Ayarlar(),
+                                                   kesici=lambda a: None)
+        assert (metin, parca, yetisme) == ("p20", 0, 0.0)
+        assert model.transcribe.call_count == 1
+
+    def test_the_cutter_sees_only_audio_not_yet_cut_off_and_received_so_far(self):
+        seen = []
+        def kesici(audio):
+            seen.append(len(audio) / SR)
+            return int(4 * SR) if len(seen) == 2 else None
+        parcali_cozumle(np.zeros(13 * SR, dtype=np.float32), _echo_model(), Ayarlar(), kesici=kesici, adim_sn=3)
+        assert seen == [3, 6, 5, 8]  # 3, 6 → cut 4 s off → 9-4, 12-4
+
+
+class TestParcaliOlc:
+    def _wav(self, path, seconds):
+        TestOlcVeRapor()._wav(path, _speech(seconds))
+
+    def test_compares_whole_and_piecewise_for_long_spoken_recordings(self, tmp_path):
+        self._wav(tmp_path / "uzun.wav", 20.0)
+        (tmp_path / "uzun.txt").write_text("p20", encoding="utf-8")
+        self._wav(tmp_path / "kisa.wav", 4.0)
+        (tmp_path / "kisa.txt").write_text("p4", encoding="utf-8")
+        self._wav(tmp_path / "bos.wav", 20.0)
+        (tmp_path / "bos.txt").write_text("", encoding="utf-8")
+        sonuclar, kisa = parcali_olc(tmp_path, _echo_model(), Ayarlar(), kesici=_cut_once_at(9))
+        assert kisa == 1 and [s.dosya for s in sonuclar] == ["uzun.wav"]
+        s = sonuclar[0]
+        assert (s.parca, s.wer_butun, s.metin_parcali) == (1, 0.0, "p9 p11")
+        assert s.wer_parcali == 2.0  # "p9 p11" vs "p20": a substitution and an insertion over one word
+
+    def test_report(self, tmp_path):
+        self._wav(tmp_path / "uzun.wav", 20.0)
+        (tmp_path / "uzun.txt").write_text("gizli metin", encoding="utf-8")
+        sonuclar, kisa = parcali_olc(tmp_path, _echo_model(), Ayarlar(), kesici=_cut_once_at(9))
+        metin = parcali_rapor(sonuclar, kisa)
+        assert "en az bir parçası arka planda çözümlenen: 1" in metin
+        assert "Bırakıştan sonra Whisper: bütün medyan" in metin
+        assert "konuşmaya yetişiyor" in metin
+        assert "p9 p11" not in metin and "p9 p11" in parcali_rapor(sonuclar, kisa, metin_goster=True)
+
+    def test_report_without_long_recordings(self):
+        assert "Parçalanacak uzunlukta konuşmalı kayıt yok" in parcali_rapor([], 2)
+
+
+class TestMainParcali:
+    def test_parcali_flag_runs_the_piecewise_comparison(self, tmp_path, mock_settings):
+        runner = TestMain()
+        runner.settings = mock_settings
+        with patch("scripts.olcum.parcali_olc", return_value=([], 0)) as parcali, \
+             patch("scripts.olcum.olc") as butun:
+            runner._run(tmp_path, "--parcali")
+        parcali.assert_called_once()
+        butun.assert_not_called()

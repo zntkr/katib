@@ -185,3 +185,15 @@ class TestStartLatency:
         latency = [m for m in logs if m.startswith("First audio after")]
         assert len(latency) == 1
         assert latency[0].endswith(" ms")
+
+
+class TestChunkOwnership:
+    """Plan 0012 Faz 6: the source already hands over its own copy; the worker does not copy again."""
+
+    def test_a_chunk_is_kept_as_the_source_handed_it_over(self, mock_settings, mock_audio_source):
+        worker = AudioWorker(mock_settings, mock_audio_source)
+        worker.set_device(1)
+        worker.start_recording()
+        chunk = np.ones(1024, dtype=np.float32) * 0.1
+        worker._audio_callback(chunk, None)
+        assert worker._chunks[0] is chunk

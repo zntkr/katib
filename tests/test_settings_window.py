@@ -480,6 +480,15 @@ class TestSpeechLanguageAndPrompt:
         assert window.prompt_edit.toPlainText().startswith("Merhaba.")
         assert mock_settings.get("initial_prompt") == window.prompt_edit.toPlainText()
 
+    def test_the_first_run_language_and_prompt_are_what_the_window_shows(self, window, mock_settings):
+        """main.py stores them without the window (plan 0012 Faz 5); opening it must not change them."""
+        from core.settings import first_run_speech_settings
+        mock_settings.set_many(first_run_speech_settings("tr"))
+        window.show()
+        assert window.speech_language_combo.currentData() == "tr"
+        assert window.prompt_edit.toPlainText() == mock_settings.get("initial_prompt")
+        assert mock_settings.get("initial_prompt").startswith("Merhaba.")
+
     def test_automatic_detection_uses_no_prompt(self, window, mock_settings):
         _select(window.speech_language_combo, "tr")
         _select(window.speech_language_combo, "auto")

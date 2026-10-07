@@ -3,7 +3,7 @@ import queue
 import numpy as np
 from typing import TYPE_CHECKING
 
-_CPU_THREADS = 0  # 0: let CTranslate2 analyse hardware automatically.
+_CPU_THREADS = 0  # 0: CTranslate2's default, 4 threads (faster-whisper docs); plan 0012 Faz 3 measures more.
 
 from PySide6.QtCore import Signal
 
@@ -34,6 +34,19 @@ TRANSCRIBE_OPTIONS = {
     "no_speech_threshold"       : 0.6,
     "condition_on_previous_text": False,
 }
+
+
+def warm_up(model, language: str | None, options: dict = TRANSCRIBE_OPTIONS) -> None:
+    """Pays the first transcribe()'s one-off costs (CTranslate2 sets up its kernels,
+    faster-whisper loads the VAD model). scripts/olcum.py calls it too, so its first
+    measured recording is not a cold start. Raises whatever the model raises."""
+    silence = np.zeros(SAMPLE_RATE, dtype=np.float32)
+    # VAD drops silence before the decoder runs, so the decoder needs a call without it.
+    for run_options in (dict(options, vad_filter=False), options):
+        segments, _ = model.transcribe(silence, language=language, **run_options)
+        for _ in segments:  # decoding is lazy
+            pass
+
 
 class _ReloadCommand:
     pass
@@ -99,17 +112,11 @@ class TranscriptionWorker(BaseWorker):
             self._load_model(allow_gpu=False)
 
     def _warm_up(self) -> bool:
-        """The first transcribe() pays one-off costs (CTranslate2 sets up its kernels,
-        faster-whisper loads the VAD model). Pay them now, not on the first dictation.
+        """Pay the first transcribe()'s one-off costs now, not on the first dictation.
         The model is already ready: a dictation arriving meanwhile waits in the queue."""
-        silence = np.zeros(SAMPLE_RATE, dtype=np.float32)
         start = time.perf_counter()
         try:
-            # VAD drops silence before the decoder runs, so the decoder needs a call without it.
-            for options in (dict(TRANSCRIBE_OPTIONS, vad_filter=False), TRANSCRIBE_OPTIONS):
-                segments, _ = self._model.transcribe(silence, language=self._target_language(), **options)
-                for _ in segments:  # decoding is lazy
-                    pass
+            warm_up(self._model, self._target_language())
         except Exception as e:
             _log.warning(f"Warm-up failed: {e}")
             return False

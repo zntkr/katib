@@ -100,6 +100,41 @@ DEFAULTS: dict[str, Any] = {
 }
 
 
+# The prompt a speech language starts with until the user saves their own: one ordinary,
+# well-punctuated sentence nudges Whisper towards punctuation and capitals.
+DEFAULT_PROMPTS: dict[str, str] = {
+    "ar": "مرحباً. أقوم اليوم بتدوين ملاحظاتي بالصوت.",
+    "de": "Hallo. Ich diktiere heute meine Notizen per Sprache.",
+    "el": "Γεια σας. Σήμερα υπαγορεύω τις σημειώσεις μου φωνητικά.",
+    "en": "Hello. I'm dictating my notes using voice today.",
+    "es": "Hola. Hoy estoy dictando mis notas por voz.",
+    "fa": "سلام. امروز یادداشت‌های خود را به صورت صوتی دیکته می‌کنم.",
+    "fr": "Bonjour. Je dicte mes notes à voix haute aujourd'hui.",
+    "hi": "नमस्ते। आज मैं अपने नोट्स आवाज़ से बोल रहा हूँ।",
+    "id": "Halo. Hari ini saya mendiktekan catatan saya secara lisan.",
+    "it": "Ciao. Oggi sto dettando le mie note a voce.",
+    "ja": "こんにちは。今日は音声でメモを書き取っています。",
+    "ko": "안녕하세요. 오늘 음성으로 메모를 받아쓰고 있습니다.",
+    "pt": "Olá. Hoje estou ditando minhas anotações por voz.",
+    "ru": "Привет. Сегодня я диктую свои заметки голосом.",
+    "tr": "Merhaba. Bugün notlarımı sesli olarak dikte ediyorum.",
+    "ur": "السلام علیکم۔ آج میں اپنے نوٹس آواز سے لکھوا رہا ہوں۔",
+    "zh": "你好。今天我正在用语音记录我的笔记。",
+}
+
+
+def first_run_speech_settings(system_code: str) -> dict[str, str]:
+    """The speech language a new install starts with, and its stock prompt, as if the user
+    had picked it in the settings window: the computer's language when Katib lists it, else
+    automatic detection (no prompt). A fixed language skips detection, which costs an extra
+    encoder pass and can pick the wrong language on a short clip (plan 0012 Faz 5).
+    An unlisted language falls back to detection, not English: forcing English on someone
+    speaking Dutch would garble the text, detection still writes Dutch."""
+    listed = {code for _, code in SPEECH_LANGUAGES if code != "auto"}
+    language = system_code if system_code in listed else "auto"
+    return {"language": language, "initial_prompt": DEFAULT_PROMPTS.get(language, "")}
+
+
 def get_settings_path() -> Path:
     settings_dir = get_app_data_dir()
     settings_dir.mkdir(parents=True, exist_ok=True)
@@ -190,6 +225,8 @@ class SettingsManager:
     def __init__(self, in_memory: bool = False):
         self.in_memory = in_memory
         self._cache: dict[str, Any] = dict(DEFAULTS)
+        # No settings.json yet: a new install. Existing users keep what they have (CONTEXT.md #8).
+        self.first_run = False
 
         if not self.in_memory:
             self._load()
@@ -197,6 +234,7 @@ class SettingsManager:
     def _load(self):
         path = get_settings_path()
         if not path.exists():
+            self.first_run = True
             return
         try:
             with open(path, "r", encoding="utf-8") as f:

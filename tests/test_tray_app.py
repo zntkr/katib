@@ -15,6 +15,7 @@ from core.settings import (
 from ui.settings_window import TABS
 from ui.tray_app import TrayApp
 from ui.utils import qt_key_to_keyboard
+from tests.log_helpers import on_log_entry
 
 TRAY_AVAILABLE = "ui.tray_app.QSystemTrayIcon.isSystemTrayAvailable"
 
@@ -185,6 +186,81 @@ class TestDictation:
         tray.on_hotkey_released()
         tray.on_level_changed(0.7)
         assert tray.settings_window.level_bar.value() == 0
+
+
+
+class TestDictationLatency:
+    """Plan 0012 Faz 1: one log line per dictation, from key release to the paste."""
+    CLOCK = "ui.tray_app.time.perf_counter"
+
+    @pytest.fixture
+    def lines(self):
+        seen: list[str] = []
+        on_log_entry(lambda level, component, message: seen.append(message))
+        return seen
+
+    @staticmethod
+    def _latency(lines: list[str]) -> list[str]:
+        return [m for m in lines if m.startswith("Dictation done")]
+
+    def _dictate(self, tray, released: float, pasted: float) -> None:
+        tray.on_hotkey_pressed()
+        with patch(self.CLOCK, return_value=released):
+            tray.on_hotkey_released()
+        tray.on_dictation_timed(18.2, 1.62)
+        with patch("ui.tray_app.inject_text"), patch(self.CLOCK, return_value=pasted):
+            tray.on_text_ready("merhaba")
+
+    def test_release_to_paste_is_logged_with_the_model_timing(self, tray, lines):
+        self._dictate(tray, released=10.0, pasted=11.84)
+        assert self._latency(lines) == ["Dictation done: release->paste 1840 ms (audio 18.2 s, model 1620 ms)"]
+
+    def test_logged_even_when_the_paste_delivers_the_finished_signal(self, tray, lines):
+        """inject_text() runs processEvents(): transcription_finished can arrive mid-paste."""
+        tray.on_hotkey_pressed()
+        with patch(self.CLOCK, return_value=10.0):
+            tray.on_hotkey_released()
+        tray.on_dictation_timed(3.0, 0.4)
+        with patch("ui.tray_app.inject_text", side_effect=lambda *a, **k: tray.on_transcription_finished()), \
+             patch(self.CLOCK, return_value=10.7):
+            tray.on_text_ready("merhaba")
+        assert self._latency(lines) == ["Dictation done: release->paste 700 ms (audio 3.0 s, model 400 ms)"]
+
+    def test_each_dictation_is_logged_once(self, tray, lines):
+        self._dictate(tray, released=10.0, pasted=11.0)
+        tray.on_transcription_finished()
+        with patch("ui.tray_app.inject_text"):
+            tray.on_text_ready("tekrar")  # e.g. a stray signal: no release to time from
+        assert len(self._latency(lines)) == 1
+
+    def test_text_without_a_release_is_not_timed(self, tray, lines):
+        with patch("ui.tray_app.inject_text"):
+            tray.on_text_ready("merhaba")
+        assert self._latency(lines) == []
+
+    def test_a_refused_press_does_not_start_a_timing(self, tray, lines):
+        tray.transcription_worker = MagicMock(is_ready=False, is_loading=True)
+        tray.on_hotkey_pressed()
+        tray.on_hotkey_released()
+        with patch("ui.tray_app.inject_text"):
+            tray.on_text_ready("merhaba")
+        assert self._latency(lines) == []
+
+    def test_a_dictation_that_ends_without_text_is_not_carried_over(self, tray, lines):
+        tray.on_hotkey_pressed()
+        with patch(self.CLOCK, return_value=10.0):
+            tray.on_hotkey_released()
+        tray.on_transcription_finished()  # "no speech": nothing pasted
+        with patch("ui.tray_app.inject_text"):
+            tray.on_text_ready("merhaba")
+        assert self._latency(lines) == []
+
+    def test_a_new_press_forgets_a_dropped_recording(self, tray, lines):
+        tray.on_hotkey_pressed()
+        with patch(self.CLOCK, return_value=1.0):
+            tray.on_hotkey_released()  # recording too short: no transcription follows
+        self._dictate(tray, released=10.0, pasted=10.5)
+        assert self._latency(lines) == ["Dictation done: release->paste 500 ms (audio 18.2 s, model 1620 ms)"]
 
 
 class TestStatus:
