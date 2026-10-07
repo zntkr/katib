@@ -54,7 +54,7 @@ def find_cut(audio: np.ndarray, threshold: float = 0.4) -> int | None:
 def context_prompt(user_prompt: str, text_so_far: str, max_chars: int = CONTEXT_CHARS) -> str:
     """The prompt for the next piece: the user's own prompt, then the end of what was
     already transcribed, so capitalisation, punctuation and terms carry over the cut."""
+    # faster-whisper keeps only the last ~223 prompt tokens; an uncut text would push the
+    # user's prompt, which comes first, out of them.
     tail = text_so_far.strip()[-max_chars:]
-    if tail and len(text_so_far.strip()) > max_chars:
-        tail = tail.split(" ", 1)[-1]  # do not start mid-word
     return " ".join(part for part in (user_prompt.strip(), tail) if part)

@@ -83,6 +83,9 @@ grep -n "partial_audio" workers/audio_worker.py main.py
     yoldan farklı (VAD parçalarını bağımsız çözümler, önceki metne koşullanmaz) →
     WER ayrıca ölçülür.
   - **B — Kayıt sürerken parça parça çözümleme** (bu planın asıl tasarımı, Faz 1–3).
+- [ ] 🛑 **0 ya da A seçilirse Faz 1'in kodu silinir:** `core/segmenter.py`,
+      `tests/test_segmenter.py`, `scripts/olcum.py`'deki `--parcali` modu ve testleri.
+      Yalnız ölçüm için yazıldı; uygulamada kullanılmayan kod olarak kalmaz.
 - [ ] Seçilen seçenek ve gerekçesi günlüğe; B seçilirse ADR yazılır (Faz 3).
 
 ## Faz 1 — Bölme fonksiyonu ve ölçüm modu (B)
@@ -208,3 +211,11 @@ python scripts\olcum.py --parcali --tekrar 3 --dil tr --cihaz cpu
 
 Faz 0 kararı bu raporla verilir: "bırakıştan sonra" süresi belirgin düşüyor, parçalı WER
 bütününkünden kötü değil ve "yetişiyor" ise B; değilse 0 ya da A.
+
+### 2026-10-07 — Öz-inceleme
+
+`context_prompt`'taki "kelime ortasından başlama" kırpması kaldırıldı: Whisper yarım kelimeye
+takılmaz, kırpma tam kelime sınırına denk gelince fazladan bir kelime siliyordu. Son 200
+karakterle sınırlamanın kendisi kalıyor ve gerekçesi koda yazıldı: faster-whisper prompt'un
+yalnız son ~223 token'ını tutar (`get_prompt`), kırpılmamış metin en baştaki kullanıcı
+prompt'unu dışarı iterdi. Faz 0'a "0 / A seçilirse Faz 1 kodu silinir" maddesi eklendi.

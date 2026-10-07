@@ -357,8 +357,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--no-seviye", action="store_true", help="katman 2'yi (seviye analizi) tamamen kapat")
     p.add_argument("--no-vad", action="store_true", help="Whisper'ın vad_filter'ını kapat")
     p.add_argument("--metin", action="store_true", help="raporda dikte metnini göster")
-    p.add_argument("--cihaz", choices=("auto", "cpu", "cuda"), default="auto",
-                   help="auto: uygulamadaki gibi, GPU kullanılabiliyorsa GPU")
+    p.add_argument("--cihaz", choices=("auto", "cpu", "cuda"), default=settings.get("compute_device"),
+                   help="varsayılan: uygulamanın compute_device ayarı; auto: GPU kullanılabiliyorsa GPU")
     p.add_argument("--compute-type", help="ör. int8, float16 (varsayılan: uygulamanın seçeceği)")
     p.add_argument("--threads", type=int, default=0, help="CPU iş parçacığı; 0 = CTranslate2 varsayılanı (4)")
     p.add_argument("--beam", type=int, help="beam_size (uygulama: %d)" % TRANSCRIBE_OPTIONS["beam_size"])
@@ -379,7 +379,7 @@ def main(argv: list[str] | None = None) -> int:
 
     model, cihaz, compute_type = model_ac(model_dir, args.cihaz, args.compute_type, args.threads,
                                           settings.get("compute_type"))
-    dil = None if args.dil in (None, "", "auto") else args.dil  # "auto" is the setting, not a language
+    dil = None if args.dil in (None, "", "auto") else args.dil  # --dil auto: detection, as in the app
     ayarlar = Ayarlar(min_sure=args.min_sure, silence_db=args.silence_db, seviye=not args.no_seviye,
                       vad=not args.no_vad, dil=dil,
                       prompt=(settings.get("initial_prompt") or "").strip(),

@@ -207,19 +207,22 @@ class TestModelAc:
 
 
 class TestMain:
-    def _run(self, tmp_path, *args, language="auto"):
+    @pytest.fixture(autouse=True)
+    def _settings(self, mock_settings):
+        """The real SettingsManager (in memory): main() reads defaults through its get()."""
+        self.settings = mock_settings
+
+    def _run(self, tmp_path, *args):
         TestOlcVeRapor()._wav(tmp_path / "k.wav", _speech())
         (tmp_path / "k.txt").write_text("merhaba", encoding="utf-8")
         model = _model(" Merhaba.")
-        settings = MagicMock()
-        settings.get.side_effect = lambda key, default=None: {
-            "language": language, "compute_type": "int8", "initial_prompt": ""}.get(key, default)
         order = MagicMock()
-        with patch("core.settings.SettingsManager", return_value=settings), \
-             patch("scripts.olcum.model_ac", return_value=(model, "cpu", "int8")), \
+        with patch("core.settings.SettingsManager", return_value=self.settings), \
+             patch("scripts.olcum.model_ac", return_value=(model, "cpu", "int8")) as ac, \
              patch("scripts.olcum.warm_up", side_effect=lambda *a: order.warm_up(*a)) as warm, \
              patch("scripts.olcum.olc", side_effect=lambda *a: order.olc() or []):
             assert main(["--klasor", str(tmp_path), "--model", "m", *args]) == 0
+        self.model_ac = ac
         return warm, order
 
     def test_the_model_is_warmed_up_before_anything_is_measured(self, tmp_path):
@@ -227,13 +230,28 @@ class TestMain:
         assert [c[0] for c in order.mock_calls if c[0] in ("warm_up", "olc")] == ["warm_up", "olc"]
 
     def test_auto_language_setting_means_detection(self, tmp_path):
-        warm, _ = self._run(tmp_path, language="auto")
+        self.settings.set("language", "auto")
+        warm, _ = self._run(tmp_path)
+        assert warm.call_args[0][1] is None
+
+    def test_dil_auto_on_the_command_line_means_detection(self, tmp_path):
+        warm, _ = self._run(tmp_path, "--dil", "auto")
         assert warm.call_args[0][1] is None
 
     def test_warm_up_uses_the_measured_options(self, tmp_path):
         warm, _ = self._run(tmp_path, "--dil", "tr", "--beam", "1")
         model, dil, options = warm.call_args[0]
         assert dil == "tr" and options["beam_size"] == 1
+
+    def test_the_device_follows_the_apps_compute_device_setting(self, tmp_path):
+        self.settings.set("compute_device", "cpu")
+        self._run(tmp_path)
+        assert self.model_ac.call_args[0][1] == "cpu"
+
+    def test_cihaz_overrides_the_setting(self, tmp_path):
+        self.settings.set("compute_device", "cpu")
+        self._run(tmp_path, "--cihaz", "cuda")
+        assert self.model_ac.call_args[0][1] == "cuda"
 
 
 # ------------------------------------------------------------------ plan 0014 Faz 1: --parcali
@@ -326,9 +344,11 @@ class TestParcaliOlc:
 
 
 class TestMainParcali:
-    def test_parcali_flag_runs_the_piecewise_comparison(self, tmp_path):
+    def test_parcali_flag_runs_the_piecewise_comparison(self, tmp_path, mock_settings):
+        runner = TestMain()
+        runner.settings = mock_settings
         with patch("scripts.olcum.parcali_olc", return_value=([], 0)) as parcali, \
              patch("scripts.olcum.olc") as butun:
-            TestMain()._run(tmp_path, "--parcali")
+            runner._run(tmp_path, "--parcali")
         parcali.assert_called_once()
         butun.assert_not_called()

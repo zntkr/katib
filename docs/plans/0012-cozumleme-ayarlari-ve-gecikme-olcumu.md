@@ -199,9 +199,12 @@ kırılımıyla veriyor; başta kullanılan cihaz ve çözümleme ayarları yaz�
 Ölçümden önce ısınma: uygulamanın `_warm_up` gövdesi `workers/transcription_worker.py::warm_up(model, language, options)`
 olarak dışarı alındı; worker ve betik aynı fonksiyonu, betik ölçülen ayarlarla çağırıyor.
 
-⚠️ **Plan dışı düzeltme:** konuşma dili ayarı `auto` iken (varsayılan) betik Whisper'a
-`language="auto"` geçiriyordu; faster-whisper bunu `'auto' is not a valid language code`
-ile reddeder → varsayılan ayarlı kullanıcıda betik hiç çalışmazdı. Artık `auto` → `None`.
+⚠️ **Plan dışı küçük düzeltme:** `--dil auto` elle verilirse betik Whisper'a
+`language="auto"` geçiriyordu (faster-whisper bunu `'auto' is not a valid language code` ile
+reddeder). Artık `auto` → `None`. ~~Varsayılan ayarlı kullanıcıda betik hiç çalışmazdı~~ —
+**yanlış iddia, 2026-10-07'de düzeltildi:** `SettingsManager.get("language")` `auto` için
+zaten `None` döndürüyor; varsayılan yol hiç bozuk değildi. Yanlış iddiayı "doğrulayan" test,
+gerçeğinden farklı cevap veren sahte bir ayar nesnesi kullanıyordu.
 
 **Testler:** `tests/test_tray_app.py::TestDictationLatency` (7),
 `tests/test_olcum.py` (15 yeni: `TestCozumleme`, `TestTekrar`, `TestSureOzeti`,
@@ -236,3 +239,17 @@ belgesine "alıcı kendi dizisini alır, kaynak onu yeniden kullanmaz" sözleşm
 Testler: `tests/test_audio_worker.py::TestChunkOwnership` (kopya geri gelince kırmızı),
 `tests/test_portaudio_source.py::TestChunkCopy` (sözleşmenin kaynak tarafı: PortAudio
 tamponu sonradan değişse de alıcının dizisi değişmez). İş parçacığı sayısı Faz 3 ölçümünü bekliyor.
+
+### 2026-10-07 — Öz-inceleme düzeltmeleri
+
+Proje sahibinin "aşırı mühendislik / tekerleği yeniden icat etme var mı" sorusu üzerine
+kendi değişikliklerim gözden geçirildi:
+- **`olcum.py --cihaz` uygulamanın `compute_device` ayarına uymuyordu.** `model_ac`, worker'ın
+  cihaz seçiminin sade bir kopyası; kopyada ayar atlanmıştı → `compute_device=cpu` olan
+  kullanıcıda betik GPU'yu ölçerdi. Varsayılan artık ayardan okunuyor; bayrak yine ezer.
+  Seçim kodunu worker ile ortaklaştırmak (durumlu, CPU'ya dönüşlü metot) ~10 satırlık
+  tekrardan pahalı olduğu için yapılmadı.
+- **Faz 2 günlüğündeki "`auto` dili betiği bozuyordu" iddiası yanlıştı** (yukarıda düzeltildi).
+  `tests/test_olcum.py::TestMain` artık gerçek `SettingsManager`'ı (bellekte) kullanıyor.
+- Testler: `test_the_device_follows_the_apps_compute_device_setting` (eski varsayılanla
+  kırmızı), `test_cihaz_overrides_the_setting`, `test_dil_auto_on_the_command_line_means_detection`.

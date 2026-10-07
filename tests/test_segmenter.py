@@ -66,8 +66,8 @@ class TestContextPrompt:
         assert context_prompt("  Katib  ", "") == "Katib"
         assert context_prompt("", "") == ""
 
-    def test_only_the_end_is_kept_and_never_from_mid_word(self):
-        text = "kelime " * 100
-        prompt = context_prompt("", text)
-        assert len(prompt) <= CONTEXT_CHARS
-        assert prompt.startswith("kelime")
+    def test_only_the_end_is_kept_and_the_user_prompt_survives(self):
+        text = "kelime " * 100 + "son"
+        prompt = context_prompt("Katib", text)
+        assert prompt.startswith("Katib ") and prompt.endswith("son")
+        assert len(prompt) == len("Katib ") + CONTEXT_CHARS
