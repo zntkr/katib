@@ -130,3 +130,10 @@ Faz 2 bu konteynerde yapılamaz (Windows exe derlenemiyor).
   dosyaları (veri dosyası `icudt78.dll` dahil) artık pakette değil.
 
 **Kalan:** açık Katib kapatılıp `dist\Katib\Katib.exe`'nin tam açılışı; kurulum paketiyle kurup açılış.
+
+### 2026-10-07 — Kurulum betiği eski ICU'yu siliyor (plan 0009 Faz 2 PR'ı ile)
+
+v1.1.0 sürüm notları "yeniden kurmak eski `icuuc.dll`'i geride bırakabilir" diye uyarıyordu:
+Inno Setup dosyaların üstüne yazar ama eskileri silmez. `Katib.iss` artık kurulumdan önce
+`{app}\_internal\icu*.dll` dosyalarını adıyla siliyor (yalnız program klasörü; klasör toptan
+silinmez, ADR-0014). Test: `tests/test_packaging.py::TestGpuPackage::test_setup_removes_a_leftover_foreign_icu_and_nothing_else`.
