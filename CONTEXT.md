@@ -120,6 +120,7 @@ py -3.14 -m venv .venv
 .venv\Scripts\python -m pytest -q
 .venv\Scripts\python main.py
 build.bat                      # ortamı kurar/eşitler, PyInstaller ve Inno Setup'ı çalıştırır
+build.bat gpu                  # aynısı + NVIDIA cuBLAS: Katib_Setup_<sürüm>_GPU.exe (plan 0009 Faz 2)
 ```
 
 - Bağımlılıklar sabittir: doğrudan olanlar `requirements*.txt` içinde `==` ile, çektikleri her paket `constraints.txt` içinde. Sürüm değiştirirken ikisi birlikte güncellenir (adımlar: ADR-0011 → Sonuçlar).

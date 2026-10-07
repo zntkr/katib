@@ -1,6 +1,12 @@
 # -*- mode: python ; coding: utf-8 -*-
+import os
 import pathlib
+import sys
 from PyInstaller.utils.hooks import collect_all
+
+# GPU paketi (plan 0009 Faz 2): `build.bat gpu` KATIB_GPU=1 verir. Program aynıdır; pakete
+# yalnız NVIDIA cuBLAS eklenir, böylece NVIDIA kartlı makinede CUDA kurmadan GPU'da çalışır.
+_GPU = os.environ.get('KATIB_GPU') == '1'
 
 datas = [('translations', 'translations')]
 binaries = []
@@ -42,7 +48,7 @@ except ImportError:
             break
 hiddenimports += ['sounddevice', '_sounddevice']
 
-# --- CPU-ONLY MİMARİSİ: GPU (CUDA/NVIDIA) DLL'lerini Kökten Engelleme ---
+# --- CUDA/NVIDIA DLL'leri kökten engellenir; GPU paketinde yalnız cuBLAS (aşağıda) geri eklenir ---
 _gpu_keywords = [
     'cublas', 'cudnn', 'curand', 'cusparse', 'nvrtc', 'cudart',
     'cufft', 'cufile', 'cusolve', 'cusolver', 'nccl', 'nvjpeg',
@@ -79,6 +85,21 @@ for b_dest, b_src in binaries:
         continue
     filtered_binaries.append((b_dest, b_src))
 binaries = filtered_binaries
+
+# --- GPU paketi: core/gpu.py'nin istediği cuBLAS DLL'leri, onun aradığı yere (nvidia/<paket>/bin) ---
+# Hangi DLL'lerin gerektiğini ve nerede bulunduğunu core/gpu.py söyler; liste iki yerde tutulmaz.
+# cuDNN ve diğer CUDA kitaplıkları gerekmez (ADR-0010: ölçüldü), engelli kalır.
+_gpu_keep = set()
+if _GPU:
+    sys.path.insert(0, SPECPATH)
+    from core import gpu as _gpu
+    _cuda_dir = _gpu.library_dir(_gpu.candidate_dirs())
+    if _cuda_dir is None:
+        raise SystemExit("GPU paketi: cuBLAS bulunamadi. requirements-gpu.txt kurulu mu? (build.bat gpu kurar)")
+    _dest = 'nvidia/' + _cuda_dir.parent.name + '/bin'
+    for _dll in _gpu.REQUIRED_DLLS:
+        binaries.append((str(_cuda_dir / _dll), _dest))
+        _gpu_keep.add((_dest + '/' + _dll).lower())
 
 # --- datas içinden de GPU DLL'lerini Kaldır (cudnn64 gibi datas üzerinden gelenler) ---
 datas = [
@@ -165,6 +186,8 @@ _post_exclude = [
 
 def _should_exclude(name):
     n = name.lower().replace('\\', '/').replace('-', '_')
+    if n in _gpu_keep:
+        return False
     return any(k in n for k in _post_exclude) or _is_icu(name)
 
 a.binaries = TOC([b for b in a.binaries if not _should_exclude(b[0])])

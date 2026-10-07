@@ -11,6 +11,18 @@ echo ===================================================
 set /p PY_VERSION=<.python-version
 set VENV_PY=.venv\Scripts\python.exe
 
+:: "build.bat gpu": ayni program + NVIDIA cuBLAS; NVIDIA kartli makinede CUDA kurmadan GPU'da
+:: calisir (plan 0009 Faz 2). Arguman yoksa normal (yalniz CPU) paket.
+set "KATIB_GPU="
+set "ISCC_GPU="
+if /i "%~1"=="gpu" (
+    set "KATIB_GPU=1"
+    set "ISCC_GPU=/DGpu=1"
+    echo Paket: GPU ^(NVIDIA cuBLAS dahil^)
+) else (
+    echo Paket: normal ^(yalniz CPU^)
+)
+
 echo.
 echo [1/3] Sanal ortam hazirlaniyor (Python %PY_VERSION%)...
 if not exist %VENV_PY% py -%PY_VERSION% -m venv .venv
@@ -24,6 +36,14 @@ if %ERRORLEVEL% NEQ 0 (
     echo [HATA] Bagimliliklar kurulamadi!
     pause
     exit /b %ERRORLEVEL%
+)
+if defined KATIB_GPU (
+    %VENV_PY% -m pip install --disable-pip-version-check -q -r requirements-gpu.txt -c constraints.txt
+    if errorlevel 1 (
+        echo [HATA] GPU kitapligi ^(requirements-gpu.txt^) kurulamadi!
+        pause
+        exit /b 1
+    )
 )
 echo [OK] Sanal ortam hazir.
 
@@ -51,7 +71,7 @@ if exist "C:\Program Files\Inno Setup 7\ISCC.exe" set ISCC="C:\Program Files\Inn
 if exist "C:\Program Files (x86)\Inno Setup 7\ISCC.exe" set ISCC="C:\Program Files (x86)\Inno Setup 7\ISCC.exe"
 
 if not %ISCC%=="" (
-    %ISCC% Katib.iss
+    %ISCC% %ISCC_GPU% Katib.iss
     if %ERRORLEVEL% NEQ 0 (
         echo [HATA] Inno Setup derlemesi basarisiz oldu!
         pause

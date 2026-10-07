@@ -1,4 +1,6 @@
 ; Katib installer (Inno Setup 6 or 7). build.bat compiles it from dist\Katib.
+; `build.bat gpu` passes /DGpu=1: the same program with NVIDIA's cuBLAS inside, so it runs on
+; an NVIDIA GPU without a CUDA install (plan 0009 Faz 2). Both variants are one app (one AppId).
 ;
 ; Two folders that must never be the same one (ADR-0014):
 ;   program  {autopf}\Katib        = %LOCALAPPDATA%\Programs\Katib for this per-user install
@@ -15,6 +17,11 @@
 ; The folder core/settings.py::get_app_data_dir() returns (tests/test_installer.py). Setup
 ; never writes to it or deletes from it; the uninstaller only tells the user where it is.
 #define DataDir      "{localappdata}\Katib"
+#ifdef Gpu
+  #define Variant "_GPU"
+#else
+  #define Variant ""
+#endif
 
 [Setup]
 AppId={{A3F2C1D4-7E8B-4F9A-B2C3-D4E5F6A7B8C9}
@@ -31,7 +38,7 @@ DefaultGroupName={#AppName}
 AllowNoIcons=yes
 ; Installer output
 OutputDir=installer
-OutputBaseFilename=Katib_Setup_{#AppVersion}
+OutputBaseFilename=Katib_Setup_{#AppVersion}{#Variant}
 SetupIconFile=katib.ico
 ; Compression
 Compression=lzma2/max
@@ -52,6 +59,13 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"
+
+[InstallDelete]
+; Setup only overwrites files, it never removes old ones. The first v1.1.0 build put a foreign
+; ICU into _internal, which is searched before System32 and keeps Qt from starting (plan 0015);
+; a reinstall would leave it there. Named files only, in the program folder: no folder is ever
+; deleted wholesale (ADR-0014, tests/test_installer.py).
+Type: files; Name: "{app}\_internal\icu*.dll"
 
 [Files]
 Source: "{#BuildDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs

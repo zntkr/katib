@@ -4,8 +4,8 @@
 > günlüğü"ne bir satır ekle.
 > Göreve yeni başlayan ajan: önce [Devralma notu](#devralma-notu) bölümünü oku.
 
-**Durum:** ⏸️ **KARAR BEKLİYOR** — Faz 1 bitti (2026-10-03, kod çalışma ağacında);
-Faz 2 ve Faz 3 proje sahibinin kararını bekler.
+**Durum:** ⏸️ **DOĞRULAMA BEKLİYOR** — Faz 1 bitti (2026-10-03); Faz 2 kararı verildi (iki ayrı
+kurulum paketi) ve derleme tarafı uygulandı (2026-10-07), Windows'ta derleme ve NVIDIA kartta deneme bekliyor.
 **Kullanıcı verisi değişikliği:** YOK — yalnız yeni bir ayar anahtarı
 (`compute_device`, varsayılan `auto`); CONTEXT.md → Mimari Kurallar #8'e göre onay
 gerektirmez. `compute_type`'ın anlamı ve varsayılanı değişmedi.
@@ -86,7 +86,22 @@ ancak kitaplıklar `PATH`'te ise kullanır. Seçenekler:
 | B. Uygulama içinden isteğe bağlı indirme (modeller gibi) | Tek küçük paket; isteyen indirir | Yeni indirme akışı, yeni veri klasörü (kural #8: açık onay), 11 dilde metin |
 | C. Paketleme yok | Sıfır iş | Yalnız CUDA 12 Toolkit kurmuş kullanıcılar yararlanır |
 
-- [ ] Proje sahibi seçer; seçime göre bu faz ayrıntılandırılır.
+- [x] **Karar (proje sahibi, 2026-10-07): A — iki ayrı kurulum paketi.** Normal paket
+      (`Katib_Setup_<sürüm>.exe`, ~92 MB) aynen kalır; yanına `Katib_Setup_<sürüm>_GPU.exe`
+      (cuBLAS dahil). İki paket tek uygulamadır (aynı AppId); NVIDIA kartı olan GPU paketini kurar,
+      CUDA kurmadan GPU'da çalışır. Gereken tek şey CUDA 12'yi destekleyen NVIDIA sürücüsü.
+- [x] `build.bat gpu`: `requirements-gpu.txt`'i kurar, `KATIB_GPU=1` ile PyInstaller'ı, `/DGpu=1` ile
+      Inno Setup'ı çalıştırır. Argümansız `build.bat` bugünkü paketi üretir (`KATIB_GPU` önce temizlenir).
+- [x] `Katib.spec`: GPU modunda yalnız `core/gpu.py::REQUIRED_DLLS`, `core/gpu.py`'nin bulduğu klasörden,
+      onun paket içinde aradığı yere (`nvidia/cublas/bin`) girer; liste ve yer iki kez yazılmaz.
+      Diğer CUDA kitaplıkları (cuDNN vb.) her iki pakette de engelli.
+- [x] `Katib.iss`: GPU paketinin dosya adı `_GPU` ekli.
+- [x] Testler: `tests/test_packaging.py::TestGpuPackage` (7; değişiklik geri alınınca 5'i kırmızı).
+- [ ] **Windows'ta doğrulama:** `build.bat gpu` → `dist\Katib\_internal\nvidia\cublas\bin\` içinde
+      `cublas64_12.dll` ve `cublasLt64_12.dll` var, başka CUDA DLL'i yok; NVIDIA kartlı makinede
+      kurulum sonrası "Dikte" sekmesinde modelin çalıştığı yer "GPU" görünür; NVIDIA kartı olmayan
+      makinede GPU paketi CPU'da sorunsuz çalışır. Normal `build.bat` çıktısında `nvidia\` klasörü yok.
+- [ ] Paket boyutu ölçülür (beklenen: kurulum paketi ~600 MB) ve sürüm notlarına yazılır.
 
 ## Faz 3 — Ayar ekranı (karar bekliyor)
 
@@ -169,3 +184,14 @@ yükleme ve çevirme yolu, arayüz ve mikrofon olmadan):
 
 ⚠️ Denenmedi: paketlenmiş uygulama (`dist\Katib\Katib.exe`), dikte anında gerçek bir
 GPU hatası (yalnız testte), RTX 4080 dışında bir kart.
+
+### 2026-10-07 — Faz 2: karar A, derleme tarafı uygulandı
+
+Proje sahibi "iki ayrı kurulum" seçeneğini seçti. `build.bat gpu`, `Katib.spec` ve `Katib.iss`
+değişti (ayrıntı: Faz 2 kutuları). Uygulama kodu değişmedi: `core/gpu.py` paketlenmiş uygulamada
+`_internal\nvidia\*\bin`'e zaten bakıyordu. ⚠️ Plandan sapma: kurulum betiğine eski program
+dosyalarını toptan silen bir satır eklemek düşünüldü (GPU paketinden normal pakete geçişte cuBLAS
+kalmasın diye) ama `tests/test_installer.py` klasör silmeyi bilinçli yasaklıyor (ADR-0014);
+geride kalan cuBLAS zararsız (GPU çalışmaya devam eder), satır eklenmedi. Yalnız plan 0015'in
+bilinen kalıntısı `_internal\icu*.dll` dosya adıyla siliniyor. Windows'ta derleme ve gerçek
+NVIDIA kartta deneme bu konteynerde yapılamaz (Faz 2 son iki kutu).

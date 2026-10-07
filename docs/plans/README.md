@@ -4,7 +4,7 @@
 > her plan kendi kendine yeten bir devir belgesidir. Bir sayıya ya da karara
 > ihtiyacın varsa planı aç, buradan alıntılama.
 
-**Son güncelleme:** 2026-10-07 · **14 plan, 4 kapalı, 10 açık.** (0006–0008 hız/doğruluk incelemesinden, 0009 ADR-0010'dan, 0010 ADR-0012'den, 0011 ADR-0014'ten, 0012–0014 2026-10-06 hız incelemesinden açıldı.)
+**Son güncelleme:** 2026-10-07 · **15 plan, 4 kapalı, 11 açık.** (0006–0008 hız/doğruluk incelemesinden, 0009 ADR-0010'dan, 0010 ADR-0012'den, 0011 ADR-0014'ten, 0012–0014 2026-10-06 hız incelemesinden açıldı.)
 
 ⚠️ Bu tablo elle tutuluyor ve bayatlayabilir. Şüphelendiğinde depodan doğrula:
 
@@ -38,7 +38,7 @@ planı açık gösterebilir; `katla()` bunun içindir.
 | [0007](0007-sessizlik-katmanlarini-sadelestirme.md) | Sessizlik katmanlarını sadeleştirme (önce ölç) | ⏸️ Faz 1a ✅, kayıt bekliyor | Faz 1b: kullanıcının kayıtları |
 | [0005](0005-ses-islerinin-ui-thread-olcumu.md) | Ses işlerinin UI thread'de çalışması | ⏸️ Veri bekliyor | Kullanıcının Windows ölçümü |
 | [0008](0008-model-yuklenince-isinma.md) | Model yüklenince ısınma transkripsiyonu | ⏸️ Faz 1 ✅, doğrulama bekliyor | Faz 2: kullanıcının Windows log'u |
-| [0009](0009-gpu-destegi.md) | GPU desteği (isteğe bağlı hızlandırma) | ⏸️ Faz 1 ✅, karar bekliyor | Faz 2–3: kullanıcı kararı (dağıtım, ayar ekranı) |
+| [0009](0009-gpu-destegi.md) | GPU desteği (isteğe bağlı hızlandırma) | ⏸️ Faz 1 ✅, Faz 2 kodu ✅ (iki paket), doğrulama bekliyor | Faz 2: `build.bat gpu` + NVIDIA kartta deneme |
 | [0010](0010-tek-pencereli-arayuz.md) | Tek pencereli arayüz (dashboard'un kaldırılması) | ⏸️ Faz 1–3 ✅, doğrulama bekliyor | Faz 4: kullanıcının gerçek uygulamada denemesi |
 | [0012](0012-cozumleme-ayarlari-ve-gecikme-olcumu.md) | Çözümleme ayarları ve uçtan uca gecikme ölçümü | 🟠 ⏸️ Faz 1–2, 5 ✅, ölçüm bekliyor | Faz 3: kullanıcının ölçümü → Faz 4 |
 | [0013](0013-large-v3-turbo-modeli.md) | `large-v3-turbo` modeli | 🟠 ⏸️ Karar bekliyor | Model kaynağı ve listedeki yer: kullanıcı kararı |
