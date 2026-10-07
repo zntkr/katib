@@ -4,7 +4,7 @@
 > günlüğü"ne bir satır ekle.
 > Göreve yeni başlayan ajan: önce [Devralma notu](#devralma-notu) bölümünü oku.
 
-**Durum:** ⏸️ **DOĞRULAMA BEKLİYOR** — Faz 1 bitti (2026-10-07); Faz 2 Windows'ta derleme ister.
+**Durum:** ⏸️ **DOĞRULAMA BEKLİYOR** — Faz 1 bitti; Faz 2'nin derleme kısmı doğrulandı (2026-10-07). Tam açılış ve kurulum sonrası deneme bekleniyor.
 **Kullanıcı verisi değişikliği:** YOK
 **Öncelik:** 🔴 Yüksek — böyle derlenen paket hiç açılmıyor (kurulumdan sonra ilk satırda düşüyor).
 **Tarih:** 2026-10-07
@@ -83,11 +83,11 @@ Start-Process dist\Katib\Katib.exe                               # açılmalı
       önce; spec'in kendi `_is_icu()`'su ICU adlarını tanıyor, diğerlerini tanımıyor; iki filtre de kullanıyor.
 
 ### Faz 2 — Windows'ta derleme ve açılış (kullanıcı ya da Windows'ta çalışan ajan)
-- [ ] Bu daldan `build.bat`; `dist\Katib\_internal` içinde `icu*.dll` yok.
+- [x] Bu daldan `build.bat`; `dist\Katib\_internal` içinde `icu*.dll` yok.
 - [ ] `dist\Katib\Katib.exe` açılıyor; kurulum (`installer\`) sonrası da açılıyor.
-- [ ] Derleme çıktısında PyInstaller'ın "not found" uyarıları önceki derlemeyle karşılaştırılır:
+- [x] Derleme çıktısında PyInstaller'ın "not found" uyarıları önceki derlemeyle karşılaştırılır:
       PATH temizliği gerçekten gereken bir DLL'i dışarıda bırakmamalı.
-- [ ] ⚠️ PATH'te UPX varsa artık kullanılmaz (`upx=True` yalnız UPX bulunursa çalışır); paket
+- [x] ⚠️ PATH'te UPX varsa artık kullanılmaz (`upx=True` yalnız UPX bulunursa çalışır); paket
       biraz büyüyebilir. Bilinçli kabul: UPX Qt DLL'lerini bozabildiği biliniyor.
 
 ---
@@ -117,3 +117,16 @@ Faz 1: 1 sa · Faz 2: derleme + 15 dk deneme
 
 Teşhis ve kanıtlar yukarıda. Faz 1 testleri: değişiklik geri alınınca 5 testin 5'i kırmızı.
 Faz 2 bu konteynerde yapılamaz (Windows exe derlenemiyor).
+
+### 2026-10-07 — Faz 2: derleme doğrulandı (Codex, Windows; proje sahibinin aktarımı)
+
+`abcec1a` (bu dalın Faz 1 commit'i) `build.bat` ile derlendi:
+- 708 test geçti.
+- Pakette `icu*.dll` yok.
+- Gerçek `Katib.exe` QtWidgets hatasını geçti. Tam açılış denenemedi: makinede açık bir Katib
+  olduğu için tek örnek kilidi yeni süreci normal biçimde kapattı.
+- Yeni "DLL not found" uyarısı yok; eksik Python modülü listesi değişmedi.
+- UPX kurulu değil (davranış değişmedi). Kurulum paketi 102,07 MB → 91,76 MB: sızan ICU
+  dosyaları (veri dosyası `icudt78.dll` dahil) artık pakette değil.
+
+**Kalan:** açık Katib kapatılıp `dist\Katib\Katib.exe`'nin tam açılışı; kurulum paketiyle kurup açılış.
