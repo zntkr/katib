@@ -124,6 +124,7 @@ build.bat                      # ortamı kurar/eşitler, PyInstaller ve Inno Set
 
 - Bağımlılıklar sabittir: doğrudan olanlar `requirements*.txt` içinde `==` ile, çektikleri her paket `constraints.txt` içinde. Sürüm değiştirirken ikisi birlikte güncellenir (adımlar: ADR-0011 → Sonuçlar).
 - GPU ile denemek için ayrıca: `.venv\Scripts\python -m pip install -r requirements-gpu.txt` (ADR-0010).
+- `build.bat` PyInstaller'ı yalnız Windows klasörleri PATH'teyken çalıştırır ve `Katib.spec` hiçbir `icu*.dll`'i pakete almaz: derleyen bilgisayardaki araçların DLL'leri (ör. Poppler'ın ICU'su) pakete sızınca Qt açılışta düştü. Qt, Windows'un kendi ICU'sunu kullanır (plan 0015).
 - Derlemenin istediği her dosya depoda olmalıdır (`hooks/`, `Katib.iss`). `.gitignore`'a bir şey eklemeden önce `Katib.spec` ve `build.bat`'ın onu isteyip istemediğine bak.
 
 ## Geliştirici Notları

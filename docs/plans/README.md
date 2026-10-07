@@ -32,6 +32,7 @@ planı açık gösterebilir; `katla()` bunun içindir.
 
 | Plan | Konu | Öncelik | Bağımlılık |
 |---|---|---|---|
+| [0015](0015-paketleme-dll-sizintisi.md) | Paketlemeye dışarıdan DLL sızıntısı (Qt açılışta düşüyor) | 🔴 ⏸️ Faz 1 ✅, doğrulama bekliyor | Faz 2: Windows'ta derleme + açılış |
 | [0011](0011-kurulum-konumu-ve-tasima.md) | Kurulum konumu (kaldırıcı kullanıcı verisini siliyordu) | 🔴 ⏸️ Faz 1 ✅, doğrulama bekliyor | Faz 2: kullanıcının kendi makinesinde yükseltme |
 | [0006](0006-kayit-baslangici-gecikmesi.md) | Kayıt başlangıcı: gecikme ve kesilen ilk hece | 🔄 3/4 faz | Faz 4: Windows ölçümü + kullanıcı kararı |
 | [0007](0007-sessizlik-katmanlarini-sadelestirme.md) | Sessizlik katmanlarını sadeleştirme (önce ölç) | ⏸️ Faz 1a ✅, kayıt bekliyor | Faz 1b: kullanıcının kayıtları |

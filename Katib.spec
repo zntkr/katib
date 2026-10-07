@@ -49,6 +49,15 @@ _gpu_keywords = [
     'nvidia_', 'nvinfer', 'nvonnx', 'nvpars',
 ]
 
+# --- ICU pakete girmez: Qt, Windows'un kendi ICU'sunu kullanır (System32\icuuc.dll, Windows 10 1703+).
+# Derleyen bilgisayardaki başka bir ICU (Poppler, Conda…) pakete girerse Qt açılışta
+# "Belirtilen yordam bulunamadı" ile düşer: o kopyalar fonksiyonları sürüm ekiyle verir
+# (ucnv_open yerine ucnv_open_78) ve paketin kök klasörü DLL aramasında System32'den önce gelir.
+# build.bat PATH'i temizleyerek sızıntıyı kaynağında keser; bu, ikinci güvence (plan 0015).
+def _is_icu(path):
+    name = pathlib.PurePath(str(path).replace('\\', '/')).name.lower()
+    return name.startswith('icu') and name.endswith('.dll')
+
 # --- Gereksiz Binary'leri Kaldır ---
 # opengl32sw: software OpenGL rasterizer — Katib 3D/OpenGL kullanmıyor
 # Qt6Quick / Qt6Pdf / Qt6Qml: exclude listesinde ama DLL olarak sızdı
@@ -65,6 +74,8 @@ for b_dest, b_src in binaries:
     if any(k in name_lower for k in _gpu_keywords):
         continue
     if any(k in name_lower for k in _exclude_binaries):
+        continue
+    if _is_icu(b_dest) or _is_icu(b_src):
         continue
     filtered_binaries.append((b_dest, b_src))
 binaries = filtered_binaries
@@ -154,7 +165,7 @@ _post_exclude = [
 
 def _should_exclude(name):
     n = name.lower().replace('\\', '/').replace('-', '_')
-    return any(k in n for k in _post_exclude)
+    return any(k in n for k in _post_exclude) or _is_icu(name)
 
 a.binaries = TOC([b for b in a.binaries if not _should_exclude(b[0])])
 a.datas    = TOC([d for d in a.datas    if not _should_exclude(d[0])])
