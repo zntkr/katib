@@ -29,6 +29,11 @@ echo [OK] Sanal ortam hazir.
 
 echo.
 echo [2/3] PyInstaller ile uygulama paketleniyor...
+:: PyInstaller, paketledigi DLL'lerin bagimliliklarini PATH'teki klasorlerde de arar ve buldugunu
+:: pakete koyar: Poppler, Git, Conda gibi araclarin DLL'leri boyle sizar (plan 0015: Poppler'in
+:: ICU 78'i Qt'yi acilista dusurdu). Paketleme yalniz Windows klasorlerini gorur; .venv'in
+:: Python'u tam yoluyla cagrildigi icin PATH'e gerek yok. setlocal sayesinde PATH betik bitince doner.
+set "PATH=%SystemRoot%\System32;%SystemRoot%;%SystemRoot%\System32\Wbem"
 %VENV_PY% -m PyInstaller Katib.spec --clean -y
 if %ERRORLEVEL% NEQ 0 (
     echo [HATA] PyInstaller paketlemesi basarisiz oldu!
