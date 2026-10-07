@@ -39,7 +39,7 @@ planı açık gösterebilir; `katla()` bunun içindir.
 | [0008](0008-model-yuklenince-isinma.md) | Model yüklenince ısınma transkripsiyonu | ⏸️ Faz 1 ✅, doğrulama bekliyor | Faz 2: kullanıcının Windows log'u |
 | [0009](0009-gpu-destegi.md) | GPU desteği (isteğe bağlı hızlandırma) | ⏸️ Faz 1 ✅, karar bekliyor | Faz 2–3: kullanıcı kararı (dağıtım, ayar ekranı) |
 | [0010](0010-tek-pencereli-arayuz.md) | Tek pencereli arayüz (dashboard'un kaldırılması) | ⏸️ Faz 1–3 ✅, doğrulama bekliyor | Faz 4: kullanıcının gerçek uygulamada denemesi |
-| [0012](0012-cozumleme-ayarlari-ve-gecikme-olcumu.md) | Çözümleme ayarları ve uçtan uca gecikme ölçümü | 🟠 ⏸️ Faz 1–2 ✅, ölçüm bekliyor | Faz 3: kullanıcının ölçümü; Faz 5 ayrıca onay |
+| [0012](0012-cozumleme-ayarlari-ve-gecikme-olcumu.md) | Çözümleme ayarları ve uçtan uca gecikme ölçümü | 🟠 ⏸️ Faz 1–2, 5 ✅, ölçüm bekliyor | Faz 3: kullanıcının ölçümü → Faz 4 |
 | [0013](0013-large-v3-turbo-modeli.md) | `large-v3-turbo` modeli | 🟠 ⏸️ Karar bekliyor | Model kaynağı ve listedeki yer: kullanıcı kararı |
 | [0014](0014-uzun-diktelerde-arka-planda-cozumleme.md) | Uzun diktelerde arka planda çözümleme | 🟠 ⏸️ Faz 1 (kod) ✅, ölçüm bekliyor | `olcum.py --parcali` ölçümü + kullanıcı kararı; Faz 2 için 🛑 0012 Faz 4 |
 

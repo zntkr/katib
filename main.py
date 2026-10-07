@@ -185,13 +185,17 @@ def main():
     # The Fusion style can override CSS colors; we leave it disabled.
 
     from ui.theme import theme_manager
-    from core.settings import SettingsManager, DEFAULT_DOWNLOAD_PARENT, migrate_legacy_data
+    from core.settings import SettingsManager, DEFAULT_DOWNLOAD_PARENT, migrate_legacy_data, first_run_speech_settings
     from core.models import ModelProvider
 
     migrate_legacy_data()  # must run before SettingsManager reads settings.json
     settings_manager = SettingsManager()
     model_provider = ModelProvider(base_download_dir=DEFAULT_DOWNLOAD_PARENT, active_model_path=settings_manager.get("model_dir"))
-    from core.i18n import set_language as _i18n_set_language, t as _t, available_languages, resolve_app_language
+    from core.i18n import (set_language as _i18n_set_language, t as _t, available_languages,
+                           resolve_app_language, system_language_code)
+    if settings_manager.first_run:
+        # A new install starts in the computer's language; existing users keep theirs.
+        settings_manager.set_many(first_run_speech_settings(system_language_code()))
     _saved_lang = settings_manager.get("app_language") or ""
     _lang = resolve_app_language(_saved_lang, {code for _, code in available_languages()})
     if _lang != _saved_lang:

@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 from unittest.mock import patch
 import pytest
-from core.settings import SettingsManager, get_settings_path
+from core.settings import SettingsManager, first_run_speech_settings, get_settings_path, DEFAULT_PROMPTS
 
 # shared fixture: get_settings_path → tmp_path
 
@@ -166,3 +166,37 @@ class TestSetMany:
             sm.set_many({"hotkey": "f10", "compute_type": "float32"})
         mock_path.assert_not_called()
         assert sm.get("hotkey") == "f10"
+
+
+class TestFirstRunSpeechLanguage:
+    """Plan 0012 Faz 5: a new install starts in the computer's language, not detection."""
+
+    def test_a_listed_computer_language_is_used_with_its_stock_prompt(self):
+        assert first_run_speech_settings("tr") == {"language": "tr", "initial_prompt": DEFAULT_PROMPTS["tr"]}
+        assert first_run_speech_settings("en")["language"] == "en"
+
+    def test_an_unlisted_language_falls_back_to_detection_not_english(self):
+        assert first_run_speech_settings("nl") == {"language": "auto", "initial_prompt": ""}
+
+    def test_an_unknown_computer_language_falls_back_to_detection(self):
+        assert first_run_speech_settings("")["language"] == "auto"
+
+    def test_every_listed_speech_language_has_a_stock_prompt(self):
+        from core.settings import SPEECH_LANGUAGES
+        assert {code for _, code in SPEECH_LANGUAGES if code != "auto"} == set(DEFAULT_PROMPTS)
+
+    def test_no_settings_file_is_a_first_run(self, settings_file):
+        assert SettingsManager().first_run is True
+
+    def test_an_existing_settings_file_is_not(self, settings_file):
+        settings_file.write_text("{}", encoding="utf-8")  # an existing user, even one on all defaults
+        assert SettingsManager().first_run is False
+
+    def test_in_memory_is_never_a_first_run(self):
+        assert SettingsManager(in_memory=True).first_run is False
+
+    def test_the_first_run_language_is_stored(self, settings_file):
+        sm = SettingsManager()
+        sm.set_many(first_run_speech_settings("tr"))
+        assert json.loads(settings_file.read_text(encoding="utf-8"))["language"] == "tr"
+        assert SettingsManager().get("initial_prompt") == DEFAULT_PROMPTS["tr"]

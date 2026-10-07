@@ -16,7 +16,7 @@ from core.i18n import t, available_languages
 from core.log import get_logger, OK
 from core.settings import (
     APP_NAME, WHISPER_MODELS, DEFAULTS, DEFAULT_DOWNLOAD_PARENT,
-    INJECTION_METHODS, SPEECH_LANGUAGES, get_log_dir,
+    INJECTION_METHODS, SPEECH_LANGUAGES, DEFAULT_PROMPTS, get_log_dir,
 )
 from ui.components import NoScrollComboBox, DynamicIconButton
 from ui.icons import ICN_DOWNLOAD, ICN_TICK
@@ -38,25 +38,6 @@ _LOG_LABEL = {"...": "INFO"}
 _BROWSE = "browse_custom"   # the "Browse..." action row
 _CUSTOM = "custom:"         # prefix of a folder the user picked: "custom:<path>"
 
-_DEFAULT_PROMPTS: dict[str, str] = {
-    "ar": "مرحباً. أقوم اليوم بتدوين ملاحظاتي بالصوت.",
-    "de": "Hallo. Ich diktiere heute meine Notizen per Sprache.",
-    "el": "Γεια σας. Σήμερα υπαγορεύω τις σημειώσεις μου φωνητικά.",
-    "en": "Hello. I'm dictating my notes using voice today.",
-    "es": "Hola. Hoy estoy dictando mis notas por voz.",
-    "fa": "سلام. امروز یادداشت‌های خود را به صورت صوتی دیکته می‌کنم.",
-    "fr": "Bonjour. Je dicte mes notes à voix haute aujourd'hui.",
-    "hi": "नमस्ते। आज मैं अपने नोट्स आवाज़ से बोल रहा हूँ।",
-    "id": "Halo. Hari ini saya mendiktekan catatan saya secara lisan.",
-    "it": "Ciao. Oggi sto dettando le mie note a voce.",
-    "ja": "こんにちは。今日は音声でメモを書き取っています。",
-    "ko": "안녕하세요. 오늘 음성으로 메모를 받아쓰고 있습니다.",
-    "pt": "Olá. Hoje estou ditando minhas anotações por voz.",
-    "ru": "Привет. Сегодня я диктую свои заметки голосом.",
-    "tr": "Merhaba. Bugün notlarımı sesli olarak dikte ediyorum.",
-    "ur": "السلام علیکم۔ آج میں اپنے نوٹس آواز سے لکھوا رہا ہوں۔",
-    "zh": "你好。今天我正在用语音记录我的笔记。",
-}
 
 
 class SettingsWindow(QWidget):
@@ -678,7 +659,7 @@ class SettingsWindow(QWidget):
             prompt = ""
         else:
             saved = (self.settings.get("initial_prompts") or {}).get(language)
-            prompt = saved if saved is not None else _DEFAULT_PROMPTS.get(language, "")
+            prompt = saved if saved is not None else DEFAULT_PROMPTS.get(language, "")
         self.prompt_edit.blockSignals(True)
         self.prompt_edit.setPlainText(prompt)
         self.prompt_edit.blockSignals(False)

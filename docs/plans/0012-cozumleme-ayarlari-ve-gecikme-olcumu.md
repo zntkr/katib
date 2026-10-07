@@ -4,9 +4,10 @@
 > günlüğü"ne bir satır ekle.
 > Göreve yeni başlayan ajan: önce [Devralma notu](#devralma-notu) bölümünü oku.
 
-**Durum:** ⏸️ **VERİ BEKLİYOR** — Faz 1–2 bitti (2026-10-06); Faz 3 kullanıcının ölçümünü bekler.
-**Kullanıcı verisi değişikliği:** YOK — Faz 1–4 ve 6. **Faz 5 VAR** (konuşma dili
-varsayılanı; açık onay ve gerekiyorsa taşıma kodu, CONTEXT.md → Mimari Kurallar #8).
+**Durum:** ⏸️ **VERİ BEKLİYOR** — Faz 1–2 (2026-10-06) ve Faz 5 (2026-10-07) bitti; Faz 3 kullanıcının ölçümünü bekler.
+**Kullanıcı verisi değişikliği:** YOK — Faz 1–4 ve 6. **Faz 5 VAR** (yeni kurulumda ilk
+`language` / `initial_prompt` değeri yazılır; mevcut kullanıcılar ve `DEFAULTS` değişmez, taşıma
+gerekmez). Proje sahibi açıkça onayladı (2026-10-07; CONTEXT.md → Mimari Kurallar #8).
 **Öncelik:** 🟠 Orta-yüksek — dikte süresinin neredeyse tamamı Whisper çağrısında;
 buradaki ayarlar kod değişikliği olarak en ucuz, etkisi en büyük kalemler.
 **Tarih:** 2026-10-06
@@ -124,7 +125,14 @@ python scripts\olcum.py --dil tr --beam 1 --zaman-damgasiz --sicaklik 0   # §5
 
 ## Faz 5 — Konuşma dili varsayılanı (kullanıcı kararı)
 
-⏸️ **Faz 3 ölçümü ve proje sahibinin onayı olmadan başlanmaz.**
+✅ **Karar (proje sahibi, 2026-10-07):** ölçüm beklenmeden **B'nin bir türevi** — yalnız
+**yeni kurulumda** (açılışta `settings.json` yoksa) konuşma dili bilgisayarın diline ayarlanır;
+listede yoksa **otomatik algılama** (İngilizce değil: Felemenkçe konuşan birini İngilizceye
+zorlamak metni bozar, algılama Felemenkçe yazar). Dilin hazır prompt'u da birlikte yazılır,
+kullanıcı ayar penceresinden seçmiş gibi. **Mevcut kullanıcılar etkilenmez:** `DEFAULTS`
+değişmedi (`auto`), taşıma kodu gerekmedi. Gerekçe: dil sabitlemenin hız kazancı kaynak
+okumasıyla kesin (tarama §2, ikinci kodlayıcı geçişi), kısa kayıtta yanlış dil riski bilinen
+bir sorun; ölçüm yalnız kazancın büyüklüğünü söyler.
 
 Seçenekler:
 - **A — `auto` kalır.** Faz 3 dil sabitlemenin kazancını küçük gösterirse.
@@ -253,3 +261,27 @@ kendi değişikliklerim gözden geçirildi:
   `tests/test_olcum.py::TestMain` artık gerçek `SettingsManager`'ı (bellekte) kullanıyor.
 - Testler: `test_the_device_follows_the_apps_compute_device_setting` (eski varsayılanla
   kırmızı), `test_cihaz_overrides_the_setting`, `test_dil_auto_on_the_command_line_means_detection`.
+
+### 2026-10-07 — Faz 5 uygulandı
+
+- `core/settings.py::first_run_speech_settings(system_code)` → `{"language", "initial_prompt"}`:
+  bilgisayarın dili `SPEECH_LANGUAGES`'ta varsa o dil ve hazır prompt'u, yoksa `auto` ve boş prompt.
+- `SettingsManager.first_run`: yüklemede `settings.json` yoksa `True` (bellekte kullanımda hep `False`).
+  Yalnız tüm ayarları varsayılan olan eski bir kullanıcının da dosyası vardır (açılışta
+  `app_language` yazılıyor) → yanlışlıkla "yeni kurulum" sayılmaz.
+- `main.py`: `migrate_legacy_data()` ve `SettingsManager()` sonrasında, `app_language` yazılmadan
+  önce tek çağrı: `settings_manager.set_many(first_run_speech_settings(system_language_code()))`.
+  Bilgisayarın dili arayüz dilinin kullandığı fonksiyonla okunuyor (`core/i18n.system_language_code`).
+- Hazır prompt tablosu `ui/settings_window.py::_DEFAULT_PROMPTS` → `core/settings.py::DEFAULT_PROMPTS`
+  (veri; çekirdek de kullanıyor). ⚠️ Plandan sapma / bulgu: ayar penceresi ayarları widget'lara
+  kurucuda değil `show()`'da işliyor; ilk denemede yalnız dili yazmak, model önceden kurulmuş
+  (pencere açılmayan) kurulumda dili prompt'suz bırakırdı. Bu yüzden prompt da birlikte yazılıyor.
+
+**Testler:** `tests/test_config.py::TestFirstRunSpeechLanguage` (8: listede olan / olmayan /
+bilinmeyen dil, her listelenen dilin hazır prompt'u var, `first_run` dosya yok / var / bellekte,
+yazılan değer kalıcı), `tests/test_settings_window.py::TestSpeechLanguageAndPrompt::test_the_first_run_language_and_prompt_are_what_the_window_shows`.
+Tam takım Linux'ta 752 geçti, 7 kırmızı (önceden de kırmızı olan Windows'a özgü testler).
+
+⚠️ **Not (düzeltilmedi, kapsam dışı):** `core/i18n.system_language_code()` `locale.getdefaultlocale()`
+kullanıyor; Python 3.11'den beri kullanımdan kalkmış, 3.15'te kaldırılması planlanıyor. Proje 3.14'e
+sabit (`.python-version`); 3.15'e geçerken bu fonksiyon değişmeli (arayüz dili de aynı fonksiyonu kullanıyor).
