@@ -8,7 +8,7 @@
 ; the files Setup installed.
 
 #define AppName      "Katib"
-#define AppVersion   "1.0.0"
+#define AppVersion   "1.1.0"
 #define AppPublisher "zntkr"
 #define AppExeName   "Katib.exe"
 #define BuildDir     "dist\Katib"
