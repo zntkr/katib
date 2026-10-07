@@ -25,6 +25,12 @@ Kullanım (proje kökünden):
     python scripts/olcum.py --min-sure 0.2 --no-seviye --no-vad   # katmanları kapatıp karşılaştır
     python scripts/olcum.py --dil tr --beam 1 --zaman-damgasiz --sicaklik 0 --tekrar 3
     python scripts/olcum.py --cihaz cuda                          # GPU (plan 0009)
+    python scripts/olcum.py --parcali                             # uzun dikte: parça parça (plan 0014)
+
+--parcali: konuşmalı her kaydı, uygulama tuş basılıyken ~3 sn'de bir yeni ses
+alıyormuş gibi besler; core.segmenter bir duraklamada kesim bulursa o parça
+"arka planda" çözümlenir, bırakışta yalnız kalan çözümlenir. Rapor bütün ve
+parçalı çözümlemenin WER'ini ve bırakıştan sonraki Whisper süresini yan yana verir.
 """
 from __future__ import annotations
 
@@ -43,6 +49,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from core.audio_analysis import analyse_vad, is_silent  # noqa: E402
+from core.segmenter import MIN_PAUSE_SECONDS, MIN_SEGMENT_SECONDS, context_prompt, find_cut  # noqa: E402
 from core.transcription_filter import TranscriptionFilter  # noqa: E402
 from workers.audio_worker import MIN_RECORDING_DURATION, SAMPLE_RATE, _resample  # noqa: E402
 from workers.transcription_worker import TRANSCRIBE_OPTIONS, warm_up  # noqa: E402
@@ -52,6 +59,7 @@ CHUNK = 1024
 KATMANLAR = ("sure", "seviye", "whisper_bos", "filtre")
 # Recording-length buckets (seconds): long dictations are what most users make (plan 0012).
 SURE_ARALIKLARI = ((0, 5, "< 5 sn"), (5, 15, "5–15 sn"), (15, 30, "15–30 sn"), (30, float("inf"), "> 30 sn"))
+PARCA_ADIMI_SN = 3.0  # how often the app would hand the worker new audio while the key is held (plan 0014)
 
 
 @dataclass
@@ -126,6 +134,18 @@ def cozumleme(ayarlar: Ayarlar) -> dict:
     return options
 
 
+def _cozumle(model, audio: np.ndarray, ayarlar: Ayarlar, prompt: str) -> tuple[str, float]:
+    """One Whisper call as the app makes it, run Ayarlar.tekrar times → (text, median ms)."""
+    options = cozumleme(ayarlar)
+    sureler = []
+    for _ in range(max(1, ayarlar.tekrar)):
+        start = time.perf_counter()
+        segments, _ = model.transcribe(audio, language=ayarlar.dil, initial_prompt=prompt, **options)
+        text = " ".join(seg.text for seg in segments).strip()  # decoding is lazy: time includes it
+        sureler.append((time.perf_counter() - start) * 1000.0)
+    return text, float(np.median(sureler))
+
+
 def degerlendir(audio: np.ndarray, model, ayarlar: Ayarlar,
                 filtre: TranscriptionFilter | None = None) -> tuple[str | None, str, float | None]:
     """The app's decision chain for one recording → (elendiği katman | None, metin, whisper ms)."""
@@ -137,14 +157,7 @@ def degerlendir(audio: np.ndarray, model, ayarlar: Ayarlar,
     if ayarlar.seviye and is_silent(analyse_vad(rms, CHUNK / SAMPLE_RATE), silence_db=ayarlar.silence_db):
         return "seviye", "", None
 
-    options = cozumleme(ayarlar)
-    sureler = []
-    for _ in range(max(1, ayarlar.tekrar)):
-        start = time.perf_counter()
-        segments, _ = model.transcribe(audio, language=ayarlar.dil, initial_prompt=ayarlar.prompt, **options)
-        text = " ".join(seg.text for seg in segments).strip()  # decoding is lazy: time includes it
-        sureler.append((time.perf_counter() - start) * 1000.0)
-    elapsed_ms = float(np.median(sureler))
+    text, elapsed_ms = _cozumle(model, audio, ayarlar, ayarlar.prompt)
     if not text:
         return "whisper_bos", "", elapsed_ms
     if (filtre or TranscriptionFilter()).clean(text, duration=duration) is None:
@@ -212,6 +225,102 @@ def sure_ozeti(sonuclar: list[Sonuc]) -> list[str]:
     return satirlar
 
 
+# ------------------------------------------------------------------ --parcali (plan 0014)
+
+@dataclass
+class ParcaliSonuc:
+    dosya: str
+    sure_sn: float
+    parca: int                  # pieces cut off while the key was "held"
+    wer_butun: float
+    wer_parcali: float
+    butun_ms: float             # today: the whole recording is decoded after release
+    kalan_ms: float             # with pieces: only what is left is decoded after release
+    yetisme: float              # slowest piece: decode time / piece length; < 1 keeps up with speech
+    metin_butun: str
+    metin_parcali: str
+
+
+def _vad_kesici(audio: np.ndarray) -> int | None:
+    return find_cut(audio, threshold=TRANSCRIBE_OPTIONS["vad_parameters"]["threshold"])
+
+
+def parcali_cozumle(audio: np.ndarray, model, ayarlar: Ayarlar, kesici=None,
+                    adim_sn: float = PARCA_ADIMI_SN) -> tuple[str, int, float, float]:
+    """Plays the recording in as if it were being spoken → (text, pieces, ms left after
+    release, slowest piece's decode time / its length)."""
+    kesici = kesici or _vad_kesici
+    adim = int(adim_sn * SAMPLE_RATE)
+    islenen, metinler, oranlar = 0, [], []
+    for alinan in range(adim, len(audio), adim):   # key still held: new audio every step
+        kesim = kesici(audio[islenen:alinan])
+        if kesim is None:
+            continue
+        metin, ms = _cozumle(model, audio[islenen:islenen + kesim], ayarlar,
+                             context_prompt(ayarlar.prompt, " ".join(metinler)))
+        if metin:
+            metinler.append(metin)
+        oranlar.append(ms / (kesim / SAMPLE_RATE * 1000.0))
+        islenen += kesim
+    metin, kalan_ms = _cozumle(model, audio[islenen:], ayarlar, context_prompt(ayarlar.prompt, " ".join(metinler)))
+    if metin:
+        metinler.append(metin)
+    return " ".join(metinler), len(oranlar), kalan_ms, max(oranlar, default=0.0)
+
+
+def parcali_olc(klasor: Path, model, ayarlar: Ayarlar, kesici=None) -> tuple[list[ParcaliSonuc], int]:
+    """Whole vs piece-wise decoding of every spoken recording long enough to be cut.
+    → (results, recordings skipped as too short)."""
+    en_kisa = MIN_SEGMENT_SECONDS + MIN_PAUSE_SECONDS
+    sonuclar, kisa = [], 0
+    for wav in sorted(Path(klasor).glob("*.wav")):
+        txt = wav.with_suffix(".txt")
+        beklenen = txt.read_text(encoding="utf-8").strip() if txt.exists() else ""
+        if not beklenen:
+            continue  # pieces only matter for speech
+        audio = wav_oku(wav)
+        sure = len(audio) / SAMPLE_RATE
+        if sure < en_kisa:
+            kisa += 1
+            continue
+        butun, butun_ms = _cozumle(model, audio, ayarlar, ayarlar.prompt)
+        parcali, parca, kalan_ms, yetisme = parcali_cozumle(audio, model, ayarlar, kesici)
+        sonuclar.append(ParcaliSonuc(wav.name, sure, parca, kelime_hata_orani(beklenen, butun),
+                                     kelime_hata_orani(beklenen, parcali), butun_ms, kalan_ms,
+                                     yetisme, butun, parcali))
+    return sonuclar, kisa
+
+
+def parcali_rapor(sonuclar: list[ParcaliSonuc], kisa: int = 0, metin_goster: bool = False) -> str:
+    satirlar = [f"{'dosya':28} {'sn':>5} {'parça':>5} {'WER bütün':>9} {'WER parçalı':>11} "
+                f"{'bütün ms':>8} {'kalan ms':>8} {'yetişme':>7}"]
+    for s in sonuclar:
+        satirlar.append(f"{s.dosya:28} {s.sure_sn:5.1f} {s.parca:5d} {s.wer_butun:9.0%} {s.wer_parcali:11.0%} "
+                        f"{s.butun_ms:8.0f} {s.kalan_ms:8.0f} {s.yetisme:7.2f}")
+        if metin_goster:
+            satirlar.append(f"    bütün:   {s.metin_butun!r}")
+            satirlar.append(f"    parçalı: {s.metin_parcali!r}")
+    satirlar.append("")
+    if kisa:
+        satirlar.append(f"{kisa} konuşmalı kayıt {MIN_SEGMENT_SECONDS + MIN_PAUSE_SECONDS:.1f} sn'den kısa: "
+                        "kesilemez, bugünkü yoldan geçer (rapora girmedi)")
+    if not sonuclar:
+        return "\n".join(satirlar + ["Parçalanacak uzunlukta konuşmalı kayıt yok."])
+    parcalanan = [s for s in sonuclar if s.parca]
+    satirlar += [
+        f"Kayıt: {len(sonuclar)} · en az bir parçası arka planda çözümlenen: {len(parcalanan)}",
+        f"Ortalama WER: bütün {np.mean([s.wer_butun for s in sonuclar]):.1%} · "
+        f"parçalı {np.mean([s.wer_parcali for s in sonuclar]):.1%}",
+        f"Bırakıştan sonra Whisper: bütün {_medyan_p90([s.butun_ms for s in sonuclar])}",
+        f"                          parçalı {_medyan_p90([s.kalan_ms for s in sonuclar])}",
+    ]
+    if parcalanan:
+        en_kotu = max(s.yetisme for s in parcalanan)
+        durum = "konuşmaya yetişiyor" if en_kotu < 1 else "YETİŞMİYOR: parçalar konuşmadan yavaş çözümleniyor"
+        satirlar.append(f"En yavaş parça: çözümleme / parça süresi = {en_kotu:.2f} ({durum})")
+    return "\n".join(satirlar)
+
+
 def model_ac(model_dir: str, cihaz: str, compute_type: str | None, threads: int, cpu_compute_type: str):
     """Opens the model the way the app would: "auto" takes the GPU when core.gpu says it is
     usable (which also puts the CUDA libraries on the search path). → (model, device, compute type)."""
@@ -256,6 +365,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--zaman-damgasiz", action="store_true", help="without_timestamps=True")
     p.add_argument("--sicaklik", type=_sicaklik, help="ör. 0 ya da 0,0.4 (varsayılan: faster-whisper'ın listesi)")
     p.add_argument("--tekrar", type=int, default=1, help="her kayıt için Whisper koşusu; süre medyandır")
+    p.add_argument("--parcali", action="store_true",
+                   help="uzun konuşmalı kayıtlarda bütün ve parça parça çözümlemeyi karşılaştır (plan 0014)")
     args = p.parse_args(argv)
 
     if not args.klasor.is_dir() or not any(args.klasor.glob("*.wav")):
@@ -280,7 +391,11 @@ def main(argv: list[str] | None = None) -> int:
           f"zaman_damgasız={secenekler.get('without_timestamps', False)} "
           f"sıcaklık={secenekler.get('temperature', 'varsayılan')} vad={ayarlar.vad} tekrar={ayarlar.tekrar}")
     warm_up(model, dil, secenekler)  # the app warms up after loading too (plan 0008)
-    print(rapor(olc(args.klasor, model, ayarlar), metin_goster=args.metin))
+    if args.parcali:
+        sonuclar, kisa = parcali_olc(args.klasor, model, ayarlar)
+        print(parcali_rapor(sonuclar, kisa, metin_goster=args.metin))
+    else:
+        print(rapor(olc(args.klasor, model, ayarlar), metin_goster=args.metin))
     return 0
 
 

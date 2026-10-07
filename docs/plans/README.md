@@ -4,7 +4,7 @@
 > her plan kendi kendine yeten bir devir belgesidir. Bir sayıya ya da karara
 > ihtiyacın varsa planı aç, buradan alıntılama.
 
-**Son güncelleme:** 2026-10-06 · **14 plan, 4 kapalı, 10 açık.** (0006–0008 hız/doğruluk incelemesinden, 0009 ADR-0010'dan, 0010 ADR-0012'den, 0011 ADR-0014'ten, 0012–0014 2026-10-06 hız incelemesinden açıldı.)
+**Son güncelleme:** 2026-10-07 · **14 plan, 4 kapalı, 10 açık.** (0006–0008 hız/doğruluk incelemesinden, 0009 ADR-0010'dan, 0010 ADR-0012'den, 0011 ADR-0014'ten, 0012–0014 2026-10-06 hız incelemesinden açıldı.)
 
 ⚠️ Bu tablo elle tutuluyor ve bayatlayabilir. Şüphelendiğinde depodan doğrula:
 
@@ -41,7 +41,7 @@ planı açık gösterebilir; `katla()` bunun içindir.
 | [0010](0010-tek-pencereli-arayuz.md) | Tek pencereli arayüz (dashboard'un kaldırılması) | ⏸️ Faz 1–3 ✅, doğrulama bekliyor | Faz 4: kullanıcının gerçek uygulamada denemesi |
 | [0012](0012-cozumleme-ayarlari-ve-gecikme-olcumu.md) | Çözümleme ayarları ve uçtan uca gecikme ölçümü | 🟠 ⏸️ Faz 1–2 ✅, ölçüm bekliyor | Faz 3: kullanıcının ölçümü; Faz 5 ayrıca onay |
 | [0013](0013-large-v3-turbo-modeli.md) | `large-v3-turbo` modeli | 🟠 ⏸️ Karar bekliyor | Model kaynağı ve listedeki yer: kullanıcı kararı |
-| [0014](0014-uzun-diktelerde-arka-planda-cozumleme.md) | Uzun diktelerde arka planda çözümleme | 🟠 ⏸️ Veri bekliyor | 🛑 0012 Faz 4; 0012 Faz 3 ölçümü + kullanıcı kararı |
+| [0014](0014-uzun-diktelerde-arka-planda-cozumleme.md) | Uzun diktelerde arka planda çözümleme | 🟠 ⏸️ Faz 1 (kod) ✅, ölçüm bekliyor | `olcum.py --parcali` ölçümü + kullanıcı kararı; Faz 2 için 🛑 0012 Faz 4 |
 
 0001–0004 2026-10-01'de kapandı (aşağıda "Kapalı planlar"). 0006–0008
 `docs/hiz-dogruluk-incelemesi-2026-10-01.md`'nin bulgularıdır; 0009 hedefin

@@ -43,6 +43,7 @@ class AudioSource(ABC):
         
         Args:
             audio_callback: Called with (audio_chunk, status_message) for each incoming block.
+                            audio_chunk is the receiver's own array: the source never reuses it.
             finished_callback: Called when the stream closes. If it closed unexpectedly, 
                                an exception (like AudioDisconnectedError) is passed.
         """

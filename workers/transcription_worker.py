@@ -3,7 +3,7 @@ import queue
 import numpy as np
 from typing import TYPE_CHECKING
 
-_CPU_THREADS = 0  # 0: let CTranslate2 analyse hardware automatically.
+_CPU_THREADS = 0  # 0: CTranslate2's default, 4 threads (faster-whisper docs); plan 0012 Faz 3 measures more.
 
 from PySide6.QtCore import Signal
 

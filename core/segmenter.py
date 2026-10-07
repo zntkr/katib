@@ -1,0 +1,60 @@
+"""Where a long dictation can be cut while it is still being spoken (plan 0014).
+
+A finished stretch of speech can be transcribed in the background while the user keeps
+talking; on key release only the rest is left. A cut goes only into a real pause, and only
+after enough speech that the extra 30 s encoder pass of a separate piece is worth it.
+
+next_cut() is pure (speech chunks in, a sample index out); find_cut() runs Silero VAD on
+the audio first. The worker and scripts/olcum.py use the same functions, so what is
+measured is what runs.
+"""
+import numpy as np
+
+SAMPLE_RATE = 16000
+MIN_SEGMENT_SECONDS = 8.0   # a piece is at least this long before it may be cut off
+MIN_PAUSE_SECONDS = 0.7     # only a pause at least this long is a cut point
+CONTEXT_CHARS = 200         # how much of the text so far the next piece is prompted with
+
+
+def next_cut(speeches: list[dict], length: int, sample_rate: int = SAMPLE_RATE,
+             min_segment_seconds: float = MIN_SEGMENT_SECONDS,
+             min_pause_seconds: float = MIN_PAUSE_SECONDS) -> int | None:
+    """The sample index to cut at: the middle of the first pause of at least
+    min_pause_seconds that starts at least min_segment_seconds into the audio.
+    None when there is no such pause yet.
+
+    speeches: VAD speech chunks [{"start": int, "end": int}, ...] in samples, sorted,
+    unpadded; length: samples of audio they were found in. Silence after the last chunk
+    counts as a pause too: the speaker has stopped, possibly for good.
+    """
+    if not speeches:
+        return None
+    min_segment = min_segment_seconds * sample_rate
+    min_pause = min_pause_seconds * sample_rate
+    gaps = [(a["end"], b["start"]) for a, b in zip(speeches, speeches[1:])]
+    gaps.append((speeches[-1]["end"], length))
+    for pause_start, pause_end in gaps:
+        if pause_start >= min_segment and pause_end - pause_start >= min_pause:
+            return (pause_start + pause_end) // 2
+    return None
+
+
+def find_cut(audio: np.ndarray, threshold: float = 0.4) -> int | None:
+    """next_cut() on Silero VAD's view of the audio (16 kHz mono float32)."""
+    from faster_whisper.vad import VadOptions, get_speech_timestamps
+
+    options = VadOptions(
+        threshold=threshold,
+        min_silence_duration_ms=int(MIN_PAUSE_SECONDS * 1000),  # shorter silences stay inside a chunk
+        speech_pad_ms=0,  # chunk edges are where speech is, so the gaps are the real pauses
+    )
+    return next_cut(get_speech_timestamps(audio, options), len(audio))
+
+
+def context_prompt(user_prompt: str, text_so_far: str, max_chars: int = CONTEXT_CHARS) -> str:
+    """The prompt for the next piece: the user's own prompt, then the end of what was
+    already transcribed, so capitalisation, punctuation and terms carry over the cut."""
+    tail = text_so_far.strip()[-max_chars:]
+    if tail and len(text_so_far.strip()) > max_chars:
+        tail = tail.split(" ", 1)[-1]  # do not start mid-word
+    return " ".join(part for part in (user_prompt.strip(), tail) if part)

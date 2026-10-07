@@ -222,7 +222,7 @@ class AudioWorker(BaseWorker):
                     return
                 
                 with self._chunks_lock:
-                    self._chunks.append(indata.copy())
+                    self._chunks.append(indata)  # already the receiver's own copy (AudioSource contract)
                     self._rms_history.append(rms)
 
                 self.level_changed.emit(min(rms * 5.0, 1.0))

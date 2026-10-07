@@ -4,7 +4,7 @@
 > günlüğü"ne bir satır ekle.
 > Göreve yeni başlayan ajan: önce [Devralma notu](#devralma-notu) bölümünü oku.
 
-**Durum:** ⏸️ **VERİ BEKLİYOR** — plan 0012 Faz 3 ölçümü ve proje sahibinin kararı.
+**Durum:** ⏸️ **VERİ BEKLİYOR** — Faz 1'in kod kısmı bitti (2026-10-07); ölçüm (`olcum.py --parcali`, plan 0012 Faz 3 ile aynı oturumda) ve proje sahibinin kararı bekleniyor.
 **Kullanıcı verisi değişikliği:** YOK (`settings.json` ve veri klasörleri değişmiyor)
 **Öncelik:** 🟠 Orta-yüksek — proje sahibinin diktelerinin çoğu 15 sn'yi aşıyor; bugün
 bütün çözümleme tuş bırakıldıktan sonra başlıyor ve süre dikte uzunluğuyla büyüyor.
@@ -39,14 +39,18 @@ yalnız çözümlemenin ne zaman yapıldığı.
 ```bash
 # Faz 0 kararı verildiyse: günlükte seçilen seçenek yazılı
 grep -n "Seçilen seçenek" docs/plans/0014-uzun-diktelerde-arka-planda-cozumleme.md
-# Faz 2 BİTTİYSE (seçenek B): saf bölme fonksiyonu ve kısmi ses sinyali var
-ls core/segmenter.py
+# Faz 1 BİTTİYSE: saf bölme modülü ve ölçüm modu var
+ls core/segmenter.py tests/test_segmenter.py
+grep -n "\-\-parcali" scripts/olcum.py
+# Faz 2 BİTTİYSE (seçenek B): kısmi ses sinyali var
 grep -n "partial_audio" workers/audio_worker.py main.py
 ```
 
 **Ortam**
 - Testler: `python -m pytest -q`; referans Windows CI. Whisper ve VAD testlerde sahtedir;
-  bölme fonksiyonu sentetik sessizlik/ton dizileriyle sınanır.
+  bölme fonksiyonu VAD parça listeleriyle sınanır (Silero sentetik tonu konuşma saymaz).
+- Silero VAD modeli faster-whisper paketinin içindedir (`assets/silero_vad_v6.onnx`); ağ
+  gerektirmez, konteynerde gerçekten çalıştırılabilir.
 - Gerçek süre ve doğruluk yalnız kullanıcının makinesinde (`olcum/` kayıtları).
 - ⚠️ Proje sahibinin makinesinde RTX 4080 var (ADR-0010): `medium` GPU'da 0,2–0,6 sn.
   GPU'da uzun dikte zaten yeterince hızlıysa bu plan **yalnız CPU kullanıcıları** içindir.
@@ -83,13 +87,13 @@ grep -n "partial_audio" workers/audio_worker.py main.py
 
 ## Faz 1 — Bölme fonksiyonu ve ölçüm modu (B)
 
-- [ ] `core/segmenter.py::next_cut`: `start`'tan sonraki seste, en az ~8 sn konuşmadan
+- [x] `core/segmenter.py::next_cut`: `start`'tan sonraki seste, en az ~8 sn konuşmadan
       sonra gelen ilk ≥ ~700 ms duraklamanın ortasını döndürür; yoksa `None`.
       faster-whisper'ın `get_speech_timestamps`'ını kullanır.
-- [ ] `scripts/olcum.py --parcali`: WAV'ı 3 sn'lik deltalarla besleyerek aynı bölmeyi
+- [x] `scripts/olcum.py --parcali`: WAV'ı 3 sn'lik deltalarla besleyerek aynı bölmeyi
       simüle eder; bütün ve parçalı çözümlemenin WER'ini ve "bırakıştan sonra kalan"
       çözümleme süresini yan yana raporlar.
-- [ ] Testler: sentetik ton + sessizlik dizileri (duraklama yok → `None`; kısa
+- [x] Testler: sentetik ton + sessizlik dizileri (duraklama yok → `None`; kısa
       konuşmadan sonra duraklama → `None`; uzun konuşmadan sonra duraklama → doğru
       örnek indeksi); `--parcali` raporu (sahte model).
 - [ ] Kullanıcı ölçümü: parçalı WER bütüne göre kabul edilebilir mi → günlüğe.
@@ -156,3 +160,51 @@ Faz 0: kullanıcı · Faz 1: 3 sa · Faz 2: 4–6 sa · Faz 3: 1 sa (A seçilirs
 
 `docs/hiz-incelemesi-2026-10-06.md` §9'dan; proje sahibinin "diktelerin çoğu 15 sn'yi
 aşıyor" bilgisiyle. Kod değişikliği yok.
+
+### 2026-10-07 — Faz 1 (kod) uygulandı
+
+**`core/segmenter.py`** (Qt'siz, saf):
+- `next_cut(speeches, length)`: VAD'ın konuşma parçaları arasındaki (ve son parçadan
+  sonraki) boşluklardan, en az `MIN_SEGMENT_SECONDS = 8` sn'de başlayan ve en az
+  `MIN_PAUSE_SECONDS = 0.7` sn süren **ilkinin ortasını** döndürür.
+- `find_cut(audio, threshold)`: Silero'yu `speech_pad_ms=0` ve
+  `min_silence_duration_ms=700` ile çalıştırır → parçalar arası boşluklar gerçek
+  duraklamalardır. Eşik uygulamanın `vad_parameters["threshold"]`'ı (0.4).
+- `context_prompt(user_prompt, text_so_far)`: kullanıcının prompt'u + şimdiye kadarki
+  metnin son ~200 karakteri (kelime ortasından başlamaz).
+
+**`scripts/olcum.py --parcali`:** konuşmalı ve ≥ 8,7 sn her kaydı tuş basılıyken ~3 sn'de
+bir ses geliyormuş gibi besler; kesim bulunursa o parça "arka planda" çözümlenir, kalan
+bırakışta. Rapor: parça sayısı, WER (bütün / parçalı), bırakıştan sonraki Whisper süresi
+(bütün / kalan; medyan, p90) ve en yavaş parçanın çözümleme süresi / parça süresi oranı
+(< 1: konuşmaya yetişiyor). Çözümleme yardımcısı (`_cozumle`) normal modla ortak.
+
+⚠️ **Plandan sapmalar:**
+- Ayrı bir "kısa dikte eşiği" yok: 8 sn'lik asgari parça kuralı onu zaten sağlıyor
+  (8,7 sn'den kısa kayıt kesilemez). Bir sabit daha eklemek gereksizdi.
+- Testler "sentetik ton" yerine VAD parça listeleriyle yazıldı: Silero sinüs tonunu konuşma
+  saymaz; saf fonksiyonu doğrudan sınamak daha kesin. `find_cut`'ın Silero'ya verdiği
+  ayarlar sahte modülle sınanıyor (diğer test dosyaları `faster_whisper`'ı `sys.modules`'ta
+  `MagicMock` ile değiştirdiği için `patch("faster_whisper.vad...")` sıraya bağlı kırılıyordu).
+
+**Gerçek Silero ile konteynerde doğrulama** (depoya girmedi): `espeak-ng` ile üretilen Türkçe
+konuşma (12,4 sn + 1,2 sn duraklama + 10,3 sn + 1,2 sn duraklama + 3,6 sn, hafif gürültülü),
+3 sn'lik besleme: 15. sn'de **12,83 sn**'den (duraklama 12,35–13,55), 27. sn'de **24,34 sn**'den
+(duraklama 23,88–25,08) kesti; cümle içi kısa duraklamalarda kesmedi; bırakışa 4,4 sn kaldı.
+Silero 12–15 sn'lik pencerede ~35–100 ms sürdü. Whisper bu ortamda yok (Hugging Face ağ
+politikasıyla kapalı) → WER ve gerçek süre kullanıcı ölçümünde.
+
+**Testler:** `tests/test_segmenter.py` (12), `tests/test_olcum.py` (8 yeni: `TestParcaliCozumle`,
+`TestParcaliOlc`, `TestMainParcali`). Tam takım Linux'ta 740 geçti, 7 kırmızı (önceden de
+kırmızı olan Windows'a özgü testler). Kırmızı kanıtı: modül ve bayrak yokken test dosyaları
+toplanamıyor.
+
+**Kullanıcı için:** plan 0012 Faz 3 ile aynı kayıtlarla, ayrıca:
+
+```powershell
+python scripts\olcum.py --parcali --tekrar 3 --dil tr          # CPU/GPU: uygulamanın seçeceği
+python scripts\olcum.py --parcali --tekrar 3 --dil tr --cihaz cpu
+```
+
+Faz 0 kararı bu raporla verilir: "bırakıştan sonra" süresi belirgin düşüyor, parçalı WER
+bütününkünden kötü değil ve "yetişiyor" ise B; değilse 0 ya da A.

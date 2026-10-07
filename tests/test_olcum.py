@@ -234,3 +234,101 @@ class TestMain:
         warm, _ = self._run(tmp_path, "--dil", "tr", "--beam", "1")
         model, dil, options = warm.call_args[0]
         assert dil == "tr" and options["beam_size"] == 1
+
+
+# ------------------------------------------------------------------ plan 0014 Faz 1: --parcali
+
+from scripts.olcum import parcali_cozumle, parcali_olc, parcali_rapor  # noqa: E402
+
+
+def _echo_model():
+    """Whisper that 'transcribes' a piece as its length in whole seconds, and records prompts."""
+    model = MagicMock()
+
+    def transcribe(audio, **kwargs):
+        return [SimpleNamespace(text=f" p{round(len(audio) / SR)}")], MagicMock()
+    model.transcribe.side_effect = transcribe
+    return model
+
+
+def _cut_once_at(seconds):
+    """A cutter that cuts at `seconds` into the first window long enough, then never again."""
+    state = {"done": False}
+
+    def kesici(audio):
+        if state["done"] or len(audio) < seconds * SR + SR:
+            return None
+        state["done"] = True
+        return int(seconds * SR)
+    return kesici
+
+
+class TestParcaliCozumle:
+    def test_pieces_go_ahead_and_only_the_rest_is_left_for_release(self):
+        audio = np.zeros(20 * SR, dtype=np.float32)
+        metin, parca, kalan_ms, yetisme = parcali_cozumle(audio, _echo_model(), Ayarlar(), kesici=_cut_once_at(9))
+        assert metin == "p9 p11"
+        assert parca == 1
+        assert yetisme >= 0
+
+    def test_the_next_piece_is_prompted_with_the_text_so_far(self):
+        model = _echo_model()
+        audio = np.zeros(20 * SR, dtype=np.float32)
+        parcali_cozumle(audio, model, Ayarlar(prompt="Katib"), kesici=_cut_once_at(9))
+        prompts = [c.kwargs["initial_prompt"] for c in model.transcribe.call_args_list]
+        assert prompts == ["Katib", "Katib p9"]
+
+    def test_without_a_cut_it_is_one_decode_like_today(self):
+        model = _echo_model()
+        metin, parca, _, yetisme = parcali_cozumle(np.zeros(20 * SR, dtype=np.float32), model, Ayarlar(),
+                                                   kesici=lambda a: None)
+        assert (metin, parca, yetisme) == ("p20", 0, 0.0)
+        assert model.transcribe.call_count == 1
+
+    def test_the_cutter_sees_only_audio_not_yet_cut_off_and_received_so_far(self):
+        seen = []
+        def kesici(audio):
+            seen.append(len(audio) / SR)
+            return int(4 * SR) if len(seen) == 2 else None
+        parcali_cozumle(np.zeros(13 * SR, dtype=np.float32), _echo_model(), Ayarlar(), kesici=kesici, adim_sn=3)
+        assert seen == [3, 6, 5, 8]  # 3, 6 → cut 4 s off → 9-4, 12-4
+
+
+class TestParcaliOlc:
+    def _wav(self, path, seconds):
+        TestOlcVeRapor()._wav(path, _speech(seconds))
+
+    def test_compares_whole_and_piecewise_for_long_spoken_recordings(self, tmp_path):
+        self._wav(tmp_path / "uzun.wav", 20.0)
+        (tmp_path / "uzun.txt").write_text("p20", encoding="utf-8")
+        self._wav(tmp_path / "kisa.wav", 4.0)
+        (tmp_path / "kisa.txt").write_text("p4", encoding="utf-8")
+        self._wav(tmp_path / "bos.wav", 20.0)
+        (tmp_path / "bos.txt").write_text("", encoding="utf-8")
+        sonuclar, kisa = parcali_olc(tmp_path, _echo_model(), Ayarlar(), kesici=_cut_once_at(9))
+        assert kisa == 1 and [s.dosya for s in sonuclar] == ["uzun.wav"]
+        s = sonuclar[0]
+        assert (s.parca, s.wer_butun, s.metin_parcali) == (1, 0.0, "p9 p11")
+        assert s.wer_parcali == 2.0  # "p9 p11" vs "p20": a substitution and an insertion over one word
+
+    def test_report(self, tmp_path):
+        self._wav(tmp_path / "uzun.wav", 20.0)
+        (tmp_path / "uzun.txt").write_text("gizli metin", encoding="utf-8")
+        sonuclar, kisa = parcali_olc(tmp_path, _echo_model(), Ayarlar(), kesici=_cut_once_at(9))
+        metin = parcali_rapor(sonuclar, kisa)
+        assert "en az bir parçası arka planda çözümlenen: 1" in metin
+        assert "Bırakıştan sonra Whisper: bütün medyan" in metin
+        assert "konuşmaya yetişiyor" in metin
+        assert "p9 p11" not in metin and "p9 p11" in parcali_rapor(sonuclar, kisa, metin_goster=True)
+
+    def test_report_without_long_recordings(self):
+        assert "Parçalanacak uzunlukta konuşmalı kayıt yok" in parcali_rapor([], 2)
+
+
+class TestMainParcali:
+    def test_parcali_flag_runs_the_piecewise_comparison(self, tmp_path):
+        with patch("scripts.olcum.parcali_olc", return_value=([], 0)) as parcali, \
+             patch("scripts.olcum.olc") as butun:
+            TestMain()._run(tmp_path, "--parcali")
+        parcali.assert_called_once()
+        butun.assert_not_called()

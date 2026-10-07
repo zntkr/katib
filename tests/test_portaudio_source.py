@@ -163,3 +163,18 @@ class TestOpenInOneAttempt:
         source.start(MagicMock(), MagicMock())
         broken.close.assert_called_once()
         assert source._stream is good
+
+
+class TestChunkCopy:
+    """The AudioSource contract: PortAudio reuses its buffer, so the receiver gets a copy."""
+
+    def test_the_receiver_gets_its_own_array(self):
+        import numpy as np
+        from core.portaudio_source import PortAudioSource
+        source = PortAudioSource()
+        received = []
+        source._audio_callback = lambda chunk, status: received.append(chunk)
+        buffer = np.ones((1024, 1), dtype=np.float32)
+        source._sd_audio_callback(buffer, 1024, None, None)
+        buffer[:] = 0.0  # PortAudio writes the next block into the same buffer
+        assert received[0] is not buffer and float(received[0].sum()) == 1024.0

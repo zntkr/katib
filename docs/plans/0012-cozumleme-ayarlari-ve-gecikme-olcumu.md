@@ -136,9 +136,10 @@ Seçenekler:
 
 ## Faz 6 — Küçük kalemler
 
-- [ ] `_CPU_THREADS` yorumu düzeltilir; Faz 3'te `--threads` ölçümü kazanç
-      gösterirse değer fiziksel çekirdek sayısından türetilir (ölçüm yoksa 0 kalır).
-- [ ] Çift kopya: `AudioWorker._audio_callback` kaynağın zaten kopyaladığı bloğu
+- [x] `_CPU_THREADS` yorumu düzeltilir.
+- [ ] Faz 3'te `--threads` ölçümü kazanç gösterirse değer fiziksel çekirdek sayısından
+      türetilir (ölçüm yoksa 0 kalır).
+- [x] Çift kopya: `AudioWorker._audio_callback` kaynağın zaten kopyaladığı bloğu
       yeniden kopyalamaz (tarama §12). Test: kaynaktan gelen dizi kayda bir kez girer.
 
 ---
@@ -226,3 +227,12 @@ python scripts\olcum.py --tekrar 3 --dil tr --beam 1 --zaman-damgasiz --sicaklik
 
 Uygulamanın kendisinde: birkaç gerçek dikteden sonra
 `Select-String -Path "$env:LOCALAPPDATA\Katib\Logs\katib.log" -Pattern "release->paste"`.
+
+### 2026-10-07 — Faz 6'nın ölçüm istemeyen kısmı
+
+`_CPU_THREADS` yorumu düzeltildi (0 → CTranslate2'nin varsayılanı, 4 iş parçacığı).
+`AudioWorker._audio_callback` artık bloğu yeniden kopyalamıyor; `AudioSource.start`
+belgesine "alıcı kendi dizisini alır, kaynak onu yeniden kullanmaz" sözleşmesi yazıldı.
+Testler: `tests/test_audio_worker.py::TestChunkOwnership` (kopya geri gelince kırmızı),
+`tests/test_portaudio_source.py::TestChunkCopy` (sözleşmenin kaynak tarafı: PortAudio
+tamponu sonradan değişse de alıcının dizisi değişmez). İş parçacığı sayısı Faz 3 ölçümünü bekliyor.
