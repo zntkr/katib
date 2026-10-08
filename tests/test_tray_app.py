@@ -68,6 +68,7 @@ def tray(qapp, mock_settings):
     app.audio_worker = MagicMock()
     app.osd = MagicMock()
     app.transcription_worker = MagicMock(is_ready=True, is_loading=False)
+    app.TAP_SECONDS = 0  # a press and release in a test is a held key unless the test says otherwise
     yield app
     _close(app)
 
@@ -137,10 +138,19 @@ class TestMenu:
     def test_copy_puts_the_last_dictation_on_the_clipboard(self, tray):
         with patch("ui.tray_app.inject_text"):
             tray.on_text_ready("first")
+            tray.on_transcription_finished()
             tray.on_text_ready("merhaba dünya")
         with patch("ui.tray_app.QApplication.clipboard") as clipboard:
             _action(tray, "tray.menu.copy_transcript").trigger()
         clipboard.return_value.setText.assert_called_once_with("merhaba dünya")
+
+    def test_copy_takes_every_piece_of_a_dictation_typed_in_pieces(self, tray):
+        with patch("ui.tray_app.inject_text"):
+            tray.on_text_ready("Birinci cümle.")
+            tray.on_text_ready("İkinci cümle.")
+        with patch("ui.tray_app.QApplication.clipboard") as clipboard:
+            _action(tray, "tray.menu.copy_transcript").trigger()
+        clipboard.return_value.setText.assert_called_once_with("Birinci cümle. İkinci cümle.")
 
 
 class TestDictation:
@@ -187,6 +197,92 @@ class TestDictation:
         tray.on_level_changed(0.7)
         assert tray.settings_window.level_bar.value() == 0
 
+
+
+class TestHandsFree:
+    """One key, two ways: held, the release ends the dictation; tapped, it goes on hands-free
+    until the next tap or until the speaker stops (plan 0014)."""
+
+    @pytest.fixture
+    def tapped(self, tray):
+        tray.TAP_SECONDS = 60  # the press and release below are a tap
+        tray.on_hotkey_pressed()
+        tray.on_hotkey_released()
+        return tray
+
+    def test_a_tap_keeps_recording(self, tapped):
+        tapped.audio_worker.stop_recording.assert_not_called()
+        assert _shows(tapped, STATE_LISTENING)
+        assert tapped.transcription_worker.hands_free is True
+
+    def test_a_held_key_is_not_hands_free(self, tray):
+        tray.on_hotkey_pressed()
+        tray.on_hotkey_released()
+        tray.audio_worker.stop_recording.assert_called_once()
+        assert tray.transcription_worker.hands_free is False
+
+    def test_a_second_tap_ends_it(self, tapped):
+        tapped.on_hotkey_pressed()
+        tapped.audio_worker.stop_recording.assert_called_once()
+        assert not _shows(tapped, STATE_LISTENING)
+        assert tapped.transcription_worker.hands_free is False
+        tapped.on_hotkey_released()  # the release of that second tap does nothing more
+        tapped.audio_worker.start_recording.assert_called_once()
+        tapped.audio_worker.stop_recording.assert_called_once()
+
+    def test_it_ends_when_the_speaker_stops(self, tapped):
+        tapped.on_speech_ended()
+        tapped.audio_worker.stop_recording.assert_called_once()
+        assert not _shows(tapped, STATE_LISTENING)
+
+    def test_a_key_pressed_after_it_ended_starts_a_new_dictation(self, tapped):
+        tapped.on_speech_ended()
+        tapped.on_hotkey_pressed()
+        assert tapped.audio_worker.start_recording.call_count == 2
+
+    def test_the_speaker_pausing_does_not_end_a_held_dictation(self, tray):
+        tray.on_hotkey_pressed()
+        tray.on_speech_ended()
+        tray.audio_worker.stop_recording.assert_not_called()
+
+    def test_a_lost_microphone_ends_it(self, tapped):
+        tapped.on_mic_unavailable()
+        tapped.on_hotkey_pressed()  # a fresh start, not "the second tap"
+        assert tapped.audio_worker.start_recording.call_count == 2
+
+    def test_a_tone_marks_the_start_and_the_end(self, tray):
+        with patch("ui.tray_app.chime") as chime:
+            tray.on_hotkey_pressed()
+            assert [c.args[0] for c in chime.call_args_list] == ["start"]
+            tray.on_hotkey_released()
+        assert [c.args[0] for c in chime.call_args_list] == ["start", "end"]
+
+    def test_a_dictation_that_ends_on_its_own_gets_the_end_tone(self, tapped):
+        with patch("ui.tray_app.chime") as chime:
+            tapped.on_speech_ended()
+            tapped.on_speech_ended()  # the worker may say it again before the recording stops
+        chime.assert_called_once_with("end")
+
+    def test_no_tone_when_the_microphone_did_not_open(self, tray):
+        tray.audio_worker.start_recording.side_effect = tray.on_mic_unavailable
+        with patch("ui.tray_app.chime") as chime:
+            tray.on_hotkey_pressed()
+            tray.on_hotkey_released()
+        chime.assert_not_called()
+
+    def test_no_tone_for_a_refused_press(self, tray):
+        tray.transcription_worker = MagicMock(is_ready=False, is_loading=True)
+        with patch("ui.tray_app.chime") as chime:
+            tray.on_hotkey_pressed()
+            tray.on_hotkey_released()
+        chime.assert_not_called()
+
+    def test_a_refused_tap_does_not_go_hands_free(self, tray):
+        tray.TAP_SECONDS = 60
+        tray.transcription_worker = MagicMock(is_ready=False, is_loading=True, hands_free=False)
+        tray.on_hotkey_pressed()
+        tray.on_hotkey_released()
+        assert tray.transcription_worker.hands_free is False
 
 
 class TestDictationLatency:

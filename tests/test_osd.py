@@ -117,7 +117,7 @@ class TestRecording:
         osd.setStateRecording()
         assert osd.wave.mode == "level"
         assert osd.wave.colour.name() == theme_manager.palette["CLR_ERR"].lower()
-        assert osd.text_label.text() == "LISTENING..."
+        assert osd.text_label.isHidden()  # the wave says it; no words
         assert osd.wave_timer.isActive()
         assert osd.isVisible()
 
@@ -147,8 +147,17 @@ class TestProcessing:
         osd.setStateProcessing()
         assert osd.wave.mode == "busy"
         assert osd.wave.colour.name() == theme_manager.palette["CLR_INFO"].lower()
-        assert osd.text_label.text() == "WRITING"
+        assert osd.text_label.isHidden()
         assert osd.wave_timer.isActive()
+
+    def test_the_pill_is_only_as_wide_as_the_wave(self, osd):
+        osd.setStateProcessing()
+        without_words = osd.width()
+        osd.setStateError("osd.mic_muted")
+        assert not osd.text_label.isHidden() and osd.width() > without_words
+        osd._error_active = False
+        osd.setStateRecording()
+        assert osd.width() == without_words
 
     def test_late_microphone_levels_do_not_disturb_it(self, osd):
         osd.setStateProcessing()
@@ -219,19 +228,20 @@ class TestShowAndHide:
 
 
 class TestLanguageAndPosition:
-    def test_text_follows_the_language(self, osd):
-        from core.i18n import set_language, t
-        osd.setStateRecording()
+    def test_a_message_follows_the_language(self, osd):
+        from core.i18n import set_language
+        osd.setStateError("osd.mic_muted")
         english = osd.text_label.text()
         set_language("tr")
         osd.refresh_language()
-        assert osd.text_label.text() == "DİNLENİYOR..." != english
+        assert osd.text_label.text() != english and osd.text_label.text().isupper()
 
-    def test_sits_at_the_bottom_centre_of_the_screen(self, qapp):
+    def test_sits_at_the_top_centre_of_the_screen(self, qapp):
+        """Not at the bottom: that is where text is typed in most windows."""
         from PySide6.QtWidgets import QApplication
         pill = MinimalOSD()
         screen = QApplication.primaryScreen().availableGeometry()
         pill.position_osd()
-        assert pill.x() == (screen.width() - pill.width()) // 2
-        assert pill.y() == screen.height() - pill.height() - 48
+        assert pill.x() == screen.x() + (screen.width() - pill.width()) // 2
+        assert pill.y() == screen.y() + 12
         pill.deleteLater()

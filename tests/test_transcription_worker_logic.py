@@ -239,6 +239,126 @@ class TestTranscribeFilterDuration:
         assert self._texts(qapp, mock_settings, 10.0, " İzlediğiniz için teşekkürler.") == ["İzlediğiniz için teşekkürler."]
 
 
+# Pieces transcribed while the user is still speaking (plan 0014)
+
+SR = 16000
+_CHUNKS = "workers.transcription_worker.speech_chunks"
+
+
+def _speech(start_s: float, end_s: float) -> dict:
+    return {"start": int(start_s * SR), "end": int(end_s * SR)}
+
+
+class TestPieces:
+    """12 s snapshot: 10 s of speech, then 2 s of pause → the cut is in its middle, at 11 s."""
+    CUT = 11 * SR
+    SNAPSHOT = np.zeros(12 * SR, dtype=np.float32)
+    FINISHED = np.zeros(20 * SR, dtype=np.float32)
+
+    def _worker(self, qapp, mock_settings, hands_free: bool):
+        worker = _make_worker_with_model(qapp, mock_settings, [" Birinci cümle."])
+        worker.hands_free = hands_free
+        s = _capture(worker)
+        s["ended"] = []
+        worker.speech_ended.connect(lambda: s["ended"].append(True))
+        return worker, s
+
+    def _piece(self, worker):
+        with patch(_CHUNKS, return_value=[_speech(0, 10)]):
+            worker._transcribe_partial(self.SNAPSHOT)
+
+    def _finish(self, worker, text=" İkinci cümle."):
+        worker._model.transcribe.return_value = ([MagicMock(text=text)] if text else [], MagicMock())
+        worker._transcribe(self.FINISHED)
+
+    def test_only_the_speech_before_the_pause_is_transcribed(self, qapp, mock_settings):
+        worker, _ = self._worker(qapp, mock_settings, hands_free=False)
+        self._piece(worker)
+        assert len(worker._model.transcribe.call_args.args[0]) == self.CUT
+
+    def test_no_pause_yet_means_nothing_is_transcribed(self, qapp, mock_settings):
+        worker, s = self._worker(qapp, mock_settings, hands_free=True)
+        with patch(_CHUNKS, return_value=[_speech(0, 12)]):
+            worker._transcribe_partial(self.SNAPSHOT)
+        worker._model.transcribe.assert_not_called()
+        assert s["text"] == [] and s["ended"] == []
+
+    def test_a_held_key_gets_the_whole_text_at_the_release(self, qapp, mock_settings):
+        worker, s = self._worker(qapp, mock_settings, hands_free=False)
+        self._piece(worker)
+        assert s["text"] == []  # a paste next to a held key could be a shortcut
+        self._finish(worker)
+        assert s["text"] == ["Birinci cümle. İkinci cümle."]
+
+    def test_at_the_end_only_the_rest_is_transcribed(self, qapp, mock_settings):
+        worker, _ = self._worker(qapp, mock_settings, hands_free=False)
+        self._piece(worker)
+        self._finish(worker)
+        audio = worker._model.transcribe.call_args.args[0]
+        assert len(audio) == len(self.FINISHED) - self.CUT
+        assert worker._model.transcribe.call_args.kwargs["initial_prompt"].endswith("Birinci cümle.")
+
+    def test_hands_free_types_each_piece_as_it_is_ready(self, qapp, mock_settings):
+        worker, s = self._worker(qapp, mock_settings, hands_free=True)
+        self._piece(worker)
+        assert s["text"] == ["Birinci cümle."]
+        self._finish(worker)
+        assert s["text"] == ["Birinci cümle.", "İkinci cümle."]
+
+    def test_silence_after_typed_pieces_is_not_an_error(self, qapp, mock_settings):
+        worker, s = self._worker(qapp, mock_settings, hands_free=True)
+        self._piece(worker)
+        self._finish(worker, text="")
+        assert s["text"] == ["Birinci cümle."] and s["errors"] == []
+
+    def test_the_next_dictation_starts_from_scratch(self, qapp, mock_settings):
+        worker, s = self._worker(qapp, mock_settings, hands_free=False)
+        self._piece(worker)
+        self._finish(worker)
+        self._finish(worker, text=" Yeni dikte.")
+        assert s["text"][-1] == "Yeni dikte."
+        assert len(worker._model.transcribe.call_args.args[0]) == len(self.FINISHED)
+
+    def test_a_recording_that_was_dropped_leaves_nothing_behind(self, qapp, mock_settings):
+        worker, s = self._worker(qapp, mock_settings, hands_free=False)
+        self._piece(worker)          # then the microphone is lost: no finished recording
+        worker.begin_dictation()     # the next recording starts
+        worker._queue.put(None)
+        with patch.object(worker, "_load_model"):
+            worker.run()
+        self._finish(worker, text=" Yeni dikte.")
+        assert s["text"] == ["Yeni dikte."]
+
+    def test_a_failed_piece_is_left_to_the_final_pass(self, qapp, mock_settings):
+        worker, s = self._worker(qapp, mock_settings, hands_free=True)
+        worker._model.transcribe.side_effect = RuntimeError("boom")
+        self._piece(worker)
+        assert s["text"] == [] and s["errors"] == []
+        worker._model.transcribe.side_effect = None
+        self._finish(worker, text=" Hepsi.")
+        assert s["text"] == ["Hepsi."]
+        assert len(worker._model.transcribe.call_args.args[0]) == len(self.FINISHED)
+
+    def test_hands_free_says_when_the_speaker_has_stopped(self, qapp, mock_settings):
+        worker, s = self._worker(qapp, mock_settings, hands_free=True)
+        with patch(_CHUNKS, return_value=[_speech(0, 4)]):  # 4 s of speech, then 8 s of silence
+            worker._transcribe_partial(self.SNAPSHOT)
+        assert s["ended"] == [True]
+
+    def test_a_held_key_is_never_ended_by_silence(self, qapp, mock_settings):
+        worker, s = self._worker(qapp, mock_settings, hands_free=False)
+        with patch(_CHUNKS, return_value=[_speech(0, 4)]):
+            worker._transcribe_partial(self.SNAPSHOT)
+        assert s["ended"] == []
+
+    def test_a_snapshot_is_only_queued_when_the_worker_is_idle(self, qapp, mock_settings):
+        worker, _ = self._worker(qapp, mock_settings, hands_free=False)
+        worker.is_ready = True
+        worker.add_partial(self.SNAPSHOT)
+        worker.add_partial(self.SNAPSHOT)
+        assert worker._queue.qsize() == 1
+
+
 # _load_model: recovery after a failed load (plan 0001)
 
 class TestLoadModelRecovery:

@@ -59,6 +59,52 @@ class TestStartRecording:
         assert not worker._is_recording
         assert "osd.mic_not_connected" in errors
 
+class TestPartialAudio:
+    """Plan 0014: while recording, the recording so far goes out about once a second."""
+
+    def _recording(self, mock_settings, mock_audio_source):
+        worker = AudioWorker(mock_settings, mock_audio_source)
+        worker.set_device(1)
+        started, partials = [], []
+        worker.recording_started.connect(lambda: started.append(True))
+        worker.partial_audio.connect(partials.append)
+        worker.start_recording()
+        return worker, started, partials
+
+    def test_a_recording_that_starts_is_announced(self, mock_settings, mock_audio_source):
+        worker, started, _ = self._recording(mock_settings, mock_audio_source)
+        assert started == [True] and worker._partial_timer.isActive()
+
+    def test_a_recording_that_fails_to_start_is_not(self, mock_settings, mock_audio_source):
+        mock_audio_source.start.side_effect = AudioDeviceError("Not connected")
+        worker, started, _ = self._recording(mock_settings, mock_audio_source)
+        assert started == [] and not worker._partial_timer.isActive()
+
+    def test_the_recording_so_far_is_sent_as_one_array(self, mock_settings, mock_audio_source):
+        worker, _, partials = self._recording(mock_settings, mock_audio_source)
+        worker._chunks += [np.ones((1024, 1), dtype=np.float32), np.ones((1024, 1), dtype=np.float32)]
+        worker._emit_partial()
+        assert len(partials) == 1 and partials[0].shape == (2048,)
+        assert len(worker._chunks) == 2  # the recording itself is untouched
+
+    def test_nothing_is_sent_before_the_first_audio(self, mock_settings, mock_audio_source):
+        worker, _, partials = self._recording(mock_settings, mock_audio_source)
+        worker._emit_partial()
+        assert partials == []
+
+    def test_it_stops_with_the_recording(self, mock_settings, mock_audio_source):
+        worker, _, partials = self._recording(mock_settings, mock_audio_source)
+        worker.stop_recording()
+        assert not worker._partial_timer.isActive()
+
+    def test_it_stops_when_the_stream_ends_on_its_own(self, mock_settings, mock_audio_source):
+        worker, _, partials = self._recording(mock_settings, mock_audio_source)
+        worker._chunks.append(np.ones((1024, 1), dtype=np.float32))
+        worker._on_stream_finished(AudioDisconnectedError("gone"))
+        worker._emit_partial()
+        assert partials == [] and not worker._partial_timer.isActive()
+
+
 class TestStopRecording:
     def test_stop_recording_calls_source_stop(self, mock_settings, mock_audio_source):
         worker = AudioWorker(mock_settings, mock_audio_source)

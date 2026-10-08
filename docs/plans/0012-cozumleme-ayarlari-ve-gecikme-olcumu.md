@@ -285,3 +285,32 @@ Tam takım Linux'ta 752 geçti, 7 kırmızı (önceden de kırmızı olan Window
 ⚠️ **Not (düzeltilmedi, kapsam dışı):** `core/i18n.system_language_code()` `locale.getdefaultlocale()`
 kullanıyor; Python 3.11'den beri kullanımdan kalkmış, 3.15'te kaldırılması planlanıyor. Proje 3.14'e
 sabit (`.python-version`); 3.15'e geçerken bu fonksiyon değişmeli (arayüz dili de aynı fonksiyonu kullanıyor).
+
+### 2026-10-08 — CPU ölçümü (i7-8550U, GPU yok) ve `beam_size` 5 → 2
+
+Sentetik Türkçe ses (Windows TTS; proje sahibinin sesi değil), `small`/int8, dil `tr`, 5 kayıt
+(2,5 / 6 / 13 / 28 / 44 sn), her biri 2 koşu. Whisper süresi (ms) ve ortalama WER:
+
+| Ayar | 2,5 sn | 6 sn | 13 sn | 28 sn | 44 sn | WER |
+|---|---|---|---|---|---|---|
+| beam 5 (eski) | 3735 | 4517 | 7098 | 13396 | 23625 | %5,5 |
+| beam 2 | 2992 | 3397 | 4536 | 7215 | 12705 | %6,7 |
+| beam 1 | 2928 | 3302 | 4385 | 6579 | 13386 | %8,5 |
+| beam 5, zaman damgasız | 3794 | 4339 | 6005 | 10555 | 19763 | %4,8 |
+
+İş parçacığı (13 sn'lik kayıt): 2 → 7274, 3 → 7087, 4 → 6600, 6 → 7558, 8 → 8317 ms; varsayılan (4)
+en iyisi. Zaman damgasız + beam 1 ve sıcaklık 0 tutarlı kazanç vermedi (ölçüm gürültüsü içinde).
+**Karar (proje sahibi, "milisaniye kovalamayalım"):** yalnız `beam_size` 2 yapıldı, tek satır;
+`decode_options(device)` yazılmadı, yani GPU da beam 2 kullanıyor.
+
+### 2026-10-08 (devam) — `beam_size` yeniden 5; sıcaklık listesi `[0.0, 0.4]`
+
+Proje sahibi ilk gerçek denemeden sonra: "doğruluk düşüşü kabul edilemez". Plan 0014 çözümlemeyi
+konuşmanın arkasına aldığı için beam 5'in bedeli artık bitişte değil konuşurken ödeniyor →
+**`beam_size` 5'e geri alındı.**
+
+Aynı denemede 9,1 sn'lik bir bölüm **57 sn'de** çözüldü (diğer bölümler ~4 sn); o sırada kullanıcı
+duraksayıp mırıldanıyordu. En olası neden sıcaklık geri dönüşü (tarama §5: 6 deneme × ~9 sn);
+**doğrulanamadı** — sentetik seste gürültü (SNR 20/5/0 dB) geri dönüşü tetiklemedi. Yine de liste
+`[0.0, 0.4]` yapıldı (en kötü durum 6 deneme yerine 2) ve ikinci deneme olursa günlüğe
+`Low-confidence audio: decoded a second time` yazılıyor: sıçrama tekrarlanırsa neden görülecek.

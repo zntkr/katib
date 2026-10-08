@@ -1,7 +1,7 @@
 import threading
 import sys
 import numpy as np
-from PySide6.QtCore import Qt, Signal, QElapsedTimer
+from PySide6.QtCore import Qt, Signal, QElapsedTimer, QTimer
 
 from workers.base_worker import BaseWorker, measure_time
 from core.log import get_logger, OK
@@ -11,6 +11,7 @@ _log = get_logger("MIC")
 
 SAMPLE_RATE              = 16000
 MIN_RECORDING_DURATION   = 0.5    # seconds — shorter recordings are discarded
+PARTIAL_INTERVAL_MS      = 1000   # how often the recording so far goes to the transcriber (plan 0014)
 
 def _resample(audio: np.ndarray, orig_sr: int, target_sr: int) -> np.ndarray:
     """Linear interpolation resample. Sufficient quality for speech recognition."""
@@ -25,6 +26,8 @@ def _resample(audio: np.ndarray, orig_sr: int, target_sr: int) -> np.ndarray:
 
 class AudioWorker(BaseWorker):
     audio_ready        = Signal(object)  # numpy array (float32, 16kHz, mono)
+    recording_started  = Signal()        # the microphone opened: a new dictation begins
+    partial_audio      = Signal(object)  # the recording so far (same format), about once a second
     level_changed      = Signal(float)   # 0.0 – 1.0
     devices_ready      = Signal(list)    # list of (label: str, index: int, is_default: bool)
     muted_detected     = Signal()        # mathematical 0.0 (muted) detected
@@ -59,7 +62,11 @@ class AudioWorker(BaseWorker):
         # PortAudio callback; the queued connection defers it until the callback returns.
         self._stream_lost.connect(self.refresh_devices, Qt.ConnectionType.QueuedConnection)
 
-        from PySide6.QtCore import QTimer
+        # Runs in this object's thread, never in the PortAudio callback (ADR-0007).
+        self._partial_timer = QTimer(self)
+        self._partial_timer.setInterval(PARTIAL_INTERVAL_MS)
+        self._partial_timer.timeout.connect(self._emit_partial)
+
         QTimer.singleShot(100, self._init_media_devices)
 
     def _init_media_devices(self):
@@ -90,6 +97,7 @@ class AudioWorker(BaseWorker):
         self._stop_event.wait()   # blocks while False; stop() calls set() to unblock
 
     def stop(self):
+        self._partial_timer.stop()
         self._stop_event.set()
         self.audio_source.stop()
 
@@ -135,6 +143,8 @@ class AudioWorker(BaseWorker):
             self._silence_timer.invalidate()
             self._silence_notified = False
             _log.log(OK, "Recording started")
+            self.recording_started.emit()
+            self._partial_timer.start()
         except AudioDeviceError as e:
             msg = str(e)
             if "not connected" in msg.lower():
@@ -156,9 +166,10 @@ class AudioWorker(BaseWorker):
         if not self._is_recording:
             return
 
+        self._partial_timer.stop()
         self.audio_source.stop()
         self._is_recording = False
-        
+
         self.level_changed.emit(0.0)
 
         with self._chunks_lock:
@@ -172,11 +183,7 @@ class AudioWorker(BaseWorker):
             return
 
         try:
-            audio = np.concatenate(chunks_snapshot, axis=0).flatten()
-            native_sr = self.audio_source.native_sample_rate
-            if native_sr != SAMPLE_RATE:
-                audio = _resample(audio, native_sr, SAMPLE_RATE)
-
+            audio = self._merged(chunks_snapshot)
             duration = len(audio) / SAMPLE_RATE
             from core.audio_analysis import analyse_vad, is_silent
             chunk_duration = len(audio) / SAMPLE_RATE / len(self._rms_history) if self._rms_history else 0.1
@@ -206,6 +213,22 @@ class AudioWorker(BaseWorker):
             self.error_occurred.emit("osd.audio_merge_error")
 
     # ----------------------------------------------------------------- private
+
+    def _merged(self, chunks: list) -> np.ndarray:
+        """Recorded blocks → one mono array at 16 kHz."""
+        audio = np.concatenate(chunks, axis=0).flatten()
+        return _resample(audio, self.audio_source.native_sample_rate, SAMPLE_RATE)
+
+    def _emit_partial(self) -> None:
+        """While recording: hands the recording so far to the transcriber, so finished
+        sentences are transcribed while the user is still speaking (plan 0014)."""
+        if not self._is_recording:
+            self._partial_timer.stop()  # the stream ended on its own
+            return
+        with self._chunks_lock:
+            chunks = list(self._chunks)
+        if chunks:
+            self.partial_audio.emit(self._merged(chunks))
 
     def _audio_callback(self, indata: np.ndarray, status_msg: str | None):
         try:

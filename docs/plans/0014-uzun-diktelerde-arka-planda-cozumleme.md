@@ -219,3 +219,42 @@ takılmaz, kırpma tam kelime sınırına denk gelince fazladan bir kelime siliy
 karakterle sınırlamanın kendisi kalıyor ve gerekçesi koda yazıldı: faster-whisper prompt'un
 yalnız son ~223 token'ını tutar (`get_prompt`), kırpılmamış metin en baştaki kullanıcı
 prompt'unu dışarı iterdi. Faz 0'a "0 / A seçilirse Faz 1 kodu silinir" maddesi eklendi.
+
+### 2026-10-08 — Seçilen seçenek: B, ve "eller serbest" dikte (proje sahibinin kararı)
+
+Proje sahibi (diktelerinin çoğu 30 sn+; i7-8550U, GPU yok) B'yi seçti ve iki şey daha istedi:
+tuşu basılı tutmadan dikte ve konuşma bitince kendiliğinden durma. **"Canlı yazma yok" kararı
+kısmen değişti:**
+
+- **Tek tuş, iki kullanım** (`TrayApp`, yeni ayar yok): basılı tut → bırakınca biter (eskisi gibi);
+  kısa dokun (< 0,8 sn, `TAP_SECONDS`) → eller serbest: ikinci dokunuşta ya da konuşan susunca biter.
+- **Eller serbestte bölümler duraklamada hemen yazılır**; bölüm kesinleşmiştir, sonradan değişmez.
+  **Tuş basılıyken yazılmaz**, bırakışta tek seferde yapıştırılır: tuş bastırılmadığı için basılı
+  F4'ün yanında gönderilen Ctrl+V, Ctrl+F4 olur.
+- **Konuşmanın bittiği** (`core/segmenter.py::speech_is_over`): konuşmadan sonra 3 sn sessizlik ya da
+  8 sn hiç konuşma yok. `TranscriptionWorker.speech_ended` → `TrayApp.on_speech_ended`.
+- **Plandan sapma (daha sade):** `AudioWorker.partial_audio` delta değil, saniyede bir **o ana kadarki
+  bütün kaydı** yayar; worker yalnız "kaç örnek çözümlendi"yi tutar ve boştayken bakar. Bitişte
+  `audio_ready` yine bütün kaydı verir, worker kalanını çözümler. Eşik altı kayıt bugünkü yoldan geçer.
+- Yeni kayıt `recording_started` → `begin_dictation` ile önceki kaydın bölümlerini siler.
+
+Ölçüm (bu laptop, `small`/int8, sentetik Türkçe ses, 46 sn konuşma, 3 bölüm): bölümler konuşurken
+20., 44. ve 50. saniyede yazıldı; mikrofon konuşma bittikten 4 sn sonra kapandı, ardından bekleme
+yok. Aynı ses tek parça: bırakıştan sonra 14 sn. WER %5,5 (parçalı) / %4,4 (bütün). Gerçek ses ve
+mikrofonla proje sahibi deneyecek. Testler: `TestPieces`, `TestHandsFree`, `TestPartialAudio`,
+`TestSpeechIsOver`; tam takım 807 geçti.
+
+Başlangıçta ve bitişte yumuşak bir ton çalar (`core/chime.py`, bellekte üretilir, ses dosyası yok).
+
+**Açık kalan:** ADR; kullanım kılavuzu ve çeviriler hâlâ yalnız "basılı tut" diyor; plan 0012 Faz 4
+(`decode_options`) yapılmadı, bütün ve parçalı yol aynı `TRANSCRIBE_OPTIONS`'ı kullanıyor.
+
+### 2026-10-08 (devam) — İlk gerçek deneme (proje sahibi, 104 sn eller serbest dikte)
+
+8 bölüm; 7'si 8,9–20,6 sn'lik ses için 3,9–4,4 sn'de çözüldü ve konuşurken yazıldı; bitişten sonra
+bekleme 3,4 sn. **Bir bölüm 57 sn sürdü** ve arkasındaki dört bölüm birikip art arda yazıldı
+(ayrıntı ve önlem: plan 0012 günlüğü, aynı tarih). Pill ekranın alt-ortasından **üst-ortasına**
+alındı: altta, yazılan yerin (sohbet kutusu, terminal) üstüne geliyordu.
+
+**Bilinen sınır:** bölüm düşünme duraklamasında kesilir; cümle ortasında duraklanırsa iki yarım
+ayrı çözümlenir ("…bizim de... Biraz böyle…"). Eşikle giderilemez: konuşan uzun duraklıyor.

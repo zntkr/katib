@@ -5,7 +5,8 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from core.segmenter import CONTEXT_CHARS, context_prompt, find_cut, next_cut
+from core.segmenter import (CONTEXT_CHARS, END_PAUSE_SECONDS, NO_SPEECH_SECONDS, context_prompt,
+                            find_cut, next_cut, speech_is_over)
 
 SR = 16000
 
@@ -43,6 +44,29 @@ class TestNextCut:
     def test_the_minimums_can_be_given(self):
         speeches = [_chunk(0, 2), _chunk(2.5, 4)]
         assert next_cut(speeches, 4 * SR, min_segment_seconds=1, min_pause_seconds=0.4) == int(2.25 * SR)
+
+
+class TestSpeechIsOver:
+    """Hands-free dictation: when has the speaker finished?"""
+
+    def test_speech_running_to_the_end_is_not_over(self):
+        assert not speech_is_over([_chunk(0, 5)], 5 * SR)
+
+    def test_a_thinking_pause_is_not_the_end(self):
+        assert not speech_is_over([_chunk(0, 5)], int((5 + END_PAUSE_SECONDS - 0.5) * SR))
+
+    def test_a_long_silence_after_speech_is_the_end(self):
+        assert speech_is_over([_chunk(0, 5)], int((5 + END_PAUSE_SECONDS) * SR))
+
+    def test_silence_at_the_start_waits_for_the_speaker(self):
+        assert not speech_is_over([], int((NO_SPEECH_SECONDS - 1) * SR))
+
+    def test_nothing_said_at_all_is_the_end(self):
+        assert speech_is_over([], int(NO_SPEECH_SECONDS * SR))
+
+    def test_silence_after_a_piece_already_cut_off_is_the_end(self):
+        assert speech_is_over([], int(END_PAUSE_SECONDS * SR), heard_before=True)
+        assert not speech_is_over([], int((END_PAUSE_SECONDS - 1) * SR), heard_before=True)
 
 
 class TestFindCut:

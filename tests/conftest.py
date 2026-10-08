@@ -55,6 +55,13 @@ def _no_gpu():
 
 
 @pytest.fixture(autouse=True)
+def _silent():
+    """Tests do not play the dictation tones through the machine's speakers."""
+    with patch("core.chime._play"):
+        yield
+
+
+@pytest.fixture(autouse=True)
 def _flush_qt_deletelater(qapp):
     """Flushes the deleteLater() queue after each test.
     Accumulated QWidget objects can cause hangs across multiple test files."""

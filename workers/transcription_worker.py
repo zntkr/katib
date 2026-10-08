@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 from workers.base_worker import BaseWorker, measure_time
 from core import gpu
 from core.log import get_logger, OK
+from core.segmenter import context_prompt, next_cut, speech_chunks, speech_is_over
 from core.transcription_filter import TranscriptionFilter
 from core.settings import MSG_MODEL_NOT_FOUND, STATE_READY, STATE_LOADING
 
@@ -25,6 +26,9 @@ QUEUE_MAXSIZE = 5
 # Decoding options. scripts/olcum.py uses the same dict, so measurements test what users run.
 TRANSCRIBE_OPTIONS = {
     "beam_size"                 : 5,
+    # faster-whisper's default retries a low-confidence window at up to six temperatures; one
+    # hesitant 9 s stretch then stalled a dictation for 57 s. One retry still rescues a loop.
+    "temperature"               : [0.0, 0.4],
     "vad_filter"                : True,
     "vad_parameters"            : {
         "threshold"              : 0.4,
@@ -52,6 +56,13 @@ class _ReloadCommand:
     pass
 
 _RELOAD = _ReloadCommand()
+_NEW_DICTATION = object()  # queue marker: a recording started, forget the previous one's pieces
+
+
+class _Partial:
+    """The recording so far, sent while the user is still speaking (plan 0014)."""
+    def __init__(self, audio):
+        self.audio = audio
 
 class TranscriptionWorker(BaseWorker):
     text_ready            = Signal(str)
@@ -63,6 +74,7 @@ class TranscriptionWorker(BaseWorker):
     transcription_started = Signal()
     transcription_finished = Signal()
     dictation_timed       = Signal(float, float)  # seconds of audio, seconds the model took
+    speech_ended          = Signal()  # hands-free dictation: the speaker has stopped
 
     def __init__(self, settings, model_provider, parent=None):
         super().__init__(parent)
@@ -76,6 +88,15 @@ class TranscriptionWorker(BaseWorker):
         self._device = "cpu"  # where the loaded model runs: "cuda" or "cpu"
         self._gpu_note = ""   # why the GPU is not used; shown next to the device in the settings window
         self._filter = TranscriptionFilter()
+        # Set by TrayApp: nobody holds the key, so pieces are typed as soon as they are ready
+        # and the worker says when the speaker has stopped. While a key is held pieces wait
+        # for the release: a paste (Ctrl+V) next to a held F4 would be Ctrl+F4.
+        self.hands_free = False
+        # The dictation in flight (worker thread only): samples already transcribed, their
+        # texts, and how many of those texts were already typed.
+        self._done = 0
+        self._pieces: list[str] = []
+        self._typed = 0
 
     # ------------------------------------------------------------------ QThread
     def run(self):
@@ -89,6 +110,14 @@ class TranscriptionWorker(BaseWorker):
 
             if audio is _RELOAD:
                 self._load_model()
+                continue
+
+            if audio is _NEW_DICTATION:
+                self._reset_dictation()
+                continue
+
+            if isinstance(audio, _Partial):
+                self._transcribe_partial(audio.audio)
                 continue
 
             try:
@@ -232,19 +261,80 @@ class TranscriptionWorker(BaseWorker):
             _log.warning("Transcription in progress, skipped")
             self.error_occurred.emit("osd.stt_busy")
 
+    def begin_dictation(self) -> None:
+        """AudioWorker.recording_started. A recording that never reaches add_audio (too
+        short, microphone lost) must not leave its pieces to the next one."""
+        try:
+            self._queue.put_nowait(_NEW_DICTATION)
+        except queue.Full:
+            pass  # finished dictations are waiting; each of them resets the state too
+
+    def add_partial(self, audio) -> None:
+        """AudioWorker.partial_audio. Only looked at when the worker is idle: the finished
+        recording covers everything, so a skipped snapshot loses nothing."""
+        if self.is_ready and self._queue.empty():
+            try:
+                self._queue.put_nowait(_Partial(audio))
+            except queue.Full:
+                pass
+
     # ----------------------------------------------------------------- private
     def _target_language(self) -> str | None:
         lang = self.settings.get("language", "auto")
         return None if lang == "auto" else lang
 
     def _decode(self, audio) -> str:
+        if len(audio) == 0:
+            return ""
         segments, _ = self._model.transcribe(
             audio,
             language       = self._target_language(),
-            initial_prompt = self.settings.get("initial_prompt", "").strip(),
+            # Earlier pieces of this dictation carry capitals, punctuation and terms over the cut.
+            initial_prompt = context_prompt(self.settings.get("initial_prompt", ""), " ".join(self._pieces)),
             **TRANSCRIBE_OPTIONS,
         )
+        segments = list(segments)  # decoding happens here
+        if any(isinstance(seg.temperature, float) and seg.temperature > 0 for seg in segments):
+            _log.info("Low-confidence audio: decoded a second time")
         return " ".join(seg.text for seg in segments).strip()
+
+    def _reset_dictation(self) -> None:
+        self._done, self._pieces, self._typed = 0, [], 0
+
+    def _emit_untyped(self) -> str:
+        """Hands the pieces not typed yet to the UI as one text."""
+        text = " ".join(self._pieces[self._typed:])
+        self._typed = len(self._pieces)
+        if text:
+            _log.log(OK, "Transcript", extra={"transcript": text})
+            self.text_ready.emit(text)
+        return text
+
+    def _transcribe_partial(self, audio) -> None:
+        """While the user is still speaking: transcribes the speech up to a real pause, so
+        only the rest is left when the dictation ends. Hands-free, it also types the piece
+        and notices that the speaker has stopped. Any failure is left to the final pass."""
+        if self._model is None:
+            return
+        try:
+            rest = audio[self._done:]
+            speeches = speech_chunks(rest, TRANSCRIBE_OPTIONS["vad_parameters"]["threshold"])
+            cut = next_cut(speeches, len(rest))
+            if cut is None:
+                if self.hands_free and speech_is_over(speeches, len(rest), heard_before=self._done > 0):
+                    self.speech_ended.emit()
+                return
+            started = time.perf_counter()
+            text = self._filter.clean(self._decode(rest[:cut]), duration=cut / SAMPLE_RATE)
+            self._done += cut
+            _log.info(f"Piece transcribed while recording: {cut / SAMPLE_RATE:.1f}s of audio "
+                      f"in {(time.perf_counter() - started) * 1000:.0f} ms")
+            if text:
+                self._pieces.append(text)
+                if self.hands_free:
+                    self._emit_untyped()
+        except Exception as e:
+            _log.warning(f"Background transcription skipped: {str(e) or 'unknown error'}")
 
     @measure_time("STT", "Whisper Transcription")
     def _transcribe(self, audio):
@@ -258,9 +348,10 @@ class TranscriptionWorker(BaseWorker):
             rms = float(np.sqrt(np.mean(audio ** 2)))
             _log.info(f"Audio RMS={rms:.4f}, duration={len(audio)/SAMPLE_RATE:.1f}s")
 
+            rest = audio[self._done:]  # what was not transcribed while the user was speaking
             started = time.perf_counter()
             try:
-                raw_text = self._decode(audio)
+                raw_text = self._decode(rest)
             except Exception as e:
                 if self._device != "cuda":
                     raise
@@ -271,21 +362,23 @@ class TranscriptionWorker(BaseWorker):
                 if not self.is_ready:
                     raise
                 started = time.perf_counter()
-                raw_text = self._decode(audio)
+                raw_text = self._decode(rest)
             self.dictation_timed.emit(len(audio) / SAMPLE_RATE, time.perf_counter() - started)
 
-            final_text = self._filter.clean(raw_text, duration=len(audio) / SAMPLE_RATE)
-            
-            if final_text is None:
+            last_text = self._filter.clean(raw_text, duration=len(rest) / SAMPLE_RATE)
+            if last_text:
+                self._pieces.append(last_text)
+
+            if not self._pieces:
                 _log.warning("No speech detected")
                 self.error_occurred.emit("osd.no_speech")
                 return
 
-            _log.log(OK, "Transcript", extra={"transcript": final_text})
-            self.text_ready.emit(final_text)
+            self._emit_untyped()
 
         except Exception as e:
             _log.error(f"Transcription error: {e}")
             self.error_occurred.emit("osd.stt_error")
         finally:
+            self._reset_dictation()
             self.transcription_finished.emit()

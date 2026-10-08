@@ -277,6 +277,11 @@ def main():
         downloader_worker.error_occurred.connect(lambda msg: osd.setStateError(msg))
 
         audio_worker.audio_ready.connect(transcription_worker.add_audio)
+        # Long dictations: finished sentences are transcribed while the user is still speaking,
+        # and a hands-free dictation (key tapped, not held) ends when the speaker stops (plan 0014).
+        audio_worker.recording_started.connect(transcription_worker.begin_dictation)
+        audio_worker.partial_audio.connect(transcription_worker.add_partial)
+        transcription_worker.speech_ended.connect(tray.on_speech_ended)
 
         transcription_worker.text_ready.connect(tray.on_text_ready)
 

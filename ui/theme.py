@@ -10,14 +10,13 @@ G_1, G_2, G_3, G_4, G_5, G_6 = 8, 16, 24, 32, 40, 48
 FONT_SIZE_SM = 8   # pt — log box, helper labels
 FONT_SIZE_MD = 9   # pt — general UI default
 FONT_SIZE_LG = 10  # pt — toolbar icons
-FONT_SIZE_OSD = 14 # px — OSD overlay
+FONT_SIZE_OSD = 12 # px — OSD overlay
 
 # Panel Dimensions
-PANEL_WIDTH = 320      # px — OSD
 DIALOG_WIDTH = 384     # px — HelpWindow
 SETTINGS_WIDTH  = 600  # px — SettingsWindow fixed width
 SETTINGS_HEIGHT = 340  # px — SettingsWindow fixed height
-OSD_BOTTOM_MARGIN = 48 # px — OSD bottom offset (taskbar clearance)
+OSD_TOP_MARGIN = 12 # px — OSD offset from the top of the screen
 
 # The one colour scheme (ADR-0013): dark blue-grey. There is no light theme.
 PALETTE = {

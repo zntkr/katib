@@ -14,6 +14,8 @@ SAMPLE_RATE = 16000
 MIN_SEGMENT_SECONDS = 8.0   # a piece is at least this long before it may be cut off
 MIN_PAUSE_SECONDS = 0.7     # only a pause at least this long is a cut point
 CONTEXT_CHARS = 200         # how much of the text so far the next piece is prompted with
+END_PAUSE_SECONDS = 3.0     # hands-free: this much silence after speech ends the dictation
+NO_SPEECH_SECONDS = 8.0     # hands-free: nothing said for this long ends it too
 
 
 def next_cut(speeches: list[dict], length: int, sample_rate: int = SAMPLE_RATE,
@@ -39,8 +41,20 @@ def next_cut(speeches: list[dict], length: int, sample_rate: int = SAMPLE_RATE,
     return None
 
 
-def find_cut(audio: np.ndarray, threshold: float = 0.4) -> int | None:
-    """next_cut() on Silero VAD's view of the audio (16 kHz mono float32)."""
+def speech_is_over(speeches: list[dict], length: int, heard_before: bool = False,
+                   sample_rate: int = SAMPLE_RATE) -> bool:
+    """Hands-free dictation: has the speaker finished? True after END_PAUSE_SECONDS of
+    silence following speech, or when nothing was said for NO_SPEECH_SECONDS.
+
+    heard_before: speech was already cut off this audio, so silence alone means "finished".
+    """
+    if speeches:
+        return length - speeches[-1]["end"] >= END_PAUSE_SECONDS * sample_rate
+    return length >= (END_PAUSE_SECONDS if heard_before else NO_SPEECH_SECONDS) * sample_rate
+
+
+def speech_chunks(audio: np.ndarray, threshold: float = 0.4) -> list[dict]:
+    """Silero VAD's view of the audio (16 kHz mono float32): where speech is, in samples."""
     from faster_whisper.vad import VadOptions, get_speech_timestamps
 
     options = VadOptions(
@@ -48,7 +62,12 @@ def find_cut(audio: np.ndarray, threshold: float = 0.4) -> int | None:
         min_silence_duration_ms=int(MIN_PAUSE_SECONDS * 1000),  # shorter silences stay inside a chunk
         speech_pad_ms=0,  # chunk edges are where speech is, so the gaps are the real pauses
     )
-    return next_cut(get_speech_timestamps(audio, options), len(audio))
+    return get_speech_timestamps(audio, options)
+
+
+def find_cut(audio: np.ndarray, threshold: float = 0.4) -> int | None:
+    """next_cut() on Silero VAD's view of the audio."""
+    return next_cut(speech_chunks(audio, threshold), len(audio))
 
 
 def context_prompt(user_prompt: str, text_so_far: str, max_chars: int = CONTEXT_CHARS) -> str:

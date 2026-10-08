@@ -1,15 +1,14 @@
 import math
 
-from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QFrame
+from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel
 from PySide6.QtCore import Qt, QRectF, QTimer, QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import QFont, QPalette, QPainter, QPaintEvent, QColor
 
-from ui.theme import theme_manager, G_1, G_2, FONT_SIZE_OSD, PANEL_WIDTH, OSD_BOTTOM_MARGIN
-from core.settings import STATE_LISTENING, STATE_PROCESSING, STATE_READY
-from core.i18n import t, try_t, upper
+from ui.theme import theme_manager, G_1, G_2, FONT_SIZE_OSD, OSD_TOP_MARGIN
+from core.i18n import try_t, upper
 
 # --- OSD Constants ---
-OSD_HEIGHT = 56
+OSD_HEIGHT = 36      # the pill is as wide as what it shows (see MinimalOSD._fit)
 FADE_DURATION_MS = 250
 WAVE_FRAME_MS = 33   # ~30 frames per second
 
@@ -32,12 +31,13 @@ class LevelWave(QWidget):
     BARS = 14
     BAR_WIDTH = 3
     GAP = 2
-    HEIGHT = 24
+    HEIGHT = 20
+    DOT = 8              # the dot's diameter; in "dot" mode the strip is no wider than it
     EASE = 0.35          # share of the remaining distance a bar covers per frame
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
-        self.setFixedSize(self.BARS * (self.BAR_WIDTH + self.GAP) - self.GAP, self.HEIGHT)
+        self.setFixedSize(self.DOT, self.HEIGHT)
         self.mode = "dot"
         self.colour = QColor(theme_manager.palette["CLR_TEXT_MUTED"])
         self.bars = [0.0] * self.BARS       # what is drawn, 0..1
@@ -47,6 +47,7 @@ class LevelWave(QWidget):
     def set_mode(self, mode: str, colour: str) -> None:
         self.mode = mode
         self.colour = QColor(colour)
+        self.setFixedWidth(self.DOT if mode == "dot" else self.BARS * (self.BAR_WIDTH + self.GAP) - self.GAP)
         self.bars = [0.0] * self.BARS
         self._targets = [0.0] * self.BARS
         self._phase = 0.0
@@ -72,8 +73,7 @@ class LevelWave(QWidget):
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(self.colour)
         if self.mode == "dot":
-            radius = 4
-            painter.drawEllipse(QRectF(self.width() / 2 - radius, self.height() / 2 - radius, radius * 2, radius * 2))
+            painter.drawEllipse(QRectF(0, (self.HEIGHT - self.DOT) / 2, self.DOT, self.DOT))
         else:
             for i, bar in enumerate(self.bars):
                 height = max(self.BAR_WIDTH, bar * self.HEIGHT)  # silence is a row of dots
@@ -85,7 +85,7 @@ class LevelWave(QWidget):
 
 class MinimalOSD(QWidget):
     """
-    Minimal, click-through status indicator shown at the bottom-center of the screen during dictation.
+    Minimal, click-through status indicator shown at the top-center of the screen during dictation.
     """
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -107,7 +107,7 @@ class MinimalOSD(QWidget):
         pal.setColor(QPalette.ColorRole.Window, Qt.GlobalColor.transparent)
         self.setPalette(pal)
 
-        self.setFixedSize(PANEL_WIDTH, OSD_HEIGHT)
+        self.setFixedHeight(OSD_HEIGHT)
 
         self._error_active = False
         self._error_timer = QTimer(self)
@@ -134,34 +134,31 @@ class MinimalOSD(QWidget):
 
         painter.setBrush(color)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawRoundedRect(self.rect(), 28, 28)
+        painter.drawRoundedRect(self.rect(), OSD_HEIGHT / 2, OSD_HEIGHT / 2)
         painter.end()
 
     def _build_ui(self):
-        root = QHBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(G_2, 0, G_2, 0)
+        layout.setSpacing(G_1)
 
-        self.container = QFrame()
-        self.container.setObjectName("OSDContainer")
-        # The background is drawn in paintEvent, so the stylesheet only keeps the frame clear.
-        self.container.setStyleSheet("#OSDContainer { background: transparent; border: none; }")
-
-        c_layout = QHBoxLayout(self.container)
-        c_layout.setContentsMargins(G_2, 0, G_2, 0)
-        c_layout.setSpacing(G_1)
-        c_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        # Level wave — left side: bars while recording or working, a dot for a message.
+        # The wave alone says "listening" (red, follows the voice) and "working" (blue, travels).
+        # Words appear only for a message, next to a still dot.
         self.wave = LevelWave()
-        c_layout.addWidget(self.wave)
+        layout.addWidget(self.wave)
 
-        self.text_label = QLabel(upper(t(STATE_READY)))
-        _osd_font = QFont("Segoe UI Variable Display", -1, QFont.Weight.Bold)
+        self.text_label = QLabel()
+        self.text_label.hide()
+        # A family Qt does not know silently becomes Tahoma; "Segoe UI" is on every Windows.
+        _osd_font = QFont(["Segoe UI Variable", "Segoe UI"], -1, QFont.Weight.DemiBold)
         _osd_font.setPixelSize(FONT_SIZE_OSD)
         self.text_label.setFont(_osd_font)
-        c_layout.addWidget(self.text_label)
+        layout.addWidget(self.text_label)
 
-        root.addWidget(self.container)
+    def _fit(self) -> None:
+        """The pill is exactly as wide as the wave and the text it shows."""
+        self.layout().activate()
+        self.setFixedWidth(self.layout().sizeHint().width())
 
     def _setup_animations(self):
         self.fade_anim = QPropertyAnimation(self, b"windowOpacity")
@@ -180,28 +177,22 @@ class MinimalOSD(QWidget):
 
     # --- Public API (State Management) ---
     def refresh_language(self):
-        if self._osd_state == "recording":
-            self.text_label.setText(upper(t(STATE_LISTENING)))
-        elif self._osd_state == "processing":
-            self.text_label.setText(upper(t(STATE_PROCESSING)))
-        elif self._osd_state == "error":
+        if self._osd_state == "error":
             self.text_label.setText(upper(try_t(self._osd_error_msg))[:60])
+            self._fit()
+            self.position_osd()
 
     def setStateRecording(self):
         self._osd_state = "recording"
-        p = theme_manager.palette
-        self.text_label.setText(upper(t(STATE_LISTENING)))
-        self.text_label.setStyleSheet(f"color: {p['CLR_TEXT_STATUS']};")
-        self.wave.set_mode("level", p['CLR_ERR'])
+        self.text_label.hide()
+        self.wave.set_mode("level", theme_manager.palette['CLR_ERR'])
         self.wave_timer.start()
         self.show_osd()
 
     def setStateProcessing(self):
         self._osd_state = "processing"
-        p = theme_manager.palette
-        self.text_label.setText(upper(t(STATE_PROCESSING)))
-        self.text_label.setStyleSheet(f"color: {p['CLR_TEXT_STATUS']};")
-        self.wave.set_mode("busy", p['CLR_INFO'])
+        self.text_label.hide()
+        self.wave.set_mode("busy", theme_manager.palette['CLR_INFO'])
         self.wave_timer.start()
         self.show_osd()
 
@@ -212,6 +203,7 @@ class MinimalOSD(QWidget):
         text = upper(try_t(msg))[:60]
         self.text_label.setText(text)
         self.text_label.setStyleSheet(f"color: {p['CLR_TEXT_STATUS']};")
+        self.text_label.show()
         self.wave.set_mode("dot", p['CLR_WARN'])
         self.wave_timer.stop()
         self._error_active = True
@@ -220,6 +212,7 @@ class MinimalOSD(QWidget):
         self._error_timer.start(ERROR_DISPLAY_MS)
 
     def show_osd(self):
+        self._fit()
         self.position_osd()
         if self.isVisible() and self.windowOpacity() > 0.9:
             return
@@ -250,8 +243,10 @@ class MinimalOSD(QWidget):
     def position_osd(self):
         from PySide6.QtWidgets import QApplication
         screen = QApplication.primaryScreen().availableGeometry()
-        x = (screen.width() - self.width()) // 2
-        y = screen.height() - self.height() - OSD_BOTTOM_MARGIN
+        # Top centre: text is typed near the bottom of most windows (chat boxes, terminals,
+        # the last line of a document), and the pill must not cover what is being dictated.
+        x = screen.x() + (screen.width() - self.width()) // 2
+        y = screen.y() + OSD_TOP_MARGIN
         self.move(x, y)
 
     def closeEvent(self, event) -> None:

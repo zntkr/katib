@@ -7,6 +7,7 @@ from core.settings import (
     APP_NAME, MSG_MIC_UNAVAILABLE, MSG_MODEL_NOT_FOUND, STATE_LISTENING, STATE_LOADING,
     STATE_PROCESSING,
 )
+from core.chime import chime
 from core.i18n import t, set_language
 from core.log import get_logger, OK
 from core.text_injector import inject_text
@@ -41,6 +42,7 @@ class TrayApp(QObject):
     _RTL_LANGS = {"ar", "fa", "ur"}
     TRAY_RETRY_INTERVAL_MS = 5000
     TRAY_RETRY_LIMIT       = 60  # give up after 5 minutes
+    TAP_SECONDS            = 0.8  # a key press shorter than this is a tap, not a hold
 
     def __init__(self, settings, model_provider, parent: QObject | None = None):
         super().__init__(parent)
@@ -63,6 +65,11 @@ class TrayApp(QObject):
         # feels is release → paste (plan 0012). Cleared when the dictation ends either way.
         self._released_at: float | None = None
         self._dictation_timing: tuple[float, float] | None = None  # seconds of audio, seconds of model
+        # One key, two ways to dictate: hold it and speak, or tap it and speak hands-free.
+        self._pressed_at: float | None = None
+        self._hands_free: bool = False
+        self._swallow_release: bool = False  # the release of the tap that ended a hands-free dictation
+        self._transcript_parts: list[str] = []
 
         p = theme_manager.palette
         self.icon_idle = colorize_svg_icon(ICN_MIC, p["CLR_TEXT_MUTED"], size=64)
@@ -162,7 +169,9 @@ class TrayApp(QObject):
 
     @Slot(str)
     def on_text_ready(self, text: str) -> None:
-        self._last_transcript = text
+        # A hands-free dictation arrives in pieces; "copy last dictation" means all of them.
+        self._transcript_parts.append(text)
+        self._last_transcript = " ".join(self._transcript_parts)
         self._act_copy.setEnabled(True)
         # Taken before the paste: inject_text() runs processEvents(), which can deliver
         # transcription_finished (it clears both) before the paste returns.
@@ -179,6 +188,10 @@ class TrayApp(QObject):
 
     @Slot()
     def on_hotkey_pressed(self):
+        if self._hands_free:  # the second tap: the user says they are done
+            self._swallow_release = True
+            self._end_dictation()
+            return
         if self.transcription_worker and not self.transcription_worker.is_ready:
             if self.osd:
                 self.osd.setStateError(STATE_LOADING if self.transcription_worker.is_loading else MSG_MODEL_NOT_FOUND)
@@ -187,17 +200,49 @@ class TrayApp(QObject):
             self.osd.setStateRecording()
         self._released_at = None  # a dropped recording must not time the next one
         self._dictation_timing = None
+        self._pressed_at = time.monotonic()
         self.set_recording(True)
         if self.audio_worker:
             self.audio_worker.start_recording()
+        if self._recording:  # still true: the microphone opened
+            chime("start")
 
     @Slot()
     def on_hotkey_released(self):
-        if self._recording:
+        """Held key: the release ends the dictation. Short tap: it goes on hands-free until
+        the next tap or until the speaker stops (on_speech_ended)."""
+        if self._swallow_release:
+            self._swallow_release = False
+            return
+        tapped = (self._recording and self._pressed_at is not None
+                  and time.monotonic() - self._pressed_at < self.TAP_SECONDS)
+        self._pressed_at = None
+        if tapped:
+            self._set_hands_free(True)
+        else:
+            self._end_dictation()
+
+    @Slot()
+    def on_speech_ended(self) -> None:
+        """TranscriptionWorker.speech_ended: a hands-free dictation ends on its own."""
+        if self._hands_free:
+            self._end_dictation()
+
+    def _set_hands_free(self, active: bool) -> None:
+        self._hands_free = active
+        if self.transcription_worker:
+            self.transcription_worker.hands_free = active
+
+    def _end_dictation(self) -> None:
+        self._set_hands_free(False)
+        was_recording = self._recording
+        if was_recording:
             self._released_at = time.perf_counter()
         self.set_recording(False)
         if self.audio_worker:
             self.audio_worker.stop_recording()
+        if was_recording:
+            chime("end")  # after the microphone closed: the tone is not part of the recording
 
     @Slot(float)
     def on_level_changed(self, value: float) -> None:
@@ -267,12 +312,14 @@ class TrayApp(QObject):
         self._processing = False
         self._released_at = None  # no speech or an error: nothing was pasted, nothing to time
         self._dictation_timing = None
+        self._transcript_parts = []  # the dictation is complete; the next text starts a new one
         self._resolve_status()
 
     @Slot()
     def on_mic_unavailable(self) -> None:
         self._mic_unavailable = True
         self._recording = False  # a recording cannot start or continue without a microphone
+        self._set_hands_free(False)
         self._resolve_status()
 
     @Slot()
