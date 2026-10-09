@@ -958,6 +958,80 @@ class TestGpuFailureDuringDictation:
         assert worker._model.transcribe.call_count == 1
 
 
+class _FakeModel:
+    """A model whose destruction can be observed (a MagicMock keeps itself alive in cycles)."""
+    def __init__(self):
+        self.model = MagicMock()   # the CTranslate2 model inside faster-whisper's wrapper
+
+    def transcribe(self, *args, **kwargs):
+        return [], MagicMock()
+
+
+class TestReplacingAModel:
+    """Destroying a CTranslate2 model that has run on the GPU killed Katib (RTX 4080,
+    2026-10-09: it died the moment a download finished and it changed models). The GPU model
+    gives its memory back and is then kept, never destroyed. These tests hold the rule; the
+    crash itself only shows on a real card: scripts/gpu_model_degisimi.py."""
+
+    def _replace(self, worker, old_device: str, **load_kwargs):
+        import gc
+        import weakref
+        old = _FakeModel()
+        worker._model, worker._device = old, old_device
+        unload, alive = old.model.unload_model, weakref.ref(old)
+        del old
+        with _gpu(), \
+             patch.object(worker.model_provider, "get_active_model_path", return_value="/fake/dir"), \
+             patch(_PATCH_MODEL_CLS, side_effect=lambda *a, **k: _FakeModel()):
+            worker._load_model(**load_kwargs)
+        gc.collect()
+        return unload, alive
+
+    def test_a_gpu_model_gives_its_memory_back_and_is_not_destroyed(self, qapp, mock_settings):
+        worker = TranscriptionWorker(mock_settings, MagicMock())
+        unload, alive = self._replace(worker, "cuda")
+        unload.assert_called_once_with()
+        assert alive() is not None
+        assert worker.is_ready is True
+
+    def test_a_cpu_model_is_destroyed_as_before(self, qapp, mock_settings):
+        worker = TranscriptionWorker(mock_settings, MagicMock())
+        unload, alive = self._replace(worker, "cpu")
+        unload.assert_not_called()
+        assert alive() is None
+
+    def test_falling_back_to_the_cpu_does_not_destroy_the_gpu_model_either(self, qapp, mock_settings):
+        """The path a GPU failure during a dictation or a warm-up takes."""
+        worker = TranscriptionWorker(mock_settings, MagicMock())
+        unload, alive = self._replace(worker, "cuda", allow_gpu=False)
+        unload.assert_called_once_with()
+        assert alive() is not None
+        assert worker._device == "cpu"
+
+    def test_every_replaced_gpu_model_is_kept(self, qapp, mock_settings):
+        worker = TranscriptionWorker(mock_settings, MagicMock())
+        first = self._replace(worker, "cuda")[1]
+        second = self._replace(worker, "cuda")[1]
+        assert first() is not None and second() is not None
+
+    def test_a_failed_unload_does_not_stop_the_next_model_from_loading(self, qapp, mock_settings):
+        import weakref
+        worker = TranscriptionWorker(mock_settings, MagicMock())
+        s = _capture(worker)
+        old = _FakeModel()
+        old.model.unload_model.side_effect = RuntimeError("CUDA error")
+        worker._model, worker._device = old, "cuda"
+        alive = weakref.ref(old)
+        del old
+        with _gpu(), \
+             patch.object(worker.model_provider, "get_active_model_path", return_value="/fake/dir"), \
+             patch(_PATCH_MODEL_CLS, side_effect=lambda *a, **k: _FakeModel()):
+            worker._load_model()
+        assert worker.is_ready is True
+        assert alive() is not None
+        assert any(lvl == "WRN" and "CUDA error" in m for lvl, _, m in s["logs"])
+
+
 # _load_model: warm-up (plan 0008)
 
 class TestWarmUp:

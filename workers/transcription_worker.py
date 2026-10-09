@@ -86,6 +86,7 @@ class TranscriptionWorker(BaseWorker):
         self.is_loading: bool = True  # run() loads the model first; False once an attempt ends
         self._current_model_dir: str | None = None
         self._device = "cpu"  # where the loaded model runs: "cuda" or "cpu"
+        self._retired_gpu_models: list = []  # replaced GPU models, never destroyed (_release_model)
         self._gpu_note = ""   # why the GPU is not used; shown next to the device in the settings window
         self._filter = TranscriptionFilter()
         # Set by TrayApp: nobody holds the key, so pieces are typed as soon as they are ready
@@ -192,6 +193,31 @@ class TranscriptionWorker(BaseWorker):
         cpu_compute_type = self.settings.get("compute_type")
         return open_on("cpu", cpu_compute_type), "cpu", cpu_compute_type
 
+    def _release_model(self) -> None:
+        """Lets go of the loaded model before another one is loaded."""
+        model = self._model
+        self._model = None  # not `del`: the attribute must survive a failed load (plan 0001)
+        if model is None:
+            return
+        if self._device == "cuda":
+            # Destroying a model that has run on the GPU can kill the process: an unhandled C++
+            # exception inside CTranslate2 4.7.1 on Windows (0xe06d7363, then abort). Seen on an
+            # RTX 4080, 2026-10-09: Katib died the moment a download finished and it changed
+            # models. Reproduced with the speech language set to "tr", not with automatic
+            # detection. unload_model() gives the GPU memory back without destroying anything
+            # (measured: about 50 MB stays per replaced model), so the object is kept until
+            # Katib exits; main.py leaves through os._exit, which runs no destructors.
+            # Check on a real card: scripts/gpu_model_degisimi.py.
+            try:
+                model.model.unload_model()
+            except Exception as e:
+                _log.warning(f"The previous model's GPU memory was not released: {e}")
+            self._retired_gpu_models.append(model)
+            return
+        del model
+        import gc
+        gc.collect()
+
     def _load_model_inner(self, allow_gpu: bool = True):
         original_dir = self.settings.get("model_dir")
         valid_dir = self.model_provider.get_active_model_path()
@@ -208,10 +234,7 @@ class TranscriptionWorker(BaseWorker):
         self.loading_state_changed.emit(True)
 
         try:
-            if self._model is not None:
-                self._model = None  # not `del`: the attribute must survive a failed load (plan 0001)
-                import gc
-                gc.collect()
+            self._release_model()
 
             from faster_whisper import WhisperModel
             start_time = time.time()

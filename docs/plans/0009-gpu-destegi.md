@@ -4,8 +4,9 @@
 > günlüğü"ne bir satır ekle.
 > Göreve yeni başlayan ajan: önce [Devralma notu](#devralma-notu) bölümünü oku.
 
-**Durum:** ⏸️ **DOĞRULAMA BEKLİYOR** — Faz 1 bitti (2026-10-03); Faz 2 kararı verildi (iki ayrı
-kurulum paketi) ve derleme tarafı uygulandı (2026-10-07), Windows'ta derleme ve NVIDIA kartta deneme bekliyor.
+**Durum:** ⏸️ **DOĞRULAMA BEKLİYOR** — Faz 1 bitti (2026-10-03); Faz 2: GPU paketi derlendi, RTX 4080'de
+kuruldu ve GPU'da çalıştı (2026-10-09); o denemede bulunan model değişimi çökmesi düzeltildi (2026-10-10).
+Bekleyen: NVIDIA kartı olmayan makinede deneme ve düzeltmeyi içeren GPU paketinin yeniden yayınlanması.
 **Kullanıcı verisi değişikliği:** YOK — yalnız yeni bir ayar anahtarı
 (`compute_device`, varsayılan `auto`); CONTEXT.md → Mimari Kurallar #8'e göre onay
 gerektirmez. `compute_type`'ın anlamı ve varsayılanı değişmedi.
@@ -97,11 +98,16 @@ ancak kitaplıklar `PATH`'te ise kullanır. Seçenekler:
       Diğer CUDA kitaplıkları (cuDNN vb.) her iki pakette de engelli.
 - [x] `Katib.iss`: GPU paketinin dosya adı `_GPU` ekli.
 - [x] Testler: `tests/test_packaging.py::TestGpuPackage` (7; değişiklik geri alınınca 5'i kırmızı).
-- [ ] **Windows'ta doğrulama:** `build.bat gpu` → `dist\Katib\_internal\nvidia\cublas\bin\` içinde
-      `cublas64_12.dll` ve `cublasLt64_12.dll` var, başka CUDA DLL'i yok; NVIDIA kartlı makinede
-      kurulum sonrası "Dikte" sekmesinde modelin çalıştığı yer "GPU" görünür; NVIDIA kartı olmayan
-      makinede GPU paketi CPU'da sorunsuz çalışır. Normal `build.bat` çıktısında `nvidia\` klasörü yok.
-- [ ] Paket boyutu ölçülür (beklenen: kurulum paketi ~600 MB) ve sürüm notlarına yazılır.
+- [x] **Windows'ta doğrulama, NVIDIA kartlı makine (2026-10-09, RTX 4080, sürücü 596.49):** `build.bat gpu` →
+      `dist\Katib\_internal\nvidia\cublas\bin\` içinde yalnız `cublas64_12.dll` ve `cublasLt64_12.dll`;
+      başka CUDA DLL'i ve `icu*.dll` yok. Kurulu uygulamanın günlüğü: `Loading (cuda/float16)`,
+      `Model ready (0.5s)`, `Warm-up done`.
+- [ ] **NVIDIA kartı olmayan makinede** GPU paketi CPU'da sorunsuz çalışır (denenmedi). Normal `build.bat`
+      çıktısında `nvidia\` klasörü olmadığına da GPU derlemesinden sonra yeniden bakılmadı.
+- [x] **GPU'da model değişimi çökmesi (2026-10-10):** düzeltildi; bkz. yürütme günlüğü.
+- [ ] **Yayın:** v1.2.0'a eklenen `Katib_Setup_1.2.0_GPU.exe` düzeltmeden ÖNCE derlendi ve çökmeyi içerir.
+      Düzeltmeyi içeren paket derlenip yayınlanmalı; sürüm notlarına hangi paketi kimin indireceği ve
+      boyut yazılmalı. Ölçülen boyut: kurulum paketi 540 MB (normal paket 91 MB), `dist\Katib` 1,1 GB.
 
 ## Faz 3 — Ayar ekranı (karar bekliyor)
 
@@ -195,3 +201,31 @@ kalmasın diye) ama `tests/test_installer.py` klasör silmeyi bilinçli yasaklı
 geride kalan cuBLAS zararsız (GPU çalışmaya devam eder), satır eklenmedi. Yalnız plan 0015'in
 bilinen kalıntısı `_internal\icu*.dll` dosya adıyla siliniyor. Windows'ta derleme ve gerçek
 NVIDIA kartta deneme bu konteynerde yapılamaz (Faz 2 son iki kutu).
+
+### 2026-10-09 / 10 — Faz 2: gerçek kartta deneme, model değişimi çökmesi
+
+`build.bat gpu` ile `Katib_Setup_1.2.0_GPU.exe` üretildi (540 MB) ve proje sahibinin makinesine
+(RTX 4080) kuruldu. Model GPU'da yüklendi ve ısındı. Aynı oturumda iki ayrı olay görüldü:
+
+1. **Kaspersky**, uygulama içi model indirmesi başladıktan 4 sn sonra `Katib.exe`'yi
+   `PDM:Exploit.Win32.Generic` diye sonlandırdı ve dosyayı sildi. Davranış tabanlı tespit; proje sahibi
+   korumayı durdurunca indirme tamamlandı. Kod tarafında çözümü yok (imza ya da üreticiye bildirim).
+2. **Çökme:** indirme bitip Katib yeni modele geçerken süreç öldü. Windows olay günlüğü: `0xe06d7363`
+   (işlenmemiş C++ istisnası), ardından `ucrtbase.dll` içinde `0xc0000409`. Katib günlüğünde
+   `Download complete` var, ardından gelmesi gereken `Loading (...)` yok: arada yalnız eski modelin
+   bırakılması var.
+
+Daraltma (geliştirme ortamı, aynı kart, CTranslate2 4.7.1): GPU'da en az bir kez çözümleme yapmış bir
+model yok edilirken süreç ölüyor. Konuşma dili `tr` iken her denemede öldü; otomatik algılamada (`auto`),
+hiç çözümleme yapmamış modelde ve CPU'da ölmedi. `unload_model()` çökmüyor ve belleği geri veriyor, ama
+ardından nesne yok edilirse süreç yine ölüyor. Kök neden CTranslate2'nin içinde; aranmadı.
+
+Düzeltme: `TranscriptionWorker._release_model` GPU modelinin belleğini `unload_model()` ile boşaltır ve
+nesneyi yok etmez (`_retired_gpu_models`). Katib `os._exit` ile çıktığı için yıkıcılar hiç çalışmaz.
+Bedel: değiştirilen model başına kartta yaklaşık 50 MB kalır. Aynı yol GPU'dan CPU'ya dönüşte de
+kullanılır (ısınma ya da dikte anındaki GPU hatası); o dönüş de düzeltmeden önce aynı koddan geçiyordu.
+
+Doğrulama: `scripts/gpu_model_degisimi.py` (small ↔ large-v3 dört değişim, CPU'ya dönüş, yeniden GPU)
+düzeltmeden önce 2. adımda ölüyordu, düzeltmeyle `TAMAM` ile bitiyor. Birim testleri:
+`tests/test_transcription_worker_logic.py::TestReplacingAModel` (düzeltme kapatılınca 4'ü kırmızı).
+⚠️ Kurulu (paketlenmiş) uygulamada düzeltme denenmedi: yeni derleme gerekir.
