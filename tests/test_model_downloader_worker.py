@@ -8,6 +8,8 @@ from unittest.mock import patch
 import pytest
 from workers.model_downloader_worker import (
     ModelDownloaderWorker,
+    DownloadProgress,
+    progress_bar_class,
     DEFAULT_DOWNLOAD_PARENT,
 )
 
@@ -44,8 +46,8 @@ class TestInitialState:
 
     def test_required_signals_exist(self, qapp, mock_settings):
         worker = ModelDownloaderWorker(mock_settings)
-        for attr in ("error_occurred", "download_finished",
-                     "status_changed", "download_state_changed"):
+        for attr in ("error_occurred", "download_finished", "status_changed",
+                     "download_state_changed", "download_progress"):
             assert hasattr(worker, attr)
 
     def test_not_running_on_creation(self, qapp, mock_settings):
@@ -565,3 +567,135 @@ class TestExceptionMessageMapping:
     def test_exception_message_translations(self, qapp, tmp_path, exc_text, expected_osd_key, mock_settings):
         msg = self._run_with_exception(tmp_path, mock_settings, exc_text)
         assert expected_osd_key in msg
+
+
+# progress
+
+class _Clock:
+    """A clock the test moves by hand."""
+    def __init__(self):
+        self.now = 100.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+def _progress():
+    reports, clock = [], _Clock()
+    return DownloadProgress(lambda *report: reports.append(report), clock), reports, clock
+
+
+class TestDownloadProgress:
+    """How much of a download is done and how fast it is going, from the byte counts the
+    library reports chunk by chunk."""
+
+    def test_reports_bytes_done_and_total(self):
+        progress, reports, clock = _progress()
+        clock.now += 1
+        progress.advance(1_000_000, 4_000_000)
+        assert reports[-1][:2] == (1_000_000, 4_000_000)
+
+    def test_bytes_add_up_across_chunks(self):
+        progress, reports, clock = _progress()
+        for _ in range(3):
+            clock.now += 1
+            progress.advance(1_000_000, 4_000_000)
+        assert reports[-1][0] == 3_000_000
+
+    def test_speed_is_that_of_the_last_seconds_not_of_the_whole_download(self):
+        progress, reports, clock = _progress()
+        for _ in range(10):                  # 1 MB/s for ten seconds
+            clock.now += 1
+            progress.advance(1_000_000, 0)
+        for _ in range(5):                   # then 3 MB/s
+            clock.now += 1
+            progress.advance(3_000_000, 0)
+        assert reports[-1][2] == pytest.approx(3_000_000)
+
+    def test_reports_a_few_times_a_second_however_often_chunks_arrive(self):
+        progress, reports, clock = _progress()
+        for _ in range(100):                 # a chunk every 10 ms for one second
+            clock.now += 0.01
+            progress.advance(1000, 0)
+        assert 2 <= len(reports) <= 5
+
+    def test_first_chunk_is_reported_at_once(self):
+        progress, reports, clock = _progress()
+        progress.advance(1000, 5000)         # the clock has not moved: no speed yet
+        assert reports == [(1000, 5000, 0.0)]
+
+
+class TestProgressBarClass:
+    """The class handed to snapshot_download as tqdm_class. The library makes two bars from
+    it: one counting bytes, one counting files."""
+
+    def test_bytes_bar_forwards_what_the_library_reports(self):
+        progress, reports, _ = _progress()
+        bar = progress_bar_class(progress)(total=0, initial=0, unit="B", unit_scale=True, desc="x")
+        bar.total += 500                     # the library adds each file's size as it learns it
+        bar.update(200)
+        assert reports[-1][:2] == (200, 500)
+
+    def test_file_counter_is_not_mistaken_for_bytes(self):
+        progress, reports, _ = _progress()
+        counter = progress_bar_class(progress)([1, 2, 3], total=3, desc="Fetching 3 files")
+        assert list(counter) == [1, 2, 3]    # the library iterates its work through this bar
+        counter.update(1)
+        assert reports == []
+
+    def test_nothing_is_drawn(self):
+        """The packaged app has no console; a drawn bar would end up as lines in the log."""
+        progress, _, _ = _progress()
+        assert progress_bar_class(progress)(total=0, unit="B").disable
+
+
+class TestRunReportsProgress:
+    def _run(self, tmp_path, mock_settings):
+        worker = ModelDownloaderWorker(mock_settings)
+        worker._target_parent = tmp_path
+        worker._repo_id = MODEL_REPO_ID
+        captured = {}
+
+        def capturing(repo_id, local_dir, **kwargs):
+            captured.update(kwargs)
+            _fake_download(repo_id, local_dir)
+
+        with patch("huggingface_hub.snapshot_download", side_effect=capturing):
+            worker.run()
+        return worker, captured
+
+    def test_library_progress_reaches_the_signal(self, qapp, tmp_path, mock_settings):
+        worker, captured = self._run(tmp_path, mock_settings)
+        seen = []
+        worker.download_progress.connect(lambda *report: seen.append(report))
+        bar = captured["tqdm_class"](total=0, unit="B")
+        bar.total += 100
+        bar.update(40)
+        assert seen[-1][:2] == (40, 100)
+
+    def test_library_reads_the_file_in_one_megabyte_chunks(self, qapp, tmp_path, mock_settings):
+        import huggingface_hub
+        self._run(tmp_path, mock_settings)
+        assert huggingface_hub.constants.DOWNLOAD_CHUNK_SIZE == 1024 * 1024
+
+
+def _library_source(name: str) -> str:
+    """Source of the installed huggingface_hub. Read from disk: this file replaces the module
+    itself with a mock."""
+    from importlib.metadata import distribution
+    path = distribution("huggingface_hub").locate_file(f"huggingface_hub/{name}")
+    return Path(path).read_text(encoding="utf-8")
+
+
+class TestLibraryContract:
+    """The progress display leans on two things inside huggingface_hub. If an upgrade removes
+    one, downloads still work but the display degrades silently (no fill, or a speed that
+    jumps); these tests make that loud. On failure: check workers/model_downloader_worker.py
+    against the new version before changing the pin."""
+
+    def test_snapshot_download_still_takes_a_progress_class(self):
+        assert "tqdm_class" in _library_source("_snapshot_download.py")
+
+    def test_chunk_size_is_still_read_from_the_constant_at_download_time(self):
+        assert "DOWNLOAD_CHUNK_SIZE" in _library_source("constants.py")
+        assert "constants.DOWNLOAD_CHUNK_SIZE" in _library_source("file_download.py")

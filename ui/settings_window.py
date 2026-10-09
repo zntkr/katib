@@ -15,11 +15,11 @@ from PySide6.QtGui import QColor, QFont, QIcon, QKeyEvent, QPainter, QPaintEvent
 from core.i18n import t, available_languages
 from core.log import get_logger, OK
 from core.settings import (
-    APP_NAME, WHISPER_MODELS, DEFAULTS, DEFAULT_DOWNLOAD_PARENT,
+    APP_NAME, WHISPER_MODELS, DEFAULT_DOWNLOAD_PARENT, format_size,
     INJECTION_METHODS, SPEECH_LANGUAGES, DEFAULT_PROMPTS, get_log_dir,
 )
 from ui.components import NoScrollComboBox, DynamicIconButton
-from ui.icons import ICN_DOWNLOAD, ICN_TICK
+from ui.icons import ICN_TICK
 from ui.theme import G_1, G_2, G_4, G_6, FONT_SIZE_SM, SETTINGS_WIDTH, SETTINGS_HEIGHT, theme_manager
 from ui.utils import qt_key_to_keyboard
 from ui.utils_win import apply_dark_mode_to_window
@@ -38,6 +38,15 @@ _LOG_LABEL = {"...": "INFO"}
 _BROWSE = "browse_custom"   # the "Browse..." action row
 _CUSTOM = "custom:"         # prefix of a folder the user picked: "custom:<path>"
 
+
+def _download_text(done: float, total: float, speed: float) -> str:
+    """"1.3 / 3.1 GB · 6.1 MB/s". Decimal units, as the model list and the download site use;
+    they read the same in every language, so there is no translation key."""
+    if total >= 1e9:
+        amount = f"{done / 1e9:.1f} / {format_size(total)}"
+    else:
+        amount = f"{done / 1e6:.0f} / {format_size(total)}"
+    return f"{amount} · {speed / 1e6:.1f} MB/s"
 
 
 class SettingsWindow(QWidget):
@@ -77,6 +86,8 @@ class SettingsWindow(QWidget):
         self._last_recording: tuple[float, float, float, str] | None = None
         self._model_info: tuple[str, str, str] | None = None
         self._last_dictation: tuple[float, float] | None = None
+        self._downloading_repo: str | None = None  # the download this window asked for
+        self._download_text: str | None = None     # ModelDownloaderWorker.download_progress
 
         self._outer = QVBoxLayout(self)
         self._outer.setContentsMargins(G_1, G_1, G_1, G_1)
@@ -178,30 +189,23 @@ class SettingsWindow(QWidget):
         layout = self._column()
         p = theme_manager.palette
 
+        # One list, one job: closed, it names the model in use (or asks for one). Each row says
+        # its state; _refresh_model_rows writes the texts. There is no download button: picking
+        # a model that is not installed asks to download it (CONTEXT.md, anti-pattern 8).
         self.model_combo = NoScrollComboBox()
-        self._model_labels: dict[str, str] = {}
+        self.model_combo.setPlaceholderText(t("settings.model_pick"))
+        self._models: dict[str, tuple[str, int]] = {}   # repo id -> (name, bytes to download)
         for key, info in WHISPER_MODELS.items():
-            label = f"{key.capitalize()} ({info['size']})"
-            self._model_labels[info["repo_id"]] = label
-            self.model_combo.addItem(label, userData=info["repo_id"])
+            self._models[info["repo_id"]] = (key.capitalize(), info["bytes"])
+            self.model_combo.addItem(key.capitalize(), userData=info["repo_id"])
         self.model_combo.addItem(t("settings.browse"), userData=_BROWSE)
         italic = QFont()
         italic.setItalic(True)
         self.model_combo.setItemData(self.model_combo.count() - 1, italic, Qt.ItemDataRole.FontRole)
         self.model_combo.currentIndexChanged.connect(self._on_model_index_changed)
 
-        self.btn_download = DynamicIconButton(
-            ICN_DOWNLOAD, p["CLR_ACCENT"], idle_color=p["CLR_ACCENT"], hover_color=p["CLR_ACCENT"]
-        )
-        self.btn_download.setToolTip(t("settings.download"))
-        self.btn_download.clicked.connect(self._on_download_clicked)
-
         layout.addWidget(QLabel(t("settings.ai_model_label")))
-        model_row = QHBoxLayout()
-        model_row.setSpacing(G_1)
-        model_row.addWidget(self.model_combo, 1)
-        model_row.addWidget(self.btn_download)
-        layout.addLayout(model_row)
+        layout.addWidget(self.model_combo)
 
         # Busy while a model is loading or downloading.
         self.loading_bar = QProgressBar()
@@ -488,22 +492,41 @@ class SettingsWindow(QWidget):
         self.loading_bar.setVisible(visible)
 
     def set_download_state(self, active: bool) -> None:
-        self.set_loading_indicator(active)
-        self.btn_download.setEnabled(not active)
+        """ModelDownloaderWorker.download_state_changed; False also when a download failed."""
+        # Sliding until the first progress report, and again for the model load that follows.
+        self.loading_bar.setRange(0, 0)
+        self._download_text = None
         if not active:
-            self._update_download_button()
+            self._downloading_repo = None
+        self.set_loading_indicator(active)
+        self._refresh_model_rows()
+        self._render_model_info()
+
+    def show_download_progress(self, done: float, total: float, speed: float) -> None:
+        """ModelDownloaderWorker.download_progress: fills the bar and says how much and how fast."""
+        if self._downloading_repo is not None:
+            # The size the row promised. The library learns the total file by file and never
+            # counts the small text files (measured: 76 of the tiny model's 78 MB).
+            total = self._models[self._downloading_repo][1]
+        if total <= 0:
+            return  # size not known: the bar keeps sliding
+        done = min(done, total)
+        self.loading_bar.setRange(0, 1000)
+        self.loading_bar.setValue(int(done / total * 1000))
+        self._download_text = _download_text(done, total, speed)
+        self._render_model_info()
 
     def on_download_complete(self, model_dir: str) -> None:
-        """The downloaded model becomes the selected one, now and after a restart."""
+        """The downloaded model becomes the one in use, now and after a restart."""
         self.settings.set("model_dir", model_dir)
+        self.model_dir_changed.emit(model_dir)   # main.py tells the provider before the rows are read
         self._sync_model_combo(model_dir)
-        self.model_dir_changed.emit(model_dir)
 
     def on_model_loaded(self, device: str, compute_type: str, gpu_note: str) -> None:
         """TranscriptionWorker.model_loaded: where the model runs; gpu_note says why not on the GPU."""
         self._model_info = (device, compute_type, gpu_note)
         self._last_dictation = None  # timed with the previous model
-        self._refresh_model_badges()
+        self._refresh_model_rows()
         self._render_model_info()
 
     def show_last_dictation(self, audio_seconds: float, elapsed_seconds: float) -> None:
@@ -513,6 +536,13 @@ class SettingsWindow(QWidget):
 
     def _render_model_info(self) -> None:
         lines = []
+        # The download first: it is what the bar right above is about. The facts after it are
+        # those of the model in use, and a GPU note there must not read as a download error.
+        if self._downloading_repo is not None:
+            line = f"{self._models[self._downloading_repo][0]} · {t('settings.model_downloading')}"
+            if self._download_text is not None:
+                line += f" · {self._download_text}"
+            lines.append(html.escape(line))
         if self._model_info is not None:
             device, compute_type, gpu_note = self._model_info
             line = f"{'GPU' if device == 'cuda' else 'CPU'} · {compute_type}"
@@ -538,18 +568,36 @@ class SettingsWindow(QWidget):
         if data == _BROWSE:
             self._browse_model_dir()
             return
-        self._last_model_index = row
-        if data and not str(data).startswith(_CUSTOM):
-            self.settings.set("selected_model_repo", data)
-        # A model that is already installed is applied as soon as it is picked.
         target = self._selected_model_path()
-        if target and self.model_provider.resolve_model_dir(str(target)) is not None:
-            if self.settings.get("model_dir") != str(target):
-                self.settings.set("model_dir", str(target))
-                self.model_dir_changed.emit(str(target))
-                name = "Custom Folder" if str(data).startswith(_CUSTOM) else target.name
-                _log.log(OK, f"Switched to model: {name}")
-        self._update_download_button()
+        if target is None or self.model_provider.resolve_model_dir(str(target)) is None:
+            # Not installed: the list goes back to the model in use and offers the download.
+            self._revert_model_combo()
+            if data in self._models:
+                self._ask_to_download(data)
+            return
+        # A model that is already installed is applied as soon as it is picked.
+        self._last_model_index = row
+        if self.settings.get("model_dir") != str(target):
+            self.settings.set("model_dir", str(target))
+            self.model_dir_changed.emit(str(target))
+            name = "Custom Folder" if str(data).startswith(_CUSTOM) else target.name
+            _log.log(OK, f"Switched to model: {name}")
+        self._refresh_model_rows()
+
+    def _ask_to_download(self, repo: str) -> None:
+        if self._downloading_repo is not None:
+            return  # one download at a time; the row of the running one says so
+        reply = QMessageBox.question(
+            self, t("settings.download_confirm_title"),
+            t("settings.download_confirm_msg").format(model=self._models[repo][0]),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        self.model_combo.setFocus()
+        if reply == QMessageBox.StandardButton.Yes:
+            self._downloading_repo = repo
+            self._refresh_model_rows()
+            self._render_model_info()
+            self.download_model_requested.emit(str(DEFAULT_DOWNLOAD_PARENT), repo)
 
     def _revert_model_combo(self) -> None:
         self.model_combo.blockSignals(True)
@@ -573,30 +621,28 @@ class SettingsWindow(QWidget):
 
     def _sync_model_combo(self, model_dir: str | None) -> None:
         """Selects the list entry for the given model folder; a folder that is not a known
-        model gets its own "Custom" entry above "Browse...". Changes no setting."""
+        model gets its own "Custom" entry above "Browse...". Without a folder no row is
+        selected and the list shows its "choose a model" text. Changes no setting."""
         combo = self.model_combo
+        row = -1
         if model_dir:
             folder_name = Path(model_dir).name
             row = next((i for i in range(combo.count())
                         if str(combo.itemData(i)).split("/")[-1] == folder_name
-                        and combo.itemData(i) in self._model_labels), -1)
+                        and combo.itemData(i) in self._models), -1)
             if row == -1:
                 custom = f"{_CUSTOM}{model_dir}"
                 row = combo.findData(custom)
                 if row == -1:
                     row = combo.count() - 1  # above "Browse..."
                     combo.blockSignals(True)
-                    combo.insertItem(row, t("settings.custom_folder").format(name=folder_name), userData=custom)
+                    combo.insertItem(row, "", userData=custom)   # text: _refresh_model_rows
                     combo.blockSignals(False)
-        else:
-            row = combo.findData(self.settings.get("selected_model_repo"))
-            if row == -1:
-                row = combo.findData(DEFAULTS["selected_model_repo"])
         combo.blockSignals(True)
         combo.setCurrentIndex(row)
         combo.blockSignals(False)
         self._last_model_index = row
-        self._update_download_button()
+        self._refresh_model_rows()
 
     def _selected_model_path(self) -> Path | None:
         repo = self.model_combo.currentData()
@@ -606,8 +652,8 @@ class SettingsWindow(QWidget):
             return Path(str(repo).split(":", 1)[1])
         return DEFAULT_DOWNLOAD_PARENT / repo.split("/")[-1]
 
-    def _refresh_model_badges(self) -> None:
-        """▶ marks the model in use, ● a model that is installed."""
+    def _refresh_model_rows(self) -> None:
+        """Writes every row's text: the model's name and its state. The model in use is bold."""
         active = self.model_provider.get_active_model_path()
         active_name = Path(active).name if active else None
         bold, normal = QFont(), QFont()
@@ -616,41 +662,30 @@ class SettingsWindow(QWidget):
         combo.blockSignals(True)
         for row in range(combo.count()):
             repo = combo.itemData(row)
-            if repo not in self._model_labels:
-                continue
-            folder_name = repo.split("/")[-1]
-            is_active = active_name == folder_name
-            installed = is_active or self.model_provider.resolve_model_dir(
-                str(DEFAULT_DOWNLOAD_PARENT / folder_name)) is not None
-            prefix = "▶ " if is_active else "● " if installed else "  "
+            if repo in self._models:
+                name, size = self._models[repo]
+                folder_name = repo.split("/")[-1]
+                is_active = active_name == folder_name
+                if is_active:
+                    state = t("settings.model_in_use")
+                elif repo == self._downloading_repo:
+                    state = t("settings.model_downloading")
+                elif self.model_provider.resolve_model_dir(str(DEFAULT_DOWNLOAD_PARENT / folder_name)) is not None:
+                    state = t("settings.model_installed")
+                else:
+                    state = t("settings.model_get").format(size=format_size(size))
+                text = f"{name} · {state}"
+            elif str(repo).startswith(_CUSTOM):
+                folder = Path(str(repo).split(":", 1)[1])
+                is_active = active is not None and Path(active) == folder
+                text = t("settings.custom_folder").format(name=folder.name)
+                if is_active:
+                    text += f" · {t('settings.model_in_use')}"
+            else:
+                continue   # "Browse..."
             combo.setItemData(row, bold if is_active else normal, Qt.ItemDataRole.FontRole)
-            combo.setItemText(row, prefix + self._model_labels[repo])
+            combo.setItemText(row, text)
         combo.blockSignals(False)
-
-    def _update_download_button(self) -> None:
-        """Download is offered only for a known model that is not installed yet."""
-        target = self._selected_model_path()
-        repo = self.model_combo.currentData()
-        installed = target is not None and self.model_provider.resolve_model_dir(str(target)) is not None
-        self.btn_download.setEnabled(repo in self._model_labels and not installed)
-        self._refresh_model_badges()
-
-    def _on_download_clicked(self) -> None:
-        repo = self.model_combo.currentData()
-        target = self._selected_model_path()
-        if repo not in self._model_labels or target is None:
-            return
-        if self.model_provider.resolve_model_dir(str(target)) is not None:
-            return
-        model_name = self._model_labels[repo].split(" (")[0]
-        reply = QMessageBox.question(
-            self, t("settings.download_confirm_title"),
-            t("settings.download_confirm_msg").format(model=model_name),
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-        )
-        self.model_combo.setFocus()
-        if reply == QMessageBox.StandardButton.Yes:
-            self.download_model_requested.emit(str(DEFAULT_DOWNLOAD_PARENT), repo)
 
     def _load_prompt_for_language(self, language: str) -> None:
         """Shows the prompt that belongs to the speech language: the one the user saved for it,

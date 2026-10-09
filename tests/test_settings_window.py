@@ -348,65 +348,170 @@ class TestModelInfo:
         assert Path(window.lbl_model_info.toolTip()) == medium.resolve()
 
 
+def _rows(window) -> dict:
+    """Row text by what the row stands for (a repository id, or the browse / custom entry)."""
+    combo = window.model_combo
+    return {combo.itemData(i): combo.itemText(i) for i in range(combo.count())}
+
+
+def _pick_to_download(window, repo: str, answer=QMessageBox.StandardButton.Yes) -> None:
+    """The user picks a model that is not installed and answers the question that follows."""
+    with patch.object(QMessageBox, "question", return_value=answer):
+        _select(window.model_combo, repo)
+
+
 class TestModelList:
-    def test_download_is_offered_for_a_model_that_is_not_installed(self, window):
-        window.show()
-        assert window.btn_download.isEnabled()
+    """One list with one job: closed, it names the model in use. Every row says its state, and
+    for a model that is not installed that state is what picking the row does."""
 
-    def test_confirming_the_download_asks_for_it(self, window, models_root, signals):
+    def test_each_row_says_its_state(self, window, mock_settings, models_root):
+        small = _make_model(models_root / "faster-whisper-small")
+        _make_model(models_root / "faster-whisper-medium")
+        mock_settings.set("model_dir", str(small))
         window.show()
-        with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes):
-            window.btn_download.click()
-        assert signals["download_model_requested"] == [(str(models_root), "Systran/faster-whisper-small")]
+        rows = _rows(window)
+        assert rows["Systran/faster-whisper-small"] == "Small · in use"
+        assert rows["Systran/faster-whisper-medium"] == "Medium · installed"
+        assert rows["Systran/faster-whisper-tiny"] == "Tiny · download (78 MB)"
 
-    def test_declining_the_download_does_nothing(self, window, signals):
+    def test_the_closed_list_shows_the_model_in_use(self, window, models_root):
+        """The stored model_dir may be just the models folder; the provider knows what is loaded."""
+        _make_model(models_root / "faster-whisper-medium")
         window.show()
-        with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.No):
-            window.btn_download.click()
-        assert "download_model_requested" not in signals
+        assert window.model_combo.currentText() == "Medium · in use"
 
-    def test_an_installed_model_is_applied_when_picked(self, window, mock_settings, models_root, signals):
+    def test_without_a_model_the_list_asks_for_one(self, window):
+        window.show()
+        assert window.model_combo.currentIndex() == -1
+        assert window.model_combo.placeholderText() == "Choose a model"
+
+    def test_picking_an_installed_model_applies_it(self, window, mock_settings, models_root, signals):
         _make_model(models_root / "faster-whisper-small")  # the one in use
         medium = _make_model(models_root / "faster-whisper-medium")
         window.show()
         _select(window.model_combo, "Systran/faster-whisper-medium")
         assert mock_settings.get("model_dir") == str(medium)
-        assert mock_settings.get("selected_model_repo") == "Systran/faster-whisper-medium"
         assert signals["model_dir_changed"] == [(str(medium),)]
-        assert not window.btn_download.isEnabled()
+        assert "download_model_requested" not in signals
 
-    def test_a_model_that_is_not_installed_is_only_remembered(self, window, mock_settings, signals):
+    def test_picking_a_model_that_is_not_installed_asks_to_download_it(self, window, models_root, signals):
         window.show()
-        _select(window.model_combo, "Systran/faster-whisper-medium")
-        assert mock_settings.get("selected_model_repo") == "Systran/faster-whisper-medium"
+        with patch.object(QMessageBox, "question",
+                          return_value=QMessageBox.StandardButton.Yes) as question:
+            _select(window.model_combo, "Systran/faster-whisper-medium")
+        assert "Medium" in question.call_args.args[2]
+        assert signals["download_model_requested"] == [(str(models_root), "Systran/faster-whisper-medium")]
         assert "model_dir_changed" not in signals
-        assert window.btn_download.isEnabled()
 
-    def test_the_model_in_use_and_installed_models_are_marked(self, window, mock_settings, models_root):
-        small = _make_model(models_root / "faster-whisper-small")
-        _make_model(models_root / "faster-whisper-medium")
-        mock_settings.set("model_dir", str(small))
+    def test_declining_the_download_changes_nothing(self, window, models_root, signals):
+        _make_model(models_root / "faster-whisper-small")
         window.show()
-        text = {window.model_combo.itemData(i): window.model_combo.itemText(i)
-                for i in range(window.model_combo.count())}
-        assert text["Systran/faster-whisper-small"].startswith("▶ ")
-        assert text["Systran/faster-whisper-medium"].startswith("● ")
-        assert text["Systran/faster-whisper-tiny"].startswith("  ")
+        _pick_to_download(window, "Systran/faster-whisper-medium", QMessageBox.StandardButton.No)
+        assert "download_model_requested" not in signals
+        assert window.model_combo.currentText() == "Small · in use"
+        assert _rows(window)["Systran/faster-whisper-medium"] == "Medium · download (1.5 GB)"
 
-    def test_the_list_shows_the_model_actually_in_use(self, window, models_root):
-        """The stored model_dir may be just the models folder; the provider knows what is loaded."""
-        _make_model(models_root / "faster-whisper-medium")
+    def test_the_list_stays_on_the_model_in_use_while_another_downloads(self, window, models_root):
+        _make_model(models_root / "faster-whisper-small")
         window.show()
-        assert window.model_combo.currentData() == "Systran/faster-whisper-medium"
-        assert window.model_combo.currentText().startswith("▶ ")
-        assert not window.btn_download.isEnabled()
+        _pick_to_download(window, "Systran/faster-whisper-medium")
+        assert window.model_combo.currentText() == "Small · in use"
+        assert _rows(window)["Systran/faster-whisper-medium"] == "Medium · downloading"
 
-    def test_download_state_shows_progress_and_blocks_a_second_download(self, window):
+    def test_a_second_download_is_not_offered_while_one_runs(self, window, signals):
+        window.show()
+        _pick_to_download(window, "Systran/faster-whisper-medium")
+        with patch.object(QMessageBox, "question") as question:
+            _select(window.model_combo, "Systran/faster-whisper-tiny")
+        question.assert_not_called()
+        assert len(signals["download_model_requested"]) == 1
+        assert window.model_combo.currentIndex() == -1   # still no model in use
+
+    def test_a_download_that_ends_frees_its_row(self, window):
+        """Finished or failed: the worker reports the end either way."""
+        window.show()
+        _pick_to_download(window, "Systran/faster-whisper-medium")
+        window.set_download_state(True)
+        window.set_download_state(False)
+        assert _rows(window)["Systran/faster-whisper-medium"] == "Medium · download (1.5 GB)"
+
+    def test_the_bar_shows_while_a_download_runs(self, window):
         window.show()
         window.set_download_state(True)
-        assert not window.loading_bar.isHidden() and not window.btn_download.isEnabled()
+        assert not window.loading_bar.isHidden()
         window.set_download_state(False)
-        assert window.loading_bar.isHidden() and window.btn_download.isEnabled()
+        assert window.loading_bar.isHidden()
+
+    def test_the_download_is_named_before_its_size_is_known(self, window):
+        window.show()
+        _pick_to_download(window, "Systran/faster-whisper-medium")
+        window.set_download_state(True)
+        assert window.lbl_model_info.text() == "Medium · downloading"
+        assert window.loading_bar.maximum() == 0      # sliding
+
+    def test_download_progress_fills_the_bar_and_says_which_model_how_much_and_how_fast(self, window):
+        window.show()
+        _pick_to_download(window, "Systran/faster-whisper-large-v3")
+        window.set_download_state(True)
+        window.show_download_progress(3_090_839_273 / 2, 3.09e9, 6.1e6)
+        assert window.loading_bar.value() * 2 == window.loading_bar.maximum()
+        assert window.lbl_model_info.text() == "Large-v3 · downloading · 1.5 / 3.1 GB · 6.1 MB/s"
+
+    def test_a_small_model_is_counted_in_megabytes(self, window):
+        window.show()
+        _pick_to_download(window, "Systran/faster-whisper-tiny")
+        window.set_download_state(True)
+        window.show_download_progress(32e6, 75e6, 5.8e6)
+        assert "32 / 78 MB · 5.8 MB/s" in window.lbl_model_info.text()
+
+    def test_the_total_is_the_size_the_row_promised(self, window):
+        """The library learns the total file by file and leaves the small text files out: it
+        says 76 MB for the tiny model, whose download is 78 MB."""
+        window.show()
+        assert _rows(window)["Systran/faster-whisper-tiny"] == "Tiny · download (78 MB)"
+        _pick_to_download(window, "Systran/faster-whisper-tiny")
+        window.set_download_state(True)
+        window.show_download_progress(78_207_087 / 2, 2e6, 5.8e6)   # early: one small file known
+        assert window.loading_bar.value() * 2 == window.loading_bar.maximum()
+        assert "39 / 78 MB" in window.lbl_model_info.text()
+
+    def test_progress_never_runs_past_the_end(self, window):
+        """A repository that grew since its size was recorded must not overfill the bar."""
+        window.show()
+        _pick_to_download(window, "Systran/faster-whisper-tiny")
+        window.set_download_state(True)
+        window.show_download_progress(79e6, 76e6, 5.8e6)
+        assert window.loading_bar.value() == window.loading_bar.maximum()
+        assert "78 / 78 MB" in window.lbl_model_info.text()
+
+    def test_progress_of_unknown_size_keeps_the_bar_sliding(self, window):
+        """A download this window did not ask for has no row to take the size from."""
+        window.show()
+        window.set_download_state(True)
+        window.show_download_progress(5e6, 0, 5.8e6)
+        assert window.loading_bar.maximum() == 0
+        assert "MB/s" not in window.lbl_model_info.text()
+
+    def test_a_finished_download_takes_its_line_away(self, window):
+        window.show()
+        _pick_to_download(window, "Systran/faster-whisper-large-v3")
+        window.set_download_state(True)
+        window.show_download_progress(1.5e9, 3.09e9, 6.1e6)
+        window.set_download_state(False)
+        assert window.loading_bar.maximum() == 0      # sliding again for the next model load
+        assert window.lbl_model_info.text() == ""
+
+    def test_the_download_line_comes_before_the_facts_of_the_model_in_use(self, window):
+        """Right under the bar stands what the bar is about. A GPU note of the model in use must
+        not read as the reason a download failed."""
+        window.show()
+        window.on_model_loaded("cpu", "int8", "GPU load failed")
+        _pick_to_download(window, "Systran/faster-whisper-medium")
+        window.set_download_state(True)
+        window.show_download_progress(0.4e9, 1.53e9, 6.1e6)
+        first, second = window.lbl_model_info.text().split("<br>")
+        assert first == "Medium · downloading · 0.4 / 1.5 GB · 6.1 MB/s"
+        assert second == "CPU · int8 · GPU load failed"
 
     def test_loading_indicator_follows_the_model_load(self, window):
         assert window.loading_bar.isHidden()
@@ -415,7 +520,7 @@ class TestModelList:
         window.set_loading_indicator(False)
         assert window.loading_bar.isHidden()
 
-    def test_a_finished_download_becomes_the_selected_model(self, window, mock_settings, models_root, signals):
+    def test_a_finished_download_becomes_the_model_in_use(self, window, mock_settings, models_root, signals):
         """It must still be the model after a restart, so the setting is written too."""
         medium = _make_model(models_root / "faster-whisper-medium")
         window.show()
@@ -423,17 +528,17 @@ class TestModelList:
         assert mock_settings.get("model_dir") == str(medium)
         assert window.model_combo.currentData() == "Systran/faster-whisper-medium"
         assert signals["model_dir_changed"] == [(str(medium),)]
-        assert not window.btn_download.isEnabled()
 
     def test_browsing_to_a_model_folder_selects_it(self, window, mock_settings, tmp_path, signals):
         custom = _make_model(tmp_path / "elsewhere" / "my-model")
         window.show()
+        # main.py tells the provider which model is in use as soon as the folder changes.
+        window.model_dir_changed.connect(lambda path: setattr(window.model_provider, "active_model_path", path))
         with patch("ui.settings_window.QFileDialog.getExistingDirectory", return_value=str(custom)):
             _select(window.model_combo, "browse_custom")
         assert mock_settings.get("model_dir") == str(custom)
         assert signals["model_dir_changed"] == [(str(custom),)]
-        assert window.model_combo.currentText() == "Custom: my-model"
-        assert not window.btn_download.isEnabled()
+        assert window.model_combo.currentText() == "Custom: my-model · in use"
 
     def test_browsing_twice_to_the_same_folder_adds_one_entry(self, window, tmp_path):
         custom = _make_model(tmp_path / "elsewhere" / "my-model")

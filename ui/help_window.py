@@ -5,11 +5,16 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor, QPainter, QPaintEvent, QKeyEvent, QFont
 
-from core.settings import APP_NAME
+from core.settings import APP_NAME, WHISPER_MODELS, format_size
 from core.i18n import t
 from ui.theme import G_1, G_2, DIALOG_WIDTH, FONT_SIZE_SM, theme_manager
 from ui.components import SettingGroup, FadeScrollArea
 from ui.utils_win import apply_dark_mode_to_window
+
+
+def _size(model: str) -> str:
+    """The model's real download size, from the same catalogue the model list reads."""
+    return format_size(WHISPER_MODELS[model]["bytes"])
 
 
 def _lbl(text: str, muted: bool = False, bold: bool = False, wrap: bool = True) -> QLabel:
@@ -183,11 +188,11 @@ class HelpWindow(QWidget):
         grp_ayar.group_layout.addWidget(_table(
             [t("help.model.col_model"), t("help.model.col_size"), t("help.model.col_speed"), t("help.model.col_accuracy")],
             [
-                ["tiny",     "~150 MB", t("help.model.speed_vfast"), t("help.model.acc_low")],
-                ["base",     "~300 MB", t("help.model.speed_fast"),  t("help.model.acc_fair")],
-                ["small ✓",  "~500 MB", t("help.model.speed_balanced"), t("help.model.acc_good")],
-                ["medium",   "~1.5 GB", t("help.model.speed_slow"),  t("help.model.acc_high")],
-                ["large-v3", "~3 GB",   t("help.model.speed_vslow"), t("help.model.acc_max")],
+                ["tiny",     _size("tiny"), t("help.model.speed_vfast"), t("help.model.acc_low")],
+                ["base",     _size("base"), t("help.model.speed_fast"),  t("help.model.acc_fair")],
+                ["small ✓",  _size("small"), t("help.model.speed_balanced"), t("help.model.acc_good")],
+                ["medium",   _size("medium"), t("help.model.speed_slow"),  t("help.model.acc_high")],
+                ["large-v3", _size("large-v3"), t("help.model.speed_vslow"), t("help.model.acc_max")],
             ]
         ))
         grp_ayar.group_layout.addSpacing(G_1)

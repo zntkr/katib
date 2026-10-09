@@ -327,6 +327,7 @@ def main():
         downloader_worker.status_changed.connect(tray.on_download_status)
         downloader_worker.download_state_changed.connect(window.set_download_state)
         downloader_worker.download_state_changed.connect(tray.on_download_state)
+        downloader_worker.download_progress.connect(window.show_download_progress)
         downloader_worker.download_finished.connect(window.on_download_complete)
 
         window.language_change_requested.connect(tray.apply_language)

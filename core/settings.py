@@ -36,38 +36,46 @@ STATE_READY         = "status.ready"
 STATE_LOADING       = "status.loading_model"
 
 
+# "bytes" is what a download fetches: the sum of every file in the repository, read from
+# huggingface.co on 2026-10-10. The model list, the download progress and the user guide
+# show it through format_size().
 WHISPER_MODELS = {
     "tiny": {
         "repo_id": "Systran/faster-whisper-tiny",
-        "size": "~150 MB",
+        "bytes": 78_207_087,
         "desc": "Very Fast, Low Accuracy (Old PCs)",
         "req_bytes": 500 * 1024**2
     },
     "base": {
         "repo_id": "Systran/faster-whisper-base",
-        "size": "~300 MB",
+        "bytes": 147_886_409,
         "desc": "Fast, Decent Accuracy",
         "req_bytes": 500 * 1024**2
     },
     "small": {
         "repo_id": "Systran/faster-whisper-small",
-        "size": "~500 MB",
+        "bytes": 486_215_847,
         "desc": "Balanced (Default / Recommended)",
         "req_bytes": 1 * 1024**3
     },
     "medium": {
         "repo_id": "Systran/faster-whisper-medium",
-        "size": "~1.5 GB",
+        "bytes": 1_530_575_217,
         "desc": "Slow, High Accuracy (High-End Hardware)",
         "req_bytes": 2 * 1024**3
     },
     "large-v3": {
         "repo_id": "Systran/faster-whisper-large-v3",
-        "size": "~3 GB",
+        "bytes": 3_090_839_273,
         "desc": "Very Slow, Maximum Accuracy (Top-End Hardware)",
         "req_bytes": 4 * 1024**3
     }
 }
+
+def format_size(n_bytes: float) -> str:
+    """"78 MB", "1.5 GB". Decimal units, as the download site shows them."""
+    return f"{n_bytes / 1e9:.1f} GB" if n_bytes >= 1e9 else f"{n_bytes / 1e6:.0f} MB"
+
 
 COMPUTE_TYPE_OPTIONS_CPU  = ("int8", "int8_float32", "float32")
 COMPUTE_TYPE_OPTIONS_CUDA = ("float16", "int8_float16", "float32")
@@ -91,6 +99,8 @@ DEFAULTS: dict[str, Any] = {
     "device_index": None,
     "device_name": "",
     "model_dir": str(DEFAULT_DOWNLOAD_PARENT),
+    # No longer read or written (2026-10-10): the model list shows the model in use, not a
+    # remembered pick. Kept because removing a key needs the owner's approval (CONTEXT.md rule 8).
     "selected_model_repo": "Systran/faster-whisper-small",
     "language": "auto",
     "compute_type": "int8",

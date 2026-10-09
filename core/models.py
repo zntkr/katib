@@ -3,7 +3,7 @@ from pathlib import Path
 from dataclasses import dataclass
 from typing import List, Optional
 
-from core.settings import WHISPER_MODELS
+from core.settings import WHISPER_MODELS, format_size
 
 @dataclass
 class LocalModel:
@@ -30,7 +30,7 @@ class ModelProvider:
             path_str = str(expected_path.resolve()) if is_installed else None
             is_active = self.active_model_path == path_str if path_str else False
             
-            name = f"{key.capitalize()} ({info['size']}) — {info['desc']}"
+            name = f"{key.capitalize()} ({format_size(info['bytes'])}) — {info['desc']}"
             
             models.append(LocalModel(
                 repo_id=repo_id,

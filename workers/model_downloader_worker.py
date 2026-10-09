@@ -1,5 +1,8 @@
 import os
 import shutil
+import threading
+import time
+from collections import deque
 from pathlib import Path
 from PySide6.QtCore import Signal
 from workers.base_worker import BaseWorker
@@ -9,10 +12,69 @@ from core.settings import DEFAULT_DOWNLOAD_PARENT, WHISPER_MODELS, STATE_LOADING
 
 _log = get_logger("DL")
 
+# huggingface_hub reports progress once per chunk it reads. With its 10 MB default a steady
+# 6 MB/s connection shows a speed that flips between 4 and 6 MB/s. Measured 2026-10-09 with
+# the tiny model: 1 MB chunks download just as fast and report about three times a second.
+CHUNK_BYTES = 1024 * 1024
+SPEED_WINDOW_S = 5.0      # the speed shown is the average over this long
+REPORT_INTERVAL_S = 0.25
+
+
+class DownloadProgress:
+    """Bytes done, bytes expected and the recent speed of one download. The library downloads
+    several files at once, so advance() is called from several threads."""
+
+    def __init__(self, on_progress, clock=time.monotonic):
+        self._on_progress = on_progress          # (done, total, bytes per second)
+        self._clock = clock
+        self._lock = threading.Lock()
+        self._done = 0
+        self._samples = deque([(clock(), 0)])    # (time, bytes done by then)
+        self._last_report = float("-inf")
+
+    def advance(self, n: int, total: int) -> None:
+        with self._lock:
+            now = self._clock()
+            self._done += n
+            self._samples.append((now, self._done))
+            # Keep one sample at or before the start of the window to measure from.
+            while len(self._samples) > 1 and self._samples[1][0] <= now - SPEED_WINDOW_S:
+                self._samples.popleft()
+            if now - self._last_report < REPORT_INTERVAL_S:
+                return
+            self._last_report = now
+            since, done_then = self._samples[0]
+            speed = (self._done - done_then) / (now - since) if now > since else 0.0
+            done = self._done
+        self._on_progress(done, total, speed)
+
+
+def progress_bar_class(progress: DownloadProgress):
+    """The class snapshot_download reports through (its tqdm_class). The library makes two
+    bars from it, one counting bytes (unit "B") and one counting files; only bytes count here."""
+    from tqdm import tqdm
+
+    class _Bar(tqdm):
+        def __init__(self, *args, **kwargs):
+            self._counts_bytes = kwargs.get("unit") == "B"
+            kwargs["disable"] = True   # never drawn: the packaged app has no console
+            super().__init__(*args, **kwargs)
+
+        def update(self, n=1):
+            if self._counts_bytes and n:
+                # The library raises .total as it learns each file's size; 0 until then.
+                progress.advance(n, self.total or 0)
+            return super().update(n)
+
+    return _Bar
+
+
 class ModelDownloaderWorker(BaseWorker):
     download_finished      = Signal(str)        # final model dir path (on success)
     status_changed         = Signal(str, str)   # text, level — "OK"|"ERR"|"INFO"
     download_state_changed = Signal(bool)       # True=started, False=finished/error
+    # bytes done, bytes expected (0 = not known yet), bytes per second. float: a Qt int is 32-bit.
+    download_progress      = Signal(float, float, float)
 
     def __init__(self, settings, parent=None):
         super().__init__(parent)
@@ -34,7 +96,11 @@ class ModelDownloaderWorker(BaseWorker):
 
     # ------------------------------------------------------------------ QThread
     def run(self) -> None:
-        from huggingface_hub import snapshot_download
+        from huggingface_hub import snapshot_download, constants
+        # See CHUNK_BYTES. This is an internal of the library: if a later version stops reading
+        # it the download is unaffected and only the speed shown gets jumpy again
+        # (tests/test_model_downloader_worker.py::TestLibraryContract).
+        constants.DOWNLOAD_CHUNK_SIZE = CHUNK_BYTES
 
         target_parent = self._target_parent
         target_parent.mkdir(parents=True, exist_ok=True)
@@ -81,6 +147,7 @@ class ModelDownloaderWorker(BaseWorker):
                 repo_id=self._repo_id,
                 local_dir=str(temp_dir),
                 local_dir_use_symlinks=False,
+                tqdm_class=progress_bar_class(DownloadProgress(self.download_progress.emit)),
             )
 
             # Atomic rename: only move to the target directory once the download is complete.
