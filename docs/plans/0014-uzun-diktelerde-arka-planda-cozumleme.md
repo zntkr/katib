@@ -258,3 +258,32 @@ alındı: altta, yazılan yerin (sohbet kutusu, terminal) üstüne geliyordu.
 
 **Bilinen sınır:** bölüm düşünme duraklamasında kesilir; cümle ortasında duraklanırsa iki yarım
 ayrı çözümlenir ("…bizim de... Biraz böyle…"). Eşikle giderilemez: konuşan uzun duraklıyor.
+
+### 2026-10-10 — GPU'da eller serbest: cümle duraklamada yazılır (8 sn kuralı yalnız CPU'da kaldı)
+
+Proje sahibi RTX 4080'de large-v3 ile (bırakıştan yazıya 0,35–0,6 sn) şunu bildirdi: eller serbest
+diktede metin kendiliğinden gelmiyor, tuşa ikinci kez dokununca yazılıyor. Neden: bölüm en az 8 sn
+konuşmadan sonra kesiliyordu; dikteleri 1,3–8,9 sn olduğu için kural hiç devreye girmedi. 8 sn, her
+bölümün saniyeler sürdüğü CPU için konmuştu; GPU'da bir bölüm 0,2–0,4 sn.
+
+- **Karar:** eller serbest **ve** model GPU'daysa asgari bölüm 1,5 sn (`MIN_SEGMENT_SECONDS_FAST`);
+  duraklama eşiği aynı (0,7 sn). CPU'da ve tuş basılıyken 8 sn kalır: basılı tuşta bölüm yazılmadığı
+  için kısa bölüm yalnız cümleyi böler.
+- **Reddedilen seçenek, ölçümle:** "cümle kuralı" (saniyede bir yazılmamış sesin tamamını çözümle;
+  modelin bitmiş saydığı bölüm iki geçişte aynıysa yaz). Sentetik Türkçe sesle (Windows "Tolga",
+  large-v3, GPU) karşılaştırıldı. Duraklamalı 17 sn'lik kayıtta duraklama kuralı her bölümü 0,5–0,7 sn
+  sonra, cümle kuralı 2–3,5 sn sonra yazdı; cümle ortasındaki 1,2 sn'lik duraklamada ikisi de aynı
+  yerden böldü; tek cümlelik kayıtta cümle kuralı hiç yazmadı. Cümle kuralı yalnız hiç duraklamadan
+  konuşulan kayıtta öne geçti (cümleler 5., 10., 13. sn'de; duraklama kuralı 12. sn'de topluca).
+  ~100 satır kod ve konuşma boyunca çalışan kart karşılığında bu tek kazanç için alınmadı. Proje sahibi
+  duraklamadan uzun konuştuğunu bildirirse yeniden açılır. Canlı metni hapta gösterme fikri de
+  reddedildi (proje sahibi: dikkat dağıtır).
+- **Doğrulama (gerçek worker, GPU, aynı sentetik kayıtlar):** duraklamalı kayıtta bölümler 3., 7., 10.,
+  14., 18. sn'de yazıldı, dikte 21. sn'de kendiliğinden bitti; "Tamam, yarın görüşürüz." 3. sn'de
+  yazıldı. Testler: `TestShortPiecesOnTheGpu`.
+- **Birlikte düzeltilenler:** (1) Pano: her yapıştırma panoyu ayrı ayrı yedekleyip 150 ms sonra geri
+  koyuyordu; art arda iki yapıştırmada kullanıcının panosu kaybolabiliyordu. Yedek artık bir kez
+  alınır, son yapıştırmadan sonra bir kez geri konur (`TestPastesInQuickSuccession`). (2) Tek
+  çözümlemede birden çok bölüm dönünce aralarına iki boşluk giriyordu (`_decode`).
+- ⚠️ **Bekleyen:** proje sahibinin kendi sesiyle denemesi. Bakılacak: kısa bölümlerde uydurma metin,
+  düşünme duraklamasında bölünmenin rahatsız edip etmediği. Gerekirse `MIN_SEGMENT_SECONDS_FAST` yükseltilir.

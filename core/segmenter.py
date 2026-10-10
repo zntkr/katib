@@ -12,6 +12,9 @@ import numpy as np
 
 SAMPLE_RATE = 16000
 MIN_SEGMENT_SECONDS = 8.0   # a piece is at least this long before it may be cut off
+# Hands-free on the GPU, where the extra encoder pass of a piece costs 0.2-0.4 s, not seconds:
+# a sentence is typed at its first real pause. Below this Whisper is unreliable.
+MIN_SEGMENT_SECONDS_FAST = 1.5
 MIN_PAUSE_SECONDS = 0.7     # only a pause at least this long is a cut point
 CONTEXT_CHARS = 200         # how much of the text so far the next piece is prompted with
 END_PAUSE_SECONDS = 3.0     # hands-free: this much silence after speech ends the dictation

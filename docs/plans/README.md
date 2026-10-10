@@ -42,7 +42,7 @@ planı açık gösterebilir; `katla()` bunun içindir.
 | [0010](0010-tek-pencereli-arayuz.md) | Tek pencereli arayüz (dashboard'un kaldırılması) | ⏸️ Faz 1–3 ✅, doğrulama bekliyor | Faz 4: kullanıcının gerçek uygulamada denemesi |
 | [0012](0012-cozumleme-ayarlari-ve-gecikme-olcumu.md) | Çözümleme ayarları ve uçtan uca gecikme ölçümü | 🟠 ⏸️ Faz 1–2, 5 ✅, ölçüm bekliyor | Faz 3: kullanıcının ölçümü → Faz 4 |
 | [0013](0013-large-v3-turbo-modeli.md) | `large-v3-turbo` modeli | 🟠 ⏸️ Karar bekliyor | Model kaynağı ve listedeki yer: kullanıcı kararı |
-| [0014](0014-uzun-diktelerde-arka-planda-cozumleme.md) | Uzun diktelerde arka planda çözümleme | 🟠 ⏸️ Faz 1 (kod) ✅, ölçüm bekliyor | `olcum.py --parcali` ölçümü + kullanıcı kararı; Faz 2 için 🛑 0012 Faz 4 |
+| [0014](0014-uzun-diktelerde-arka-planda-cozumleme.md) | Uzun diktelerde arka planda çözümleme | 🟠 ⏸️ Faz 1 (kod) ✅, ölçüm bekliyor; GPU'da eller serbest cümleyi duraklamada yazar (2026-10-10), gerçek sesle deneme bekliyor | `olcum.py --parcali` ölçümü + kullanıcı kararı; Faz 2 için 🛑 0012 Faz 4 |
 
 0001–0004 2026-10-01'de kapandı (aşağıda "Kapalı planlar"). 0006–0008
 `docs/hiz-dogruluk-incelemesi-2026-10-01.md`'nin bulgularıdır; 0009 hedefin

@@ -13,7 +13,9 @@ if TYPE_CHECKING:
 from workers.base_worker import BaseWorker, measure_time
 from core import gpu
 from core.log import get_logger, OK
-from core.segmenter import context_prompt, next_cut, speech_chunks, speech_is_over
+from core.segmenter import (
+    MIN_SEGMENT_SECONDS, MIN_SEGMENT_SECONDS_FAST, context_prompt, next_cut, speech_chunks, speech_is_over,
+)
 from core.transcription_filter import TranscriptionFilter
 from core.settings import MSG_MODEL_NOT_FOUND, STATE_READY, STATE_LOADING
 
@@ -319,7 +321,9 @@ class TranscriptionWorker(BaseWorker):
         segments = list(segments)  # decoding happens here
         if any(isinstance(seg.temperature, float) and seg.temperature > 0 for seg in segments):
             _log.info("Low-confidence audio: decoded a second time")
-        return " ".join(seg.text for seg in segments).strip()
+        # Each segment's text begins with a space of its own: joined as they are, two
+        # sentences of one decode came out with two spaces between them.
+        return " ".join(text for text in (seg.text.strip() for seg in segments) if text)
 
     def _reset_dictation(self) -> None:
         self._done, self._pieces, self._typed = 0, [], 0
@@ -342,7 +346,10 @@ class TranscriptionWorker(BaseWorker):
         try:
             rest = audio[self._done:]
             speeches = speech_chunks(rest, TRANSCRIBE_OPTIONS["vad_parameters"]["threshold"])
-            cut = next_cut(speeches, len(rest))
+            # Pieces are typed only hands-free; under a held key a short one would just split a sentence.
+            fast = self.hands_free and self._device == "cuda"
+            cut = next_cut(speeches, len(rest),
+                           min_segment_seconds=MIN_SEGMENT_SECONDS_FAST if fast else MIN_SEGMENT_SECONDS)
             if cut is None:
                 if self.hands_free and speech_is_over(speeches, len(rest), heard_before=self._done > 0):
                     self.speech_ended.emit()

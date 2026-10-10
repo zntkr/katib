@@ -249,6 +249,41 @@ def _speech(start_s: float, end_s: float) -> dict:
     return {"start": int(start_s * SR), "end": int(end_s * SR)}
 
 
+class TestShortPiecesOnTheGpu:
+    """A separate piece costs one more encoder pass: seconds on a CPU, a few hundred ms on a
+    GPU. Hands-free on the GPU a sentence is therefore typed at its first real pause, not only
+    after 8 s of speech (which left every short dictation waiting for the second tap)."""
+    SNAPSHOT = np.zeros(4 * SR, dtype=np.float32)   # the recording so far: 4 s
+
+    def _partial(self, qapp, mock_settings, device: str, hands_free: bool, speech_until: float = 2.5):
+        worker = _make_worker_with_model(qapp, mock_settings, [" Kısa cümle."])
+        worker._device, worker.hands_free = device, hands_free
+        s = _capture(worker)
+        with patch(_CHUNKS, return_value=[_speech(0, speech_until)]):
+            worker._transcribe_partial(self.SNAPSHOT)
+        return worker, s
+
+    def test_hands_free_on_the_gpu_a_short_sentence_is_typed_at_its_pause(self, qapp, mock_settings):
+        worker, s = self._partial(qapp, mock_settings, "cuda", hands_free=True)
+        assert s["text"] == ["Kısa cümle."]
+        assert len(worker._model.transcribe.call_args.args[0]) == int(3.25 * SR)  # middle of the pause
+
+    def test_on_the_cpu_a_short_sentence_still_waits(self, qapp, mock_settings):
+        worker, s = self._partial(qapp, mock_settings, "cpu", hands_free=True)
+        worker._model.transcribe.assert_not_called()
+        assert s["text"] == []
+
+    def test_a_held_key_is_not_cut_early_on_the_gpu(self, qapp, mock_settings):
+        """Nothing is typed while a key is held, so a short piece would only split a sentence."""
+        worker, s = self._partial(qapp, mock_settings, "cuda", hands_free=False)
+        worker._model.transcribe.assert_not_called()
+
+    def test_a_word_or_two_is_not_cut_off_on_its_own(self, qapp, mock_settings):
+        """Whisper is unreliable on a second of audio; it goes out with what follows or at the end."""
+        worker, s = self._partial(qapp, mock_settings, "cuda", hands_free=True, speech_until=1.0)
+        worker._model.transcribe.assert_not_called()
+
+
 class TestPieces:
     """12 s snapshot: 10 s of speech, then 2 s of pause → the cut is in its middle, at 11 s."""
     CUT = 11 * SR
@@ -586,6 +621,11 @@ class TestTranscribeSuccess:
         _, s = self._run(qapp, mock_settings, segments_text=["first", " second", " third"])
         assert "first" in s["text"][0]
         assert "second" in s["text"][0]
+
+    def test_segments_are_joined_with_one_space(self, qapp, mock_settings):
+        """Each of Whisper's segments begins with a space of its own."""
+        _, s = self._run(qapp, mock_settings, segments_text=[" İlk cümle.", " İkinci cümle."])
+        assert s["text"] == ["İlk cümle. İkinci cümle."]
 
     def test_no_error_signals(self, qapp, mock_settings):
         _, s = self._run(qapp, mock_settings)
