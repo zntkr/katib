@@ -47,6 +47,32 @@ def next_cut(speeches: list[dict], length: int, sample_rate: int = SAMPLE_RATE,
     return None
 
 
+SENTENCE_ENDS = (".", "!", "?", "…")
+
+
+def first_sentence(words: list[tuple[str, float]]) -> tuple[str, float, int] | None:
+    """The first finished sentence in what the model heard: (its text, the second it ends at,
+    how many words it has). words: [(text, end_seconds), ...] in order, each text as the
+    model gives it, with its own leading space or none ("e", "-posta"). A sentence is
+    finished when a word ends it and another word follows; the last word never counts, the
+    model closes whatever it was given with a full stop or "..." of its own.
+
+    The model's own segments cannot be used for this: on speech without pauses it returned
+    everything waiting as one segment for 30 s (measured 2026-10-10)."""
+    for i, (text, end) in enumerate(words[:-1]):
+        if text.rstrip().endswith(SENTENCE_ENDS):
+            return "".join(word for word, _ in words[: i + 1]).strip(), end, i + 1
+    return None
+
+
+def same_words(a: str, b: str) -> bool:
+    """Two passes over the same speech agree: same words in the same order. Capitals and
+    punctuation are left out, they flip between passes without the words changing."""
+    def bare(text: str) -> list[str]:
+        return ["".join(ch for ch in word.casefold() if ch.isalnum()) for word in text.split()]
+    return bare(a) == bare(b)
+
+
 def speech_is_over(speeches: list[dict], length: int, heard_before: bool = False,
                    sample_rate: int = SAMPLE_RATE) -> bool:
     """Hands-free dictation: has the speaker finished? True after END_PAUSE_SECONDS of

@@ -316,3 +316,42 @@ daha gerekir); aralıksız konuşma boyunca kart saniyede bir çalışır (geçi
 sesten çıkarır, 1 sn'den uzun cümle içi duraklamayı o da bölüm sonu sayar.
 ⚠️ **Bekleyen:** proje sahibinin aralıksız konuşarak yeniden denemesi. Ayrıca aynı günlükte bir bölüm
 (15:20:46, 4,0 sn ses) hiç metin üretmedi; ses miydi gürültü müydü bilinmiyor (metin günlüğe yazılmaz).
+
+### 2026-10-10 (devam 2) — Cümle kuralı takıldı; cümle artık modelin bölümünden değil sözcüklerden bulunuyor
+
+**Düzeltme:** yukarıdaki "aralıksız konuşma" denemeleri proje sahibinin kendi sesi değildi; nefes
+aralıkları kesilmiş bir YouTube videosunu dikte ettirdi (hoparlörden mikrofona). Doğal konuşmadan daha
+zor bir sınav: içinde hiç duraklama yok.
+
+**Kusur (kurulu sürümün günlüğü, 15:30, 89 sn):** 11 cümle konuşurken yazıldı ama bittikten 2,5–13 sn
+sonra; arada 32 sn hiçbir şey yazılmadı ve ardından 24 sn'lik ses tek blok geldi; geçişler 0,5–2,0 sn.
+Sentetik karşılığı üretildi (Windows "Tolga", %18 hızlı, bütün sessizlikler kesilmiş, 42,7 sn) ve aynı
+takılma görüldü (30,7 sn). **Neden:** model böyle konuşmada bekleyen sesin tamamını geçiş üstüne geçiş
+**tek bölüm** olarak döndürüyor; kural "arkasından başka bölüm gelen ilk bölüm"ü arıyordu, hiç bulamadı,
+bekleyen ses büyüdükçe geçiş 2–3,8 sn'ye uzadı. Bölümler ancak 30 sn'lik pencere dolunca ayrıldı.
+
+**Düzeltme:** cümle, modelin bölümlerinden değil **sözcüklerinden** bulunur
+(`core/segmenter.py::first_sentence`): geçiş `word_timestamps=True` ile yapılır; cümleyi bitiren
+(`. ! ? …`) ve arkasından başka sözcük gelen ilk sözcük cümlenin sonudur, ses o sözcüğün bittiği andan
+kesilir. Anlaşma büyük harf ve noktalamaya bakmaz (`same_words`). Yazılan cümlenin ardındaki cümle aynı
+geçişte bir kez duyulmuş olduğundan aday olarak taşınır; onaylanması tek geçiş alır.
+
+Ölçüm (gerçek worker, GPU, gerçek zaman benzetimi: bir saniyeden uzun geçiş sonraki anlık görüntüyü
+kaçırır):
+
+| Kayıt | Önce | Sonra |
+|---|---|---|
+| Nefessiz 42,7 sn | 5 bölüm, en uzun bekleme 30,7 sn, geçiş en çok 3,8 sn | 16 cümle, gecikme ortanca 2,9 / en çok 3,8 sn, geçiş ortanca 0,47 / en çok 0,73 sn |
+| Akıcı 14,4 sn | cümleler 5/10/13/15. sn | 4 cümle, gecikme ortanca 2,3 / en çok 3,4 sn |
+| Duraklamalı 17,2 sn | bölümler duraklamadan 0,5–0,7 sn sonra | değişmedi (gerçek zamanda ortanca 1,0 sn) |
+| Tek cümle 2,5 sn | susunca 0,7 sn sonra | değişmedi |
+
+Testler: `TestFirstSentence`, `TestSameWords`, `TestSpeechWithoutAPause` (tek bölümlü model çıktısıyla).
+
+**Reddedilen, ölçümle — sözcük sözcük yazma:** proje sahibi "duyduğunu anında yazıp Mac gibi his verir"
+beklediğini söyledi. Atılabilir bir prototip denendi (her geçişte iki geçişin anlaştığı sözcük öneki
+yazılır, yazılan geri alınmaz, tampon son yazılan sözcükten kırpılır). Nefessiz kayıtta bir sözcük
+söylendikten ortanca 5,6 sn (en kötü 16,6 sn) sonra yazıldı, geçişler 5 sn'ye kadar uzadı, metin tek
+geçişle %93 aynı çıktı. Whisper akan ses için yapılmış bir model değil; bu yoldan Mac hissi gelmiyor.
+Gerçek akış, ayrı bir motor (akan sesi çözen, Türkçe bilen, yerel) araştırması gerektirir; açılmadı.
+⚠️ **Bekleyen:** kurulu sürümde ve gerçek sesle deneme. Sentetik ses gerçek konuşmadan temiz.

@@ -284,87 +284,127 @@ class TestShortPiecesOnTheGpu:
         worker._model.transcribe.assert_not_called()
 
 
+def _heard(*parts: tuple[str, float]):
+    """What the model returns for the audio waiting: ONE segment (as it did for 30 s on speech
+    without pauses), its words carrying their end times. parts: (text, the second it ends at)."""
+    words, since = [], 0.0
+    for text, end in parts:
+        tokens = text.split()
+        for i, token in enumerate(tokens, start=1):
+            words.append(MagicMock(word=" " + token, end=since + (end - since) * i / len(tokens)))
+        since = end
+    return [MagicMock(text=" ".join(text for text, _ in parts), words=words)], MagicMock()
+
+
 class TestSpeechWithoutAPause:
     """Someone who talks on without pausing gives the pause rule nothing to cut at: a 39.7 s
-    dictation showed nothing until it ended (the owner's own voice, 2026-10-10). Hands-free on
-    the GPU the model then says where a sentence ends: it splits what it hears into segments,
-    and a segment followed by another one is finished. It is typed once two passes in a row
-    give it the same words, which keeps the model's first guesses off the page."""
+    dictation showed nothing until it ended (2026-10-10). Hands-free on the GPU everything
+    waiting is then decoded and its first finished sentence is typed once two passes in a row
+    hear the same words, which keeps the model's first guesses off the page. The sentence is
+    found in the words, not in the model's segments: on such speech the model returned all of
+    it as one segment for 30 s."""
 
-    FIRST = (" Bugün değişiklikleri gözden geçirdim.", 3.2)   # text, where it ends (s)
+    FIRST = ("Bugün değişiklikleri gözden geçirdim.", 3.2)
 
     def _worker(self, qapp, mock_settings, device="cuda", hands_free=True):
         worker = _make_worker_with_model(qapp, mock_settings)
         worker._device, worker.hands_free = device, hands_free
         return worker, _capture(worker)
 
-    def _snapshot(self, worker, seconds: float, *segments):
+    def _snapshot(self, worker, seconds: float, *parts):
         """The recording so far arrives; all of it is speech, with no pause to cut at."""
-        worker._model.transcribe.return_value = ([MagicMock(text=t, end=e) for t, e in segments], MagicMock())
+        worker._model.transcribe.return_value = _heard(*parts)
         with patch(_CHUNKS, side_effect=lambda rest, *_: [{"start": 0, "end": len(rest)}]):
             worker._transcribe_partial(np.zeros(int(seconds * SR), dtype=np.float32))
 
-    def test_a_finished_sentence_seen_once_is_not_typed_yet(self, qapp, mock_settings):
+    def test_a_finished_sentence_heard_once_is_not_typed_yet(self, qapp, mock_settings):
         worker, s = self._worker(qapp, mock_settings)
-        self._snapshot(worker, 5, self.FIRST, (" İndirme", 5.0))
+        self._snapshot(worker, 5, self.FIRST, ("İndirme", 5.0))
         assert s["text"] == []
 
-    def test_it_is_typed_when_the_next_pass_agrees(self, qapp, mock_settings):
+    def test_it_is_typed_when_the_next_pass_hears_the_same(self, qapp, mock_settings):
         worker, s = self._worker(qapp, mock_settings)
-        self._snapshot(worker, 5, self.FIRST, (" İndirme", 5.0))
-        self._snapshot(worker, 6, self.FIRST, (" İndirme göstergesi", 6.0))
+        self._snapshot(worker, 5, self.FIRST, ("İndirme", 5.0))
+        self._snapshot(worker, 6, self.FIRST, ("İndirme göstergesi", 6.0))
         assert s["text"] == ["Bugün değişiklikleri gözden geçirdim."]
 
-    def test_what_was_typed_is_not_heard_again(self, qapp, mock_settings):
+    def test_the_words_are_asked_for_with_their_times(self, qapp, mock_settings):
         worker, _ = self._worker(qapp, mock_settings)
-        self._snapshot(worker, 5, self.FIRST, (" İndirme", 5.0))
-        self._snapshot(worker, 6, self.FIRST, (" İndirme göstergesi", 6.0))
-        self._snapshot(worker, 7, (" İndirme göstergesi düzgün", 3.8))
+        self._snapshot(worker, 5, self.FIRST, ("İndirme", 5.0))
+        assert worker._model.transcribe.call_args.kwargs["word_timestamps"] is True
+
+    def test_the_audio_is_cut_where_the_sentence_ends(self, qapp, mock_settings):
+        worker, _ = self._worker(qapp, mock_settings)
+        self._snapshot(worker, 5, self.FIRST, ("İndirme", 5.0))
+        self._snapshot(worker, 6, self.FIRST, ("İndirme göstergesi", 6.0))
+        self._snapshot(worker, 7, ("İndirme göstergesi düzgün", 3.8))
         assert len(worker._model.transcribe.call_args.args[0]) == 7 * SR - int(3.2 * SR)
         assert worker._model.transcribe.call_args.kwargs["initial_prompt"].endswith("gözden geçirdim.")
+
+    def test_capitals_and_punctuation_may_differ_between_the_passes(self, qapp, mock_settings):
+        worker, s = self._worker(qapp, mock_settings)
+        self._snapshot(worker, 5, ("bugün değişiklikleri, gözden geçirdim!", 3.2), ("İndirme", 5.0))
+        self._snapshot(worker, 6, self.FIRST, ("İndirme göstergesi", 6.0))
+        assert s["text"] == ["Bugün değişiklikleri gözden geçirdim."]   # as the later pass has it
 
     def test_a_guess_that_changes_is_never_typed(self, qapp, mock_settings):
         """Measured: "The download indicator will be displayed." became "...works properly and"."""
         worker, s = self._worker(qapp, mock_settings)
-        self._snapshot(worker, 4, (" Gösterge görüntülenecek.", 3.0), (" Ve", 4.0))
-        self._snapshot(worker, 5, (" Gösterge düzgün çalışıyor.", 4.2), (" Model", 5.0))
+        self._snapshot(worker, 4, ("Gösterge görüntülenecek.", 3.0), ("Ve", 4.0))
+        self._snapshot(worker, 5, ("Gösterge düzgün çalışıyor.", 4.2), ("Model", 5.0))
         assert s["text"] == []
-        self._snapshot(worker, 6, (" Gösterge düzgün çalışıyor.", 4.2), (" Model listesi", 6.0))
+        self._snapshot(worker, 6, ("Gösterge düzgün çalışıyor.", 4.2), ("Model listesi", 6.0))
         assert s["text"] == ["Gösterge düzgün çalışıyor."]
 
     def test_a_sentence_still_being_spoken_is_not_typed(self, qapp, mock_settings):
         worker, s = self._worker(qapp, mock_settings)
         for seconds in (5, 6, 7):
-            self._snapshot(worker, seconds, (" Bugün değişiklikleri gözden", float(seconds)))
+            self._snapshot(worker, seconds, ("Bugün değişiklikleri gözden", float(seconds)))
         assert s["text"] == []
+
+    def test_the_full_stop_the_model_puts_on_the_last_word_does_not_count(self, qapp, mock_settings):
+        """The model closes whatever it is given; only a word that follows shows the sentence ended."""
+        worker, s = self._worker(qapp, mock_settings)
+        for seconds in (5, 6):
+            self._snapshot(worker, seconds, ("Bugün değişiklikleri gözden geçirdim.", float(seconds)))
+        assert s["text"] == []
+
+    def test_the_sentence_after_it_needs_only_one_more_pass(self, qapp, mock_settings):
+        """It was already heard once, in the pass that typed the first."""
+        second = ("İndirme göstergesi düzgün çalışıyor.", 6.5)
+        worker, s = self._worker(qapp, mock_settings)
+        self._snapshot(worker, 8, self.FIRST, second, ("Model", 8.0))
+        self._snapshot(worker, 9, self.FIRST, second, ("Model listesi", 9.0))
+        self._snapshot(worker, 10, ("İndirme göstergesi düzgün çalışıyor.", 3.3), ("Model listesi artık", 6.8))
+        assert s["text"] == ["Bugün değişiklikleri gözden geçirdim.", "İndirme göstergesi düzgün çalışıyor."]
 
     def test_a_few_seconds_must_be_waiting_before_the_model_is_asked(self, qapp, mock_settings):
         worker, _ = self._worker(qapp, mock_settings)
-        self._snapshot(worker, 2, self.FIRST, (" İndirme", 2.0))
+        self._snapshot(worker, 2, self.FIRST, ("İndirme", 2.0))
         worker._model.transcribe.assert_not_called()
 
     def test_an_end_outside_the_audio_is_not_cut_at(self, qapp, mock_settings):
         worker, s = self._worker(qapp, mock_settings)
         for seconds in (5, 6):
-            self._snapshot(worker, seconds, (" Bugün değişiklikleri gözden geçirdim.", 0.0), (" İndirme", 5.0))
+            self._snapshot(worker, seconds, ("Bugün değişiklikleri gözden geçirdim.", 0.0), ("İndirme", 5.0))
         assert s["text"] == [] and worker._done == 0
 
     def test_on_the_cpu_the_model_is_not_asked(self, qapp, mock_settings):
         """Every pass would cost seconds there."""
         worker, _ = self._worker(qapp, mock_settings, device="cpu")
-        self._snapshot(worker, 6, self.FIRST, (" İndirme", 6.0))
+        self._snapshot(worker, 6, self.FIRST, ("İndirme", 6.0))
         worker._model.transcribe.assert_not_called()
 
     def test_under_a_held_key_the_model_is_not_asked(self, qapp, mock_settings):
         worker, _ = self._worker(qapp, mock_settings, hands_free=False)
-        self._snapshot(worker, 6, self.FIRST, (" İndirme", 6.0))
+        self._snapshot(worker, 6, self.FIRST, ("İndirme", 6.0))
         worker._model.transcribe.assert_not_called()
 
     def test_a_new_dictation_forgets_the_last_one_s_guess(self, qapp, mock_settings):
         worker, s = self._worker(qapp, mock_settings)
-        self._snapshot(worker, 5, self.FIRST, (" İndirme", 5.0))
+        self._snapshot(worker, 5, self.FIRST, ("İndirme", 5.0))
         worker._reset_dictation()
-        self._snapshot(worker, 5, self.FIRST, (" İndirme", 5.0))
+        self._snapshot(worker, 5, self.FIRST, ("İndirme", 5.0))
         assert s["text"] == []
 
 
