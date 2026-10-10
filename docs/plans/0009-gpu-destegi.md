@@ -105,9 +105,15 @@ ancak kitaplıklar `PATH`'te ise kullanır. Seçenekler:
 - [ ] **NVIDIA kartı olmayan makinede** GPU paketi CPU'da sorunsuz çalışır (denenmedi). Normal `build.bat`
       çıktısında `nvidia\` klasörü olmadığına da GPU derlemesinden sonra yeniden bakılmadı.
 - [x] **GPU'da model değişimi çökmesi (2026-10-10):** düzeltildi; bkz. yürütme günlüğü.
-- [ ] **Yayın:** v1.2.0'a eklenen `Katib_Setup_1.2.0_GPU.exe` düzeltmeden ÖNCE derlendi ve çökmeyi içerir.
-      Düzeltmeyi içeren paket derlenip yayınlanmalı; sürüm notlarına hangi paketi kimin indireceği ve
-      boyut yazılmalı. Ölçülen boyut: kurulum paketi 540 MB (normal paket 91 MB), `dist\Katib` 1,1 GB.
+- [x] **Yayın (2026-10-10):** v1.2.0'daki `Katib_Setup_1.2.0_GPU.exe`, düzeltmeyi içeren derlemeyle
+      (`e0d8aff`, sha256 `fdae7ff3…26afe5`, 540 MB) değiştirildi. İlk yüklenen dosya (2026-10-09) çökmeyi
+      içeriyordu. Proje sahibi yeni paketi kurdu: large-v3 GPU'da çalışıyor, bırakıştan yazıya 0,4–0,6 sn.
+- [x] **Paketlenmiş uygulamada model değişimi (2026-10-10 13:50, kurulu sürümün günlüğü):** aynı süreçte
+      GPU'da large-v3 → small → large-v3 → small → large-v3, konuşma dili `tr`; çökme yok, ardından dikteler çalıştı.
+- [ ] **Sürüm tutarlılığı:** bu GPU paketi `main`'den derlendi ve v1.2.0 etiketinden sonraki iki commit'i
+      (yeni model listesi, indirme göstergesi) içerir; aynı sürümdeki normal paket içermez. Sürüm notları da
+      hâlâ yalnız CPU paketini anlatıyor. İkisi v1.2.1 ile birlikte yayınlanarak düzelir.
+      Ölçülen boyut: kurulum paketi 540 MB (normal paket 91 MB), `dist\Katib` 1,1 GB.
 
 ## Faz 3 — Ayar ekranı (karar bekliyor)
 
