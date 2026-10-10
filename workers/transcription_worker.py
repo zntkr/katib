@@ -14,7 +14,8 @@ from workers.base_worker import BaseWorker, measure_time
 from core import gpu
 from core.log import get_logger, OK
 from core.segmenter import (
-    MIN_SEGMENT_SECONDS, MIN_SEGMENT_SECONDS_FAST, context_prompt, next_cut, speech_chunks, speech_is_over,
+    MIN_SEGMENT_SECONDS, MIN_SEGMENT_SECONDS_FAST, SENTENCE_PASS_SECONDS,
+    context_prompt, next_cut, speech_chunks, speech_is_over,
 )
 from core.transcription_filter import TranscriptionFilter
 from core.settings import MSG_MODEL_NOT_FOUND, STATE_READY, STATE_LOADING
@@ -100,6 +101,8 @@ class TranscriptionWorker(BaseWorker):
         self._done = 0
         self._pieces: list[str] = []
         self._typed = 0
+        # A finished sentence the model reported once; typed when the next pass says the same.
+        self._candidate: str | None = None
 
     # ------------------------------------------------------------------ QThread
     def run(self):
@@ -311,6 +314,12 @@ class TranscriptionWorker(BaseWorker):
     def _decode(self, audio) -> str:
         if len(audio) == 0:
             return ""
+        # Each segment's text begins with a space of its own: joined as they are, two
+        # sentences of one decode came out with two spaces between them.
+        return " ".join(text for text in (seg.text.strip() for seg in self._decode_segments(audio)) if text)
+
+    def _decode_segments(self, audio) -> list:
+        """The model's own split of the audio: segments with .text and .end (seconds)."""
         segments, _ = self._model.transcribe(
             audio,
             language       = self._target_language(),
@@ -321,12 +330,11 @@ class TranscriptionWorker(BaseWorker):
         segments = list(segments)  # decoding happens here
         if any(isinstance(seg.temperature, float) and seg.temperature > 0 for seg in segments):
             _log.info("Low-confidence audio: decoded a second time")
-        # Each segment's text begins with a space of its own: joined as they are, two
-        # sentences of one decode came out with two spaces between them.
-        return " ".join(text for text in (seg.text.strip() for seg in segments) if text)
+        return segments
 
     def _reset_dictation(self) -> None:
         self._done, self._pieces, self._typed = 0, [], 0
+        self._candidate = None
 
     def _emit_untyped(self) -> str:
         """Hands the pieces not typed yet to the UI as one text."""
@@ -353,10 +361,13 @@ class TranscriptionWorker(BaseWorker):
             if cut is None:
                 if self.hands_free and speech_is_over(speeches, len(rest), heard_before=self._done > 0):
                     self.speech_ended.emit()
+                elif fast and speeches:
+                    self._type_finished_sentence(rest)
                 return
             started = time.perf_counter()
             text = self._filter.clean(self._decode(rest[:cut]), duration=cut / SAMPLE_RATE)
             self._done += cut
+            self._candidate = None
             _log.info(f"Piece transcribed while recording: {cut / SAMPLE_RATE:.1f}s of audio "
                       f"in {(time.perf_counter() - started) * 1000:.0f} ms")
             if text:
@@ -365,6 +376,32 @@ class TranscriptionWorker(BaseWorker):
                     self._emit_untyped()
         except Exception as e:
             _log.warning(f"Background transcription skipped: {str(e) or 'unknown error'}")
+
+    def _type_finished_sentence(self, rest) -> None:
+        """Speech that goes on without a pause (hands-free, GPU): the pause rule finds nothing
+        to cut at, so the model says where a sentence ends. It splits what it hears into
+        segments; one that is followed by another is finished, and it is typed once two
+        passes in a row give it the same words. The first guess at a sentence is often wrong
+        ("The download indicator will be displayed." a second before "...works properly
+        and"); agreement keeps it off the page. Slower than a pause: the next sentence must
+        have begun. Numbers: plan 0014, 2026-10-10."""
+        if len(rest) < SENTENCE_PASS_SECONDS * SAMPLE_RATE:
+            return
+        started = time.perf_counter()
+        segments = self._decode_segments(rest)
+        first = segments[0].text.strip() if len(segments) > 1 else ""
+        cut = int(segments[0].end * SAMPLE_RATE) if first else 0
+        if not first or first != self._candidate or not 0 < cut < len(rest):
+            self._candidate = first or None
+            return
+        self._candidate = None
+        self._done += cut
+        _log.info(f"Sentence transcribed while recording: {cut / SAMPLE_RATE:.1f}s of audio, "
+                  f"last pass {(time.perf_counter() - started) * 1000:.0f} ms")
+        text = self._filter.clean(first, duration=cut / SAMPLE_RATE)
+        if text:
+            self._pieces.append(text)
+            self._emit_untyped()
 
     @measure_time("STT", "Whisper Transcription")
     def _transcribe(self, audio):

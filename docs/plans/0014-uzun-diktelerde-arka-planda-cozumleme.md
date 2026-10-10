@@ -287,3 +287,32 @@ bölümün saniyeler sürdüğü CPU için konmuştu; GPU'da bir bölüm 0,2–0
   çözümlemede birden çok bölüm dönünce aralarına iki boşluk giriyordu (`_decode`).
 - ⚠️ **Bekleyen:** proje sahibinin kendi sesiyle denemesi. Bakılacak: kısa bölümlerde uydurma metin,
   düşünme duraklamasında bölünmenin rahatsız edip etmediği. Gerekirse `MIN_SEGMENT_SECONDS_FAST` yükseltilir.
+
+### 2026-10-10 (devam) — İlk gerçek deneme; cümle kuralı duraklama kuralının YANINA eklendi
+
+Proje sahibi yeni derlemeyi kendi sesiyle denedi (kurulu sürümün günlüğü, 15:16–15:21):
+
+- **Duraklama kuralı çalıştı:** 112 sn'lik eller serbest diktede 2,9–6,6 sn'lik bölümler konuşurken
+  yazıldı (bölüm başına 0,37–0,56 sn); bitişte bekleme 0,48 sn.
+- **Aralıksız konuşmada hiçbir şey yazılmadı** (proje sahibinin bildirimi): 39,7 sn'lik diktede tek
+  bölüm yok, 809 karakter sonda geldi (3,1 sn bekleme). Aynı oturumda duraklamasız 11,5 ve 11,6 sn'lik
+  bölümler de var. Yukarıda "öyle konuştuğunu bildirirse yeniden açılır" denen durum.
+
+**Karar değişti:** cümle kuralı eklendi, duraklama kuralı yerinde kaldı. Sıra (`_transcribe_partial`,
+yalnız eller serbest + GPU): (1) duraklama varsa oradan kes ve hemen yaz (hızlı yol, değişmedi);
+(2) duraklama yoksa ve en az 3 sn ses bekliyorsa (`SENTENCE_PASS_SECONDS`) bekleyen sesin tamamını
+çözümle (`_type_finished_sentence`): model sesi kendi bölümlerine ayırır; arkasından başka bölüm gelen
+ilk bölüm "bitmiş"tir ve **iki ardışık geçişte aynı sözcüklerle** çıkarsa yazılır, ses onun bittiği
+yerden kesilir. Anlaşma şartı modelin ilk yanlış tahminini eler (ölçülen örnek: "The download indicator
+will be displayed." bir saniye sonra "...works properly and" oldu).
+
+Doğrulama (gerçek worker, GPU, sentetik Türkçe): aralıksız 14 sn'lik kayıtta cümleler 5., 10., 13. ve
+15. sn'de yazıldı (yalnız duraklama kuralıyla: 12. ve 15. sn); duraklamalı ve tek cümlelik kayıtlarda
+sonuç değişmedi (3/7/10/14/18. sn; 3. sn). Tuş basılıyken ve CPU'da davranış aynı. Testler:
+`TestSpeechWithoutAPause`.
+
+**Bilinen sınırlar:** cümle, bittikten ~2 sn sonra yazılır (sonraki cümlenin başlaması ve bir geçiş
+daha gerekir); aralıksız konuşma boyunca kart saniyede bir çalışır (geçiş 0,2–0,5 sn); model bölümü
+sesten çıkarır, 1 sn'den uzun cümle içi duraklamayı o da bölüm sonu sayar.
+⚠️ **Bekleyen:** proje sahibinin aralıksız konuşarak yeniden denemesi. Ayrıca aynı günlükte bir bölüm
+(15:20:46, 4,0 sn ses) hiç metin üretmedi; ses miydi gürültü müydü bilinmiyor (metin günlüğe yazılmaz).
